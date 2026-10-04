@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Various Hookshot Addon - BP v1.0.8",
+    "name": "Various Hookshot Addon - BP v1.0.10",
     "description": "Various Hookshot Addon for Minecraft Bedrock",
     "uuid": "c57e4772-91cc-4ffe-a2ff-49959267310b",
     "version": [
       1,
       0,
-      8
+      10
     ],
     "min_engine_version": [
       1,
@@ -24,7 +24,7 @@
       "version": [
         1,
         0,
-        8
+        10
       ],
       "entry": "scripts/main.js"
     }
@@ -35,7 +35,7 @@
       "version": [
         1,
         0,
-        8
+        10
       ]
     },
     {

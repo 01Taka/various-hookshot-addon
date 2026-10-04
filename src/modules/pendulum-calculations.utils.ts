@@ -48,52 +48,8 @@ export function calculateNextTickVelocity(
   maxDistance: number,
 ): Vector3 | null {
   const currentDistance = Vector3Utils.distance(player.location, anchor);
-
-  // 1. ロープがたるんでいる（最大長以内）場合はリセットして自由落下
-  if (currentDistance < maxDistance || currentDistance < 0.0001) {
-    PlayerStateManager.delete(player.id, MAX_SPEED_KEY);
-    return null;
-  }
-
-  // 2. 幾何ベクトルの計算 (r: 相対位置, n: 法線単位ベクトル)
-  const r = Vector3Utils.subtract(player.location, anchor);
-  const n = Vector3Utils.normalize(r);
-
-  // 3. 次Tickの自由予測速度を計算
-  const nextVelocity = predictNextVelocity({
-    currentVelocity: player.getVelocity(),
-    dragXZ: 0,
-    dragY: MINECRAFT_DRAG.air.y,
-    gravity: MINECRAFT_GRAVITY,
-  });
-
-  // 4. 接線方向ベクトル（進行方向）の算出
-  const vn = Vector3Utils.dot(nextVelocity, n);
-
-  // 内側（中心向き）へ向かっている場合はロープが緩むのでリセット
-  if (vn <= 0) {
-    PlayerStateManager.delete(player.id, MAX_SPEED_KEY);
-    return null;
-  }
-
-  // 接線成分を取り出す
-  const vt = Vector3Utils.subtract(nextVelocity, Vector3Utils.scale(n, vn));
-  const vtLength = Vector3Utils.magnitude(vt);
-
-  // 接線方向の速度がほぼゼロの場合は維持できないため解除
-  if (vtLength < 0.0001) {
-    PlayerStateManager.delete(player.id, MAX_SPEED_KEY);
-    return null;
-  }
-
-  // 接線方向の単位ベクトル（スイングの向き）
-  const tangentDir = Vector3Utils.scale(vt, 1 / vtLength);
-
-  // 5. 最高速度（最下点速度）の計算・取得
-  // 最下点の Y 座標
-  const bottomY = anchor.y - maxDistance;
-  // 最下点からの現在の高さ
-  const height = Math.max(0, player.location.y - bottomY);
+  const currentVel = player.getVelocity();
+  const currentSpeed = Vector3Utils.magnitude(currentVel);
 
   let maxSpeed = PlayerStateManager.get<number | undefined>(
     player.id,
@@ -101,24 +57,82 @@ export function calculateNextTickVelocity(
     undefined,
   );
 
+  // 【改善1】たるみ判定にマージン（遊び）を設ける
+  // スイング中（maxSpeedが存在する時）は、弦による内側への潜り込み（約0.2ブロック）を許容する
+  const slackTolerance = maxSpeed !== undefined ? 0.3 : 0.0;
+  if (
+    currentDistance < maxDistance - slackTolerance ||
+    currentDistance < 0.0001
+  ) {
+    PlayerStateManager.delete(player.id, MAX_SPEED_KEY);
+    return null;
+  }
+
+  // 法線単位ベクトル (アンカーからプレイヤーへの外向き)
+  const r = Vector3Utils.subtract(player.location, anchor);
+  const n = Vector3Utils.normalize(r);
+
+  // 【改善2】dragXZ は減衰なしなら 1.0 (0だと水平速度が消滅する)
+  const nextVelocity = predictNextVelocity({
+    currentVelocity: currentVel,
+    dragXZ: 1.0, // または MINECRAFT_DRAG.air.x
+    dragY: MINECRAFT_DRAG.air.y,
+    gravity: MINECRAFT_GRAVITY,
+  });
+
+  // 接線成分の抽出
+  const vn = Vector3Utils.dot(nextVelocity, n);
+  let vt = Vector3Utils.subtract(nextVelocity, Vector3Utils.scale(n, vn));
+  let vtLength = Vector3Utils.magnitude(vt);
+
+  // 【改善3】真下で重力と法線が平行になり vt が潰れた場合、現在の速度（慣性）から接線を作る
+  let tangentDir: Vector3;
+  if (vtLength < 0.001) {
+    // 現在の速度の法線成分を抜いて接線方向を復元
+    const curVn = Vector3Utils.dot(currentVel, n);
+    const curVt = Vector3Utils.subtract(
+      currentVel,
+      Vector3Utils.scale(n, curVn),
+    );
+    const curVtLength = Vector3Utils.magnitude(curVt);
+
+    if (curVtLength < 0.001) {
+      // 完全に静止して真下にぶら下がっている場合
+      PlayerStateManager.delete(player.id, MAX_SPEED_KEY);
+      return null;
+    }
+    tangentDir = Vector3Utils.scale(curVt, 1 / curVtLength);
+  } else {
+    tangentDir = Vector3Utils.scale(vt, 1 / vtLength);
+  }
+
+  // 高さの計算
+  const bottomY = anchor.y - maxDistance;
+  const height = Math.max(0, player.location.y - bottomY);
+
   if (maxSpeed === undefined) {
-    // 【ロープが張った初回】：力学的エネルギー保存則から最下点での最高速度を計算
-    // v_max = sqrt(v_t^2 + 2 * g * h)
-    maxSpeed = Math.sqrt(vtLength * vtLength + 2 * MINECRAFT_GRAVITY * height);
+    // 【初回：張った瞬間】外向きに動いている時だけ張る
+    if (vn <= 0) {
+      return null; // 内向きにすれ違っただけなら張らない
+    }
+    const initSpeed = Math.max(currentSpeed, vtLength);
+    maxSpeed = Math.sqrt(
+      initSpeed * initSpeed + 2 * MINECRAFT_GRAVITY * height,
+    );
     PlayerStateManager.set(player.id, MAX_SPEED_KEY, maxSpeed);
   }
 
-  // 6. 現在の高さにおける速さ (v = sqrt(v_max^2 - 2 * g * h)) を計算
+  // 現在の高さにおける速さ
   const speedSquared = maxSpeed * maxSpeed - 2 * MINECRAFT_GRAVITY * height;
 
-  // 最高到達点を超えて速度が尽きた場合は、ロープがたるむのでリセット
+  // 最高到達点で速度が尽きたらたるむ
   if (speedSquared <= 0) {
     PlayerStateManager.delete(player.id, MAX_SPEED_KEY);
     return null;
   }
 
-  const currentSpeed = Math.sqrt(speedSquared);
+  const targetSpeed = Math.sqrt(speedSquared);
 
-  // 7. 接線単位ベクトルに現在の速さを掛けて最終ベクトルを決定
-  return Vector3Utils.scale(tangentDir, currentSpeed);
+  // 接線方向に目標速度を乗算して返す
+  return Vector3Utils.scale(tangentDir, targetSpeed);
 }

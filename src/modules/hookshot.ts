@@ -13,6 +13,7 @@ import {
   MINECRAFT_DRAG,
   MINECRAFT_GRAVITY,
 } from "addon-utils";
+import { calculateNextTickVelocity } from "./pendulum-calculations.utils";
 
 export interface HookState {
   anchor: Vector3;
@@ -135,69 +136,60 @@ export function detachHook(player: Player, message?: string): void {
   }
 }
 
-/**
- * 物理演算に基づき、ロープ拘束を満たす次のTickの目標速度を計算します。
- *
- * @param currentPos プレイヤーの現在位置（ロープ接続点: 胸部）
- * @param currentVel プレイヤーの現在の速度 (blocks/tick)
- * @param anchor アンカーブロックの中心座標
- * @param maxDistance ロープの最大長 L
- * @param dragXZ 水平方向の空気/水抵抗保持率
- * @param dragY 垂直方向の空気/水抵抗保持率
- * @param gravity 重力加速度 (blocks/tick)
- * @returns 次のTickで到達すべき目標速度ベクトル
- */
 export function calculateNextTickTetherVelocity(
   currentPos: Vector3,
   currentVel: Vector3,
   anchor: Vector3,
   maxDistance: number,
-  dragXZ: number,
-  dragY: number,
-  gravity: number,
 ): Vector3 {
-  // 1. 次Tickの自由予測速度 (Minecraft Bedrock の環境物理による減衰と重力)
-  const vFree: Vector3 = {
-    x: currentVel.x * dragXZ,
-    y: (currentVel.y - gravity) * dragY,
-    z: currentVel.z * dragXZ,
-  };
+  // 1. 現在のアンカーからの相対ベクトルと距離
+  const rx = currentPos.x - anchor.x;
+  const ry = currentPos.y - anchor.y;
+  const rz = currentPos.z - anchor.z;
+  const currentDistance = Math.hypot(rx, ry, rz);
 
-  // 2. 次Tickの自由予測位置
-  const predPos: Vector3 = {
-    x: currentPos.x + vFree.x,
-    y: currentPos.y + vFree.y,
-    z: currentPos.z + vFree.z,
-  };
-
-  // 3. アンカーから予測位置への相対ベクトルおよび予測距離
-  const rx = predPos.x - anchor.x;
-  const ry = predPos.y - anchor.y;
-  const rz = predPos.z - anchor.z;
-  const predDistance = Math.hypot(rx, ry, rz);
-
-  // 4. ロープがたるんでいる（最大長以内）場合は外力不要（自由落下・運動を維持）
-  if (predDistance <= maxDistance || predDistance < 0.0001) {
-    return vFree;
+  // ゼロ除算防止
+  if (currentDistance < 0.0001) {
+    return currentVel;
   }
 
-  // 5. ロープが張っている（最大長を超える）場合：
-  // 拘束面（半径 maxDistance の球面）上の目標位置へ射影
-  const scale = maxDistance / predDistance;
-  const targetNextPos: Vector3 = {
-    x: anchor.x + rx * scale,
-    y: anchor.y + ry * scale,
-    z: anchor.z + rz * scale,
-  };
+  // 2. 外向きの法線単位ベクトル
+  const nx = rx / currentDistance;
+  const ny = ry / currentDistance;
+  const nz = rz / currentDistance;
 
-  // 6. 1Tick で targetNextPos に到達するための必要速度: vNext = targetNextPos - currentPos
-  const vNext: Vector3 = {
-    x: targetNextPos.x - currentPos.x,
-    y: targetNextPos.y - currentPos.y,
-    z: targetNextPos.z - currentPos.z,
-  };
+  // 3. 現在の速度のうち「外向き（ロープを伸ばす向き）」の速度成分 (内積)
+  const vRadial = currentVel.x * nx + currentVel.y * ny + currentVel.z * nz;
 
-  return vNext;
+  // 4. ロープがたるんでいる、または内側に向かって飛んでいる場合は何もしない
+  // ※ゲームエンジン側の重力・摩擦に任せるため currentVel をそのまま返す
+  if (currentDistance < maxDistance && vRadial <= 0) {
+    return currentVel;
+  }
+
+  // 1Tickで境界を飛び越える予測距離
+  const predDistance = currentDistance + vRadial; // 簡易的な1Tick後の距離
+
+  if (predDistance > maxDistance && vRadial > 0) {
+    // 5. 接線速度の抽出：外向きの速度成分 (vRadial * n) を完全に打ち消す
+    let vx = currentVel.x - vRadial * nx;
+    let vy = currentVel.y - vRadial * ny;
+    let vz = currentVel.z - vRadial * nz;
+
+    // 6. 伸びた分の位置補正（バウムガルテ安定化）
+    // すでにロープ長を超えている場合、一気に戻さず数Tickかけて中心へ引き戻す (alpha ≈ 0.2〜0.3)
+    if (currentDistance > maxDistance) {
+      const excess = currentDistance - maxDistance;
+      const correctionSpeed = excess * 0.25; // 1Tickあたり25%ずつ引き戻す
+      vx -= correctionSpeed * nx;
+      vy -= correctionSpeed * ny;
+      vz -= correctionSpeed * nz;
+    }
+
+    return { x: vx, y: vy, z: vz };
+  }
+
+  return currentVel;
 }
 
 /**
@@ -281,23 +273,26 @@ export function tickHookshotPhysics(player: Player): void {
   const gravity = inWater ? MINECRAFT_GRAVITY * 0.25 : MINECRAFT_GRAVITY;
 
   // 物理計算により次のTickの目標速度を算出
-  const targetVelocity = calculateNextTickTetherVelocity(
-    playerPoint,
-    currentVel,
+  // const targetVelocity = calculateNextTickTetherVelocity(
+  //   playerPoint,
+  //   currentVel,
+  //   state.anchor,
+  //   state.maxDistance,
+  // );
+
+  const targetVelocity = calculateNextTickVelocity(
+    player,
     state.anchor,
     state.maxDistance,
-    dragXZ,
-    dragY,
-    gravity,
   );
 
-  // 自由予測速度との差分がある場合（ロープが張った状態）のみインパルスを計算して適用
-  const rx = playerPoint.x + currentVel.x * dragXZ - state.anchor.x;
-  const ry = playerPoint.y + (currentVel.y - gravity) * dragY - state.anchor.y;
-  const rz = playerPoint.z + currentVel.z * dragXZ - state.anchor.z;
-  const predictedDist = Math.hypot(rx, ry, rz);
+  // // 自由予測速度との差分がある場合（ロープが張った状態）のみインパルスを計算して適用
+  // const rx = playerPoint.x + currentVel.x * dragXZ - state.anchor.x;
+  // const ry = playerPoint.y + (currentVel.y - gravity) * dragY - state.anchor.y;
+  // const rz = playerPoint.z + currentVel.z * dragXZ - state.anchor.z;
+  // const predictedDist = Math.hypot(rx, ry, rz);
 
-  if (predictedDist > state.maxDistance) {
+  if (targetVelocity) {
     const impulse = calculateVelocityImpulse({
       targetVelocity,
       currentVelocity: currentVel,
