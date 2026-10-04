@@ -1,0 +1,50 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Various Hookshot Addon - BP v1.0.8",
+    "description": "Various Hookshot Addon for Minecraft Bedrock",
+    "uuid": "c57e4772-91cc-4ffe-a2ff-49959267310b",
+    "version": [
+      1,
+      0,
+      8
+    ],
+    "min_engine_version": [
+      1,
+      20,
+      80
+    ]
+  },
+  "modules": [
+    {
+      "description": "Script Module",
+      "type": "script",
+      "language": "javascript",
+      "uuid": "7d392ac7-cf96-434d-b702-d2f50f6c5fbe",
+      "version": [
+        1,
+        0,
+        8
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "abcf2524-3d4b-441a-8061-0b184b20c367",
+      "version": [
+        1,
+        0,
+        8
+      ]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.8.0"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "2.0.0"
+    }
+  ]
+}

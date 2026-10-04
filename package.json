@@ -1,0 +1,37 @@
+{
+  "name": "various-hookshot-addon",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Various Hookshot Addon for Minecraft Bedrock",
+  "minecraftAddon": {
+    "namespace": "various_hookshot_addon"
+  },
+  "scripts": {
+    "build": "minecraft-cli build",
+    "build:bp": "minecraft-cli build -b",
+    "build:rp": "minecraft-cli build -r",
+    "versionup": "minecraft-cli version-up",
+    "versionup:bp": "minecraft-cli version-up -b",
+    "versionup:rp": "minecraft-cli version-up -r",
+    "versionup:minor": "minecraft-cli version-up --minor",
+    "versionup:major": "minecraft-cli version-up --major",
+    "pack": "minecraft-cli pack",
+    "pack:bp": "minecraft-cli pack -b",
+    "pack:rp": "minecraft-cli pack -r",
+    "all": "minecraft-cli all"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@minecraft/math": "^2.4.0",
+    "@minecraft/server": "^2.9.0",
+    "@minecraft/server-ui": "^2.1.0",
+    "addon-utils": "github:01Taka/minecraft-addon-utils#v0.1.0"
+  },
+  "devDependencies": {
+    "archiver": "^8.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

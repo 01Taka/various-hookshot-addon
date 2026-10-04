@@ -1,0 +1,30 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Various Hookshot Addon - RP v1.0.8",
+    "description": "Resource Pack for Various Hookshot Addon",
+    "uuid": "abcf2524-3d4b-441a-8061-0b184b20c367",
+    "version": [
+      1,
+      0,
+      8
+    ],
+    "min_engine_version": [
+      1,
+      20,
+      80
+    ]
+  },
+  "modules": [
+    {
+      "description": "Resource Pack Module",
+      "type": "resources",
+      "uuid": "6a3e0e60-d2a0-4296-bb83-50d58950026a",
+      "version": [
+        1,
+        0,
+        8
+      ]
+    }
+  ]
+}
