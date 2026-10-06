@@ -13,7 +13,13 @@ import {
   MINECRAFT_DRAG,
   MINECRAFT_GRAVITY,
 } from "addon-utils";
-import { calculateNextTickVelocity } from "./pendulum-calculations.utils";
+import {
+  calculateFixedTetherVelocity,
+  calculateFixedTetherVelocity2,
+  calculateNextTickTetherVelocity,
+  calculateNextTickVelocity,
+  calculateSimpleTetherVelocity,
+} from "./pendulum-calculations.utils";
 
 export interface HookState {
   anchor: Vector3;
@@ -26,7 +32,7 @@ export interface HookState {
 export const HOOK_STATE_KEY = "hookshot_tether_state";
 export const FISHING_ROD_ID = "minecraft:fishing_rod";
 export const MAX_RAYCAST_DISTANCE = 48;
-export const REEL_IN_SPEED = 0.25; // 巻き取り速度 (blocks/tick = 5.0 blocks/s)
+export const REEL_IN_SPEED = 1.25; // 巻き取り速度 (blocks/tick = 5.0 blocks/s)
 export const MIN_ROPE_LENGTH = 1.5; // 最小半径 (ブロックへの埋まり防止)
 
 /**
@@ -136,62 +142,6 @@ export function detachHook(player: Player, message?: string): void {
   }
 }
 
-export function calculateNextTickTetherVelocity(
-  currentPos: Vector3,
-  currentVel: Vector3,
-  anchor: Vector3,
-  maxDistance: number,
-): Vector3 {
-  // 1. 現在のアンカーからの相対ベクトルと距離
-  const rx = currentPos.x - anchor.x;
-  const ry = currentPos.y - anchor.y;
-  const rz = currentPos.z - anchor.z;
-  const currentDistance = Math.hypot(rx, ry, rz);
-
-  // ゼロ除算防止
-  if (currentDistance < 0.0001) {
-    return currentVel;
-  }
-
-  // 2. 外向きの法線単位ベクトル
-  const nx = rx / currentDistance;
-  const ny = ry / currentDistance;
-  const nz = rz / currentDistance;
-
-  // 3. 現在の速度のうち「外向き（ロープを伸ばす向き）」の速度成分 (内積)
-  const vRadial = currentVel.x * nx + currentVel.y * ny + currentVel.z * nz;
-
-  // 4. ロープがたるんでいる、または内側に向かって飛んでいる場合は何もしない
-  // ※ゲームエンジン側の重力・摩擦に任せるため currentVel をそのまま返す
-  if (currentDistance < maxDistance && vRadial <= 0) {
-    return currentVel;
-  }
-
-  // 1Tickで境界を飛び越える予測距離
-  const predDistance = currentDistance + vRadial; // 簡易的な1Tick後の距離
-
-  if (predDistance > maxDistance && vRadial > 0) {
-    // 5. 接線速度の抽出：外向きの速度成分 (vRadial * n) を完全に打ち消す
-    let vx = currentVel.x - vRadial * nx;
-    let vy = currentVel.y - vRadial * ny;
-    let vz = currentVel.z - vRadial * nz;
-
-    // 6. 伸びた分の位置補正（バウムガルテ安定化）
-    // すでにロープ長を超えている場合、一気に戻さず数Tickかけて中心へ引き戻す (alpha ≈ 0.2〜0.3)
-    if (currentDistance > maxDistance) {
-      const excess = currentDistance - maxDistance;
-      const correctionSpeed = excess * 0.25; // 1Tickあたり25%ずつ引き戻す
-      vx -= correctionSpeed * nx;
-      vy -= correctionSpeed * ny;
-      vz -= correctionSpeed * nz;
-    }
-
-    return { x: vx, y: vy, z: vz };
-  }
-
-  return currentVel;
-}
-
 /**
  * 毎Tick呼び出され、フックが接続されているプレイヤーに物理拘束インパルスを適用します。
  */
@@ -272,25 +222,22 @@ export function tickHookshotPhysics(player: Player): void {
   const dragY = inWater ? MINECRAFT_DRAG.water.y : MINECRAFT_DRAG.air.y;
   const gravity = inWater ? MINECRAFT_GRAVITY * 0.25 : MINECRAFT_GRAVITY;
 
+  let targetVelocity;
+  if (player.dimension.id === "minecraft:overworld") {
+    targetVelocity = calculateFixedTetherVelocity(
+      player,
+      state.anchor,
+      state.maxDistance,
+    );
+  } else {
+    targetVelocity = calculateNextTickVelocity(
+      player,
+      state.anchor,
+      state.maxDistance,
+    );
+  }
+
   // 物理計算により次のTickの目標速度を算出
-  // const targetVelocity = calculateNextTickTetherVelocity(
-  //   playerPoint,
-  //   currentVel,
-  //   state.anchor,
-  //   state.maxDistance,
-  // );
-
-  const targetVelocity = calculateNextTickVelocity(
-    player,
-    state.anchor,
-    state.maxDistance,
-  );
-
-  // // 自由予測速度との差分がある場合（ロープが張った状態）のみインパルスを計算して適用
-  // const rx = playerPoint.x + currentVel.x * dragXZ - state.anchor.x;
-  // const ry = playerPoint.y + (currentVel.y - gravity) * dragY - state.anchor.y;
-  // const rz = playerPoint.z + currentVel.z * dragXZ - state.anchor.z;
-  // const predictedDist = Math.hypot(rx, ry, rz);
 
   if (targetVelocity) {
     const impulse = calculateVelocityImpulse({
