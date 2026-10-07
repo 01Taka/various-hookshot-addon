@@ -78,7 +78,7 @@ export function clampOutwardVelocity(
 // 4. メイン拘束計算関数（固定長ロープ）
 // =================================================================
 
-function getAirDrag(speed: number) {
+export function getAirDrag(speed: number) {
   // 1. 閾値（これ以上の速度から急激にブレーキをかける）
   const SPEED_THRESHOLD = 1.6; // blocks/tick
 
