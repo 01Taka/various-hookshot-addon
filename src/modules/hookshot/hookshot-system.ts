@@ -1,7 +1,8 @@
 import { Vector3Utils } from "@minecraft/math";
-import { Player, system, world } from "@minecraft/server";
+import { BlockRaycastHit, Player, system, world } from "@minecraft/server";
 import {
   getDirectionVector,
+  getMainhandItem,
   isInputButtonPressed,
   isSneakButtonPressed,
   PlayerStateManager,
@@ -11,6 +12,7 @@ import { AnchorPosition, HookshotDefinition, HookshotState } from "./types";
 
 const ACTIVE_HOOK_KEY = "hookshotActiveState";
 const LAST_USE_TICK_KEY = "hookshotLastUseTick";
+const UI_ACTIVE_KEY = "hookshotUiActive";
 
 const DEFAULT_MAX_DISTANCE = 1200;
 const DEFAULT_REEL_SPEED = 1.25;
@@ -59,6 +61,7 @@ export class HookshotSystem {
     if (!state) return;
 
     PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
+    this.clearDistanceUiIfActive(player);
 
     const def = this.definitionsById.get(state.hookshotId);
     if (def?.onDetach) {
@@ -86,52 +89,7 @@ export class HookshotSystem {
       handler(player);
     }
 
-    const normal = getDirectionVector(hit.face);
-    const head = player.getHeadLocation();
-    const view = player.getViewDirection();
-
-    // 衝突面の中心座標
-    const faceCenterX = hit.block.x + 0.5 + normal.x * 0.5;
-    const faceCenterY = hit.block.y + 0.5 + normal.y * 0.5;
-    const faceCenterZ = hit.block.z + 0.5 + normal.z * 0.5;
-
-    // レイと平面の交点距離 t
-    const dot = normal.x * view.x + normal.y * view.y + normal.z * view.z;
-    let anchorX = faceCenterX;
-    let anchorY = faceCenterY;
-    let anchorZ = faceCenterZ;
-
-    if (Math.abs(dot) > 0.0001) {
-      const t =
-        (normal.x * (faceCenterX - head.x) +
-          normal.y * (faceCenterY - head.y) +
-          normal.z * (faceCenterZ - head.z)) /
-        dot;
-
-      if (t > 0) {
-        // 交点座標をブロック面の境界内 [0, 1] にクランプ
-        anchorX = Math.max(
-          hit.block.x,
-          Math.min(hit.block.x + 1, head.x + view.x * t),
-        );
-        anchorY = Math.max(
-          hit.block.y,
-          Math.min(hit.block.y + 1, head.y + view.y * t),
-        );
-        anchorZ = Math.max(
-          hit.block.z,
-          Math.min(hit.block.z + 1, head.z + view.z * t),
-        );
-      }
-    }
-
-    const anchor: AnchorPosition = {
-      dimensionId: player.dimension.id,
-      x: anchorX,
-      y: anchorY,
-      z: anchorZ,
-    };
-
+    const anchor = this.calculateAnchorPosition(player, hit);
     const distance = Vector3Utils.distance(player.location, anchor);
 
     const state: HookshotState = {
@@ -330,7 +288,11 @@ export class HookshotSystem {
     system.runInterval(() => {
       for (const player of world.getAllPlayers()) {
         const state = this.getActiveState(player);
-        if (!state) continue;
+        if (!state) {
+          // アンカー設置前: メインハンドにフックショットを持っている場合はプレビュー距離UIを更新
+          this.updatePreviewDistanceUi(player);
+          continue;
+        }
 
         // ディメンションが変化した場合は自動解除
         if (player.dimension.id !== state.anchor.dimensionId) {
@@ -358,7 +320,143 @@ export class HookshotSystem {
           def.wireStyle,
           state.currentLength,
         );
+
+        // 接続中距離UIの更新（○○m / ○○m）
+        this.updateDistanceUi(player, state);
       }
     });
+  }
+
+  /**
+   * レイキャスト衝突結果からアンカー座標を計算します。
+   */
+  private static calculateAnchorPosition(
+    player: Player,
+    hit: BlockRaycastHit,
+  ): AnchorPosition {
+    const normal = getDirectionVector(hit.face);
+    const head = player.getHeadLocation();
+    const view = player.getViewDirection();
+
+    // 衝突面の中心座標
+    const faceCenterX = hit.block.x + 0.5 + normal.x * 0.5;
+    const faceCenterY = hit.block.y + 0.5 + normal.y * 0.5;
+    const faceCenterZ = hit.block.z + 0.5 + normal.z * 0.5;
+
+    // レイと平面の交点距離 t
+    const dot = normal.x * view.x + normal.y * view.y + normal.z * view.z;
+    let anchorX = faceCenterX;
+    let anchorY = faceCenterY;
+    let anchorZ = faceCenterZ;
+
+    if (Math.abs(dot) > 0.0001) {
+      const t =
+        (normal.x * (faceCenterX - head.x) +
+          normal.y * (faceCenterY - head.y) +
+          normal.z * (faceCenterZ - head.z)) /
+        dot;
+
+      if (t > 0) {
+        // 交点座標をブロック面の境界内 [0, 1] にクランプ
+        anchorX = Math.max(
+          hit.block.x,
+          Math.min(hit.block.x + 1, head.x + view.x * t),
+        );
+        anchorY = Math.max(
+          hit.block.y,
+          Math.min(hit.block.y + 1, head.y + view.y * t),
+        );
+        anchorZ = Math.max(
+          hit.block.z,
+          Math.min(hit.block.z + 1, head.z + view.z * t),
+        );
+      }
+    }
+
+    return {
+      dimensionId: player.dimension.id,
+      x: anchorX,
+      y: anchorY,
+      z: anchorZ,
+    };
+  }
+
+  /**
+   * アンカー設置前の距離UI（アクションバー）の更新
+   * 視線の先のブロックまでの距離 / 持っているフックショットの最大射程
+   */
+  private static updatePreviewDistanceUi(player: Player): void {
+    const mainhandItem = getMainhandItem(player);
+    if (!mainhandItem) {
+      this.clearDistanceUiIfActive(player);
+      return;
+    }
+
+    const def = this.definitionsByItem.get(mainhandItem.typeId);
+    if (!def) {
+      this.clearDistanceUiIfActive(player);
+      return;
+    }
+
+    const maxDistance = def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+    const raycastDistance = Math.max(maxDistance, 250);
+
+    const hit = player.getBlockFromViewDirection({
+      maxDistance: raycastDistance,
+      includeLiquidBlocks: false,
+      includePassableBlocks: false,
+    });
+
+    if (!hit) {
+      this.clearDistanceUiIfActive(player);
+      return;
+    }
+
+    const anchor = this.calculateAnchorPosition(player, hit);
+    const distance = Vector3Utils.distance(player.location, anchor);
+
+    try {
+      player.onScreenDisplay.setActionBar(
+        `${distance.toFixed(1)}m / ${maxDistance.toFixed(1)}m`,
+      );
+      PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
+    } catch {
+      // プレイヤー切断時などのエラー抑止
+    }
+  }
+
+  /**
+   * フックショットUIが表示中の場合のみアクションバーをクリア
+   */
+  private static clearDistanceUiIfActive(player: Player): void {
+    const isActive = PlayerStateManager.get<boolean>(
+      player.id,
+      UI_ACTIVE_KEY,
+      false,
+    );
+    if (!isActive) return;
+
+    PlayerStateManager.delete(player.id, UI_ACTIVE_KEY);
+    try {
+      player.onScreenDisplay.setActionBar("");
+    } catch {}
+  }
+
+  /**
+   * 接続中距離UI（アクションバー）の更新
+   */
+  private static updateDistanceUi(
+    player: Player,
+    state: HookshotState,
+  ): void {
+    try {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      player.onScreenDisplay.setActionBar(
+        `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`,
+      );
+      PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
+    } catch {
+      // プレイヤー切断時などのエラー抑止
+    }
   }
 }
