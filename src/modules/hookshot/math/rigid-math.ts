@@ -33,7 +33,6 @@ export function calculateRigidVelocity(
     dragXZ: getAirDrag(speed),
   });
 
-  const originalSpeed = Vector3Utils.magnitude(vPred);
   const vn = getNormalComponent(vPred, normal);
   const predDistance = r + vn;
 
@@ -53,19 +52,8 @@ export function calculateRigidVelocity(
       ? -penetration * BAUMGARTE_FACTOR
       : Math.max(0, ropeLength - r);
 
-  const candidateVelocity = clampOutwardVelocity(vPred, normal, maxOutwardSpeed);
-
-  // 4. 自己加速の防止（エネルギー保存制約）：
-  // 引き戻し補正によって元の予測速さを超えてしまった場合、向きを維持したまま元の速さにクランプ
-  const candidateSpeed = Vector3Utils.magnitude(candidateVelocity);
-  if (candidateSpeed > originalSpeed && candidateSpeed > 0.0001) {
-    return Vector3Utils.scale(
-      candidateVelocity,
-      originalSpeed / candidateSpeed,
-    );
-  }
-
-  return candidateVelocity;
+  // 接線方向（スイングの勢い）を100%維持したまま、法線方向のみを制限して返す
+  return clampOutwardVelocity(vPred, normal, maxOutwardSpeed);
 }
 
 export function calculateRigidHookshot(
