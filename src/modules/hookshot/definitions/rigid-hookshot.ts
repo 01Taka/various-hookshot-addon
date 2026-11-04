@@ -1,3 +1,4 @@
+import { RIGID_WIRE_STYLE } from "../../render";
 import { calculateRigidHookshot } from "../math/rigid-math";
 import { HookshotDefinition } from "../types";
 
@@ -15,6 +16,7 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   reelSpeed: 2.0,
   reelMode: "shorten",
   minRopeLength: 1.5,
+  wireStyle: RIGID_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateRigidHookshot(player, state.anchor, state.currentLength);
   },

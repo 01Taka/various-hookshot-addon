@@ -15,6 +15,7 @@ import {
   PlayerStateManager,
 } from "addon-utils";
 import { HookshotSystem } from "../hookshot/hookshot-system";
+import { HookRenderManager } from "../render";
 import {
   calculatePathfinderVelocityImpulse,
   calculatePostFlightImpulse,
@@ -326,6 +327,9 @@ export class PathfinderGrappleSystem {
           if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
             player.applyImpulse(impulse);
           }
+
+          // ワイヤーの描画
+          HookRenderManager.renderPathfinder(player, state.anchor);
           continue;
         }
 

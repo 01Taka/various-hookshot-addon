@@ -1,4 +1,5 @@
 import { Player, Vector3 } from "@minecraft/server";
+import { WireStyle } from "../render/types";
 
 export type AnchorPosition = Vector3 & { dimensionId: string };
 
@@ -25,6 +26,8 @@ export interface HookshotDefinition {
   minRopeLength?: number;
   /** 最大ロープ長 (blocks, デフォルト: maxDistance または 1200) */
   maxRopeLength?: number;
+  /** ワイヤーの描画スタイル（パーティクル、形状モードなど） */
+  wireStyle?: WireStyle;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */
@@ -32,3 +35,4 @@ export interface HookshotDefinition {
   /** フック解除時のコールバック (演出など任意) */
   onDetach?: (player: Player, state: HookshotState) => void;
 }
+

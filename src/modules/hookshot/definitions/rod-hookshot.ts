@@ -1,3 +1,4 @@
+import { ROD_WIRE_STYLE } from "../../render";
 import { calculateRodHookshot } from "../math/rod-math";
 import { HookshotDefinition } from "../types";
 
@@ -15,6 +16,7 @@ export const rodHookshotDefinition: HookshotDefinition = {
   reelSpeed: 1.1,
   reelMode: "extend",
   minRopeLength: 0.5,
+  wireStyle: ROD_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateRodHookshot(player, state.anchor, state.currentLength);
   },

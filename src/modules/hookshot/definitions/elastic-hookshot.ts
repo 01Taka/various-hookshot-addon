@@ -1,3 +1,4 @@
+import { ELASTIC_WIRE_STYLE } from "../../render";
 import { calculateElasticHookshot } from "../math/elastic-math";
 import { HookshotDefinition } from "../types";
 
@@ -15,6 +16,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   reelSpeed: 2.0,
   reelMode: "shorten",
   minRopeLength: 1.5,
+  wireStyle: ELASTIC_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateElasticHookshot(player, state.anchor, {
       naturalLength: state.currentLength,

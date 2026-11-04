@@ -1,6 +1,7 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, system, world } from "@minecraft/server";
 import { isInputButtonPressed, PlayerStateManager } from "addon-utils";
+import { HookRenderManager } from "../render";
 import { AnchorPosition, HookshotDefinition, HookshotState } from "./types";
 
 const ACTIVE_HOOK_KEY = "hookshotActiveState";
@@ -233,6 +234,15 @@ export class HookshotSystem {
         if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
           player.applyImpulse(impulse);
         }
+
+        // ワイヤーの描画
+        HookRenderManager.renderHookshot(
+          player,
+          state.anchor,
+          state.hookshotId,
+          def.wireStyle,
+          state.currentLength,
+        );
       }
     });
   }

@@ -1,3 +1,4 @@
+import { SPRING_WIRE_STYLE } from "../../render";
 import { calculateSpringHookshot } from "../math/spring-math";
 import { HookshotDefinition } from "../types";
 
@@ -11,10 +12,11 @@ export const SLIME_BALL_ITEM_ID = "minecraft:slime_ball";
 export const springHookshotDefinition: HookshotDefinition = {
   id: SPRING_HOOKSHOT_ID,
   itemTypeId: SLIME_BALL_ITEM_ID,
-  maxDistance: 50,
-  reelSpeed: 1.2,
+  maxDistance: 60,
+  reelSpeed: 1.5,
   reelMode: "extend",
   minRopeLength: 0.5,
+  wireStyle: SPRING_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateSpringHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
