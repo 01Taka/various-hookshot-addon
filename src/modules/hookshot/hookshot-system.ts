@@ -1,6 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, system, world } from "@minecraft/server";
-import { isSneakButtonPressed, PlayerStateManager } from "addon-utils";
+import { isInputButtonPressed, PlayerStateManager } from "addon-utils";
 import { AnchorPosition, HookshotDefinition, HookshotState } from "./types";
 
 const ACTIVE_HOOK_KEY = "hookshotActiveState";
@@ -150,7 +150,22 @@ export class HookshotSystem {
   }
 
   /**
-   * ロープ巻き取り処理
+   * プレイヤーが空中にいてジャンプボタンを押しているかを判定します。
+   */
+  private static isJumpingInAir(player: Player): boolean {
+    if (!player.isValid) return false;
+    try {
+      const inAir = !player.isOnGround;
+      const jumpPressed =
+        isInputButtonPressed(player, "Jump") || player.isJumping;
+      return inAir && jumpPressed;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * ロープの長さ変更処理（縮小または伸長）
    */
   private static reel(
     player: Player,
@@ -158,9 +173,18 @@ export class HookshotSystem {
     def: HookshotDefinition,
   ): void {
     const reelSpeed = def.reelSpeed ?? DEFAULT_REEL_SPEED;
-    const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
+    const mode = def.reelMode ?? "shorten";
 
-    const nextLength = Math.max(state.currentLength - reelSpeed, minLength);
+    let nextLength = state.currentLength;
+    if (mode === "extend") {
+      const maxLength =
+        def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+      nextLength = Math.min(state.currentLength + reelSpeed, maxLength);
+    } else {
+      const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
+      nextLength = Math.max(state.currentLength - reelSpeed, minLength);
+    }
+
     if (state.currentLength !== nextLength) {
       state.currentLength = nextLength;
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
@@ -199,8 +223,8 @@ export class HookshotSystem {
         const def = this.definitionsById.get(state.hookshotId);
         if (!def) continue;
 
-        // スニークによる巻き取り
-        if (isSneakButtonPressed(player)) {
+        // 空中でのジャンプ入力による長さ変更（縮小 or 伸長）
+        if (this.isJumpingInAir(player)) {
           this.reel(player, state, def);
         }
 

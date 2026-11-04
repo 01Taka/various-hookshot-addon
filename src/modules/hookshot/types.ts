@@ -8,6 +8,8 @@ export interface HookshotState {
   currentLength: number;
 }
 
+export type ReelMode = "shorten" | "extend";
+
 export interface HookshotDefinition {
   /** 一意な識別子 (例: "elastic", "rigid", "rod", "spring") */
   id: string;
@@ -15,10 +17,14 @@ export interface HookshotDefinition {
   itemTypeId: string;
   /** Raycast の最大射程距離 (blocks, デフォルト: 1200) */
   maxDistance?: number;
-  /** スニーク時の巻き取り速度 (blocks/tick, デフォルト: 1.25) */
+  /** 空中ジャンプ入力時の長さ変更速度 (blocks/tick, デフォルト: 1.25) */
   reelSpeed?: number;
+  /** 長さ変更の挙動モード ("shorten": 縮む, "extend": 伸びる, デフォルト: "shorten") */
+  reelMode?: ReelMode;
   /** 最小ロープ長 (blocks, デフォルト: 1.5) */
   minRopeLength?: number;
+  /** 最大ロープ長 (blocks, デフォルト: maxDistance または 1200) */
+  maxRopeLength?: number;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */

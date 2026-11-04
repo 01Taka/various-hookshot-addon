@@ -64,8 +64,6 @@ export function calculateElasticVelocity(
     Vector3Utils.scale(normal, springAccel + dampingAccel),
   );
 
-  player.sendMessage(`dis: ${r.toFixed(2)}, len: ${naturalLength.toFixed(2)}`);
-
   // --- 限界長を超えたら硬い拘束 ---
   if (maxLength) {
     const penetration = Math.max(0, r - maxLength);

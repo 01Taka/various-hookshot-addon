@@ -6,13 +6,15 @@ export const SLIME_BALL_ITEM_ID = "minecraft:slime_ball";
 
 /**
  * スライムボール（minecraft:slime_ball）を使用した双方向バネフックショットの定義
+ * 空中ジャンプ入力でバネが伸びる（extend）
  */
 export const springHookshotDefinition: HookshotDefinition = {
   id: SPRING_HOOKSHOT_ID,
   itemTypeId: SLIME_BALL_ITEM_ID,
-  maxDistance: 1200,
-  reelSpeed: 1.25,
-  minRopeLength: 1.5,
+  maxDistance: 50,
+  reelSpeed: 1.2,
+  reelMode: "extend",
+  minRopeLength: 0.5,
   calculateImpulse: (player, state) => {
     return calculateSpringHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
