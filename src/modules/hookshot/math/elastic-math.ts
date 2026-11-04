@@ -1,23 +1,19 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import {
-  calculateVelocityImpulse,
-  MINECRAFT_DRAG,
-  MINECRAFT_GRAVITY,
-} from "addon-utils";
-import {
-  getDirectionAndDistance,
-  predictTickPhysics,
-  getNormalComponent,
   clampOutwardVelocity,
-} from "../pendulum-calculations.utils";
-import { getAirDrag } from "./retractable-hookshot-math.utils";
+  convertTargetVelocityToImpulse,
+  getAirDrag,
+  getDirectionAndDistance,
+  getNormalComponent,
+  predictTickPhysics,
+} from "./physics-utils";
 
 export interface ElasticRopeParams {
   /** ロープの自然長。これ以下ではたるんで力が働かない */
   naturalLength: number;
   /** ロープの限界長。これを超えると硬い拘束に切り替わる */
-  maxLength: number;
+  maxLength?: number;
   /** バネ定数 (blocks/tick² per block)。大きいほど強く引く。0.2 超は不安定になりやすい */
   stiffness?: number;
   /** 法線方向の減衰率 (0〜1)。大きいほど振動が早く収まる */
@@ -26,7 +22,7 @@ export interface ElasticRopeParams {
   maxAcceleration?: number;
 }
 
-function calculateElasticVelocity(
+export function calculateElasticVelocity(
   player: Player,
   anchor: Vector3,
   {
@@ -68,17 +64,19 @@ function calculateElasticVelocity(
     Vector3Utils.scale(normal, springAccel + dampingAccel),
   );
 
-  player.sendMessage(`dis: ${r.toFixed(2)}, len: ${naturalLength}`);
+  player.sendMessage(`dis: ${r.toFixed(2)}, len: ${naturalLength.toFixed(2)}`);
 
   // --- 限界長を超えたら硬い拘束 ---
-  const penetration = Math.max(0, r - maxLength);
-  if (penetration > 0) {
-    const BAUMGARTE_FACTOR = 0.15;
-    target = clampOutwardVelocity(
-      target,
-      normal,
-      -penetration * BAUMGARTE_FACTOR,
-    );
+  if (maxLength) {
+    const penetration = Math.max(0, r - maxLength);
+    if (penetration > 0) {
+      const BAUMGARTE_FACTOR = 0.15;
+      target = clampOutwardVelocity(
+        target,
+        normal,
+        -penetration * BAUMGARTE_FACTOR,
+      );
+    }
   }
 
   return target;
@@ -90,13 +88,5 @@ export function calculateElasticHookshot(
   params: ElasticRopeParams,
 ): Vector3 {
   const velocity = calculateElasticVelocity(player, anchor, params);
-  if (velocity === null) return { x: 0, y: 0, z: 0 };
-
-  return calculateVelocityImpulse({
-    targetVelocity: velocity,
-    currentVelocity: player.getVelocity(),
-    dragXZ: MINECRAFT_DRAG.air.xz,
-    dragY: MINECRAFT_DRAG.air.y,
-    gravity: MINECRAFT_GRAVITY,
-  });
+  return convertTargetVelocityToImpulse(player, velocity);
 }
