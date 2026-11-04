@@ -1,6 +1,11 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, system, world } from "@minecraft/server";
-import { isInputButtonPressed, PlayerStateManager } from "addon-utils";
+import {
+  getDirectionVector,
+  isInputButtonPressed,
+  isSneakButtonPressed,
+  PlayerStateManager,
+} from "addon-utils";
 import { HookRenderManager } from "../render";
 import { AnchorPosition, HookshotDefinition, HookshotState } from "./types";
 
@@ -81,11 +86,50 @@ export class HookshotSystem {
       handler(player);
     }
 
+    const normal = getDirectionVector(hit.face);
+    const head = player.getHeadLocation();
+    const view = player.getViewDirection();
+
+    // 衝突面の中心座標
+    const faceCenterX = hit.block.x + 0.5 + normal.x * 0.5;
+    const faceCenterY = hit.block.y + 0.5 + normal.y * 0.5;
+    const faceCenterZ = hit.block.z + 0.5 + normal.z * 0.5;
+
+    // レイと平面の交点距離 t
+    const dot = normal.x * view.x + normal.y * view.y + normal.z * view.z;
+    let anchorX = faceCenterX;
+    let anchorY = faceCenterY;
+    let anchorZ = faceCenterZ;
+
+    if (Math.abs(dot) > 0.0001) {
+      const t =
+        (normal.x * (faceCenterX - head.x) +
+          normal.y * (faceCenterY - head.y) +
+          normal.z * (faceCenterZ - head.z)) /
+        dot;
+
+      if (t > 0) {
+        // 交点座標をブロック面の境界内 [0, 1] にクランプ
+        anchorX = Math.max(
+          hit.block.x,
+          Math.min(hit.block.x + 1, head.x + view.x * t),
+        );
+        anchorY = Math.max(
+          hit.block.y,
+          Math.min(hit.block.y + 1, head.y + view.y * t),
+        );
+        anchorZ = Math.max(
+          hit.block.z,
+          Math.min(hit.block.z + 1, head.z + view.z * t),
+        );
+      }
+    }
+
     const anchor: AnchorPosition = {
       dimensionId: player.dimension.id,
-      x: hit.block.x + 0.5,
-      y: hit.block.y + 0.5,
-      z: hit.block.z + 0.5,
+      x: anchorX,
+      y: anchorY,
+      z: anchorZ,
     };
 
     const distance = Vector3Utils.distance(player.location, anchor);
@@ -94,6 +138,9 @@ export class HookshotSystem {
       hookshotId: def.id,
       anchor,
       currentLength: distance,
+      jumpConsumed:
+        isInputButtonPressed(player, "Jump") || player.isJumping,
+      sneakConsumed: isSneakButtonPressed(player),
     };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
@@ -151,42 +198,112 @@ export class HookshotSystem {
   }
 
   /**
-   * プレイヤーが空中にいてジャンプボタンを押しているかを判定します。
+   * キー入力に応じたロープの伸縮処理を実行します。
+   * - ジャンプ（空中時）: 通常方向（デフォルト "shorten"）
+   * - スニーク/Shift（空中・接地問わず）: 逆方向（デフォルト "extend"）
+   * - 両方同時押し・入力なし: 何もしない
    */
-  private static isJumpingInAir(player: Player): boolean {
-    if (!player.isValid) return false;
+  private static handleReelInput(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+  ): void {
+    if (!player.isValid) return;
+
+    let jumpPressed = false;
+    let sneakPressed = false;
+    let onGround = false;
     try {
-      const inAir = !player.isOnGround;
-      const jumpPressed =
+      jumpPressed =
         isInputButtonPressed(player, "Jump") || player.isJumping;
-      return inAir && jumpPressed;
+      sneakPressed = isSneakButtonPressed(player);
+      onGround = player.isOnGround;
     } catch {
-      return false;
+      return;
+    }
+
+    let stateDirty = false;
+
+    if (!jumpPressed && state.jumpConsumed) {
+      state.jumpConsumed = false;
+      stateDirty = true;
+    }
+    if (!sneakPressed && state.sneakConsumed) {
+      state.sneakConsumed = false;
+      stateDirty = true;
+    }
+
+    // 両方同時押しなら中立（何もしない）
+    if (jumpPressed && sneakPressed) {
+      if (stateDirty) {
+        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      }
+      return;
+    }
+
+    const baseMode = def.reelMode ?? "shorten";
+    const reverseMode = baseMode === "extend" ? "shorten" : "extend";
+
+    // シフト（スニーク）は地上・空中のどちらでも逆方向（長くする）に動作
+    if (sneakPressed) {
+      const isInitial = !state.sneakConsumed;
+      if (isInitial) {
+        state.sneakConsumed = true;
+        stateDirty = true;
+      }
+      this.reel(player, state, def, reverseMode, isInitial, stateDirty);
+      return;
+    }
+
+    // ジャンプは空中時のみ通常方向（短くする）に動作
+    if (jumpPressed && !onGround) {
+      const isInitial = !state.jumpConsumed;
+      if (isInitial) {
+        state.jumpConsumed = true;
+        stateDirty = true;
+      }
+      this.reel(player, state, def, baseMode, isInitial, stateDirty);
+      return;
+    }
+
+    if (stateDirty) {
+      PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
   }
 
   /**
-   * ロープの長さ変更処理（縮小または伸長）
+   * ロープの長さ変更処理（短縮または伸長）
    */
   private static reel(
     player: Player,
     state: HookshotState,
     def: HookshotDefinition,
+    mode: "shorten" | "extend",
+    isInitial = false,
+    forceSave = false,
   ): void {
     const reelSpeed = def.reelSpeed ?? DEFAULT_REEL_SPEED;
-    const mode = def.reelMode ?? "shorten";
+    const configuredInitial =
+      typeof def.initialReelDelta === "object"
+        ? mode === "extend"
+          ? def.initialReelDelta.extend
+          : def.initialReelDelta.shorten
+        : def.initialReelDelta;
+
+    const initialStep = isInitial ? (configuredInitial ?? 0) : 0;
+    const delta = reelSpeed + initialStep;
 
     let nextLength = state.currentLength;
     if (mode === "extend") {
       const maxLength =
         def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
-      nextLength = Math.min(state.currentLength + reelSpeed, maxLength);
+      nextLength = Math.min(state.currentLength + delta, maxLength);
     } else {
       const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
-      nextLength = Math.max(state.currentLength - reelSpeed, minLength);
+      nextLength = Math.max(state.currentLength - delta, minLength);
     }
 
-    if (state.currentLength !== nextLength) {
+    if (state.currentLength !== nextLength || forceSave) {
       state.currentLength = nextLength;
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
@@ -224,10 +341,8 @@ export class HookshotSystem {
         const def = this.definitionsById.get(state.hookshotId);
         if (!def) continue;
 
-        // 空中でのジャンプ入力による長さ変更（縮小 or 伸長）
-        if (this.isJumpingInAir(player)) {
-          this.reel(player, state, def);
-        }
+        // キー入力によるロープ長の変更（ジャンプ＝短縮、シフト＝伸長、押下時の瞬間変化対応）
+        this.handleReelInput(player, state, def);
 
         // 物理インパルス計算と適用
         const impulse = def.calculateImpulse(player, state);

@@ -7,15 +7,16 @@ export const STICK_ITEM_ID = "minecraft:stick";
 
 /**
  * 棒（minecraft:stick）を使用した内側にも縮まない剛体棒フックショットの定義
- * 空中ジャンプ入力で棒が伸びる（extend）
+ * 空中ジャンプ入力で短く（shorten）、シフト入力で長く（extend）
  */
 export const rodHookshotDefinition: HookshotDefinition = {
   id: ROD_HOOKSHOT_ID,
   itemTypeId: STICK_ITEM_ID,
-  maxDistance: 50,
-  reelSpeed: 1.1,
+  maxDistance: 42,
+  reelSpeed: 0.9,
   reelMode: "extend",
-  minRopeLength: 0.5,
+  initialReelDelta: 0.0,
+  minRopeLength: 1.5,
   wireStyle: ROD_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateRodHookshot(player, state.anchor, state.currentLength);

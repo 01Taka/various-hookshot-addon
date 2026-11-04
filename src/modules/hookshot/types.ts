@@ -7,6 +7,8 @@ export interface HookshotState {
   hookshotId: string;
   anchor: AnchorPosition;
   currentLength: number;
+  jumpConsumed?: boolean;
+  sneakConsumed?: boolean;
 }
 
 export type ReelMode = "shorten" | "extend";
@@ -18,8 +20,10 @@ export interface HookshotDefinition {
   itemTypeId: string;
   /** Raycast の最大射程距離 (blocks, デフォルト: 1200) */
   maxDistance?: number;
-  /** 空中ジャンプ入力時の長さ変更速度 (blocks/tick, デフォルト: 1.25) */
+  /** ジャンプ/シフト入力時の継続的な長さ変更速度 (blocks/tick, デフォルト: 1.25) */
   reelSpeed?: number;
+  /** ボタンを押した瞬間に追加で一気に変更する瞬間変化量 (blocks, 単一数値または { shorten?, extend? } で指定可能。デフォルト: 0) */
+  initialReelDelta?: number | { shorten?: number; extend?: number };
   /** 長さ変更の挙動モード ("shorten": 縮む, "extend": 伸びる, デフォルト: "shorten") */
   reelMode?: ReelMode;
   /** 最小ロープ長 (blocks, デフォルト: 1.5) */

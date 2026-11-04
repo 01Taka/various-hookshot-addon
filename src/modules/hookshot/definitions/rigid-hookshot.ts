@@ -7,7 +7,7 @@ export const STRING_ITEM_ID = "minecraft:string";
 
 /**
  * 糸（minecraft:string）を使用した伸びがない（剛体ロープ）フックショットの定義
- * 空中ジャンプ入力でロープが縮む（shorten）
+ * 空中ジャンプ入力で短く（shorten）、シフト入力で長く（extend）
  */
 export const rigidHookshotDefinition: HookshotDefinition = {
   id: RIGID_HOOKSHOT_ID,
@@ -15,6 +15,7 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   maxDistance: 200,
   reelSpeed: 2.0,
   reelMode: "shorten",
+  initialReelDelta: 0.0,
   minRopeLength: 1.5,
   wireStyle: RIGID_WIRE_STYLE,
   calculateImpulse: (player, state) => {
