@@ -13,6 +13,7 @@ const DEFAULT_MIN_ROPE_LENGTH = 1.5;
 export class HookshotSystem {
   private static definitionsByItem = new Map<string, HookshotDefinition>();
   private static definitionsById = new Map<string, HookshotDefinition>();
+  private static externalUnhookHandlers: Array<(player: Player) => void> = [];
   private static isInitialized = false;
 
   /**
@@ -21,6 +22,16 @@ export class HookshotSystem {
   public static register(def: HookshotDefinition): void {
     this.definitionsByItem.set(def.itemTypeId, def);
     this.definitionsById.set(def.id, def);
+  }
+
+  /**
+   * 外部の特殊フックショットシステムが発射された時に、このシステムを解除するためのハンドラを登録します。
+   * （疎結合な排他制御用）
+   */
+  public static registerExternalUnhookHandler(
+    handler: (player: Player) => void,
+  ): void {
+    this.externalUnhookHandlers.push(handler);
   }
 
   /**
@@ -62,6 +73,11 @@ export class HookshotSystem {
     });
     if (!hit) {
       return false;
+    }
+
+    // 外部の特殊フックショット（パスファインダー等）が動作中なら解除を通知
+    for (const handler of this.externalUnhookHandlers) {
+      handler(player);
     }
 
     const anchor: AnchorPosition = {
@@ -136,7 +152,11 @@ export class HookshotSystem {
   /**
    * ロープ巻き取り処理
    */
-  private static reel(player: Player, state: HookshotState, def: HookshotDefinition): void {
+  private static reel(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+  ): void {
     const reelSpeed = def.reelSpeed ?? DEFAULT_REEL_SPEED;
     const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
 

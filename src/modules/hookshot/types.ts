@@ -9,7 +9,7 @@ export interface HookshotState {
 }
 
 export interface HookshotDefinition {
-  /** 一意な識別子 (例: "elastic", "rigid") */
+  /** 一意な識別子 (例: "elastic", "rigid", "rod", "spring") */
   id: string;
   /** 使用するアイテムの typeId (例: "minecraft:lead", "minecraft:string") */
   itemTypeId: string;

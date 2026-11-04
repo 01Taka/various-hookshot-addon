@@ -14,7 +14,7 @@ export * from "./math/spring-math";
 export * from "./math/physics-utils";
 
 /**
- * フックショットシステムを標準定義（リード、糸、棒、スライムボール）とともに初期化します。
+ * 通常フックショットシステムを標準定義（リード、糸、棒、スライムボール）とともに初期化します。
  */
 export function initHookshotSystem(): void {
   HookshotSystem.register(elasticHookshotDefinition);
