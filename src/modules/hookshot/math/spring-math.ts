@@ -20,8 +20,14 @@ export interface SpringRopeParams {
   damping?: number;
   /** 1Tickあたりの最大加速度 (blocks/tick²)。急激な伸び縮みでの暴発防止 */
   maxAcceleration?: number;
-  /** 着弾面の法線ベクトル（指定すると、着弾面に垂直な方向へ復元する曲げバネ力が有効になる） */
+  /** 着弾面の法線ベクトル（面の裏側へのめり込み防止に使用。また bendingAxis 未指定時の基準軸としてもフォールバック利用される） */
   surfaceNormal?: Vector3;
+  /**
+   * 曲げバネの基準軸ベクトル（単位ベクトル）。
+   * バネが横に曲げられた際、この軸方向へ引き戻す復元力が働く。
+   * 指定がない場合は surfaceNormal が使用される。
+   */
+  bendingAxis?: Vector3;
   /** 曲げバネ定数 (blocks/tick² per block)。大きいほど法線方向へ強く戻ろうとする */
   bendingStiffness?: number;
   /** 曲げ方向の減衰率 (0〜1)。大きいほど横揺れが早く収まる */
@@ -42,6 +48,7 @@ export function calculateSpringVelocity(
     damping = 0.01,
     maxAcceleration = 10,
     surfaceNormal,
+    bendingAxis,
     bendingStiffness = 0,
     bendingDamping = 0.02,
   }: SpringRopeParams,
@@ -82,16 +89,17 @@ export function calculateSpringVelocity(
     Vector3Utils.scale(normal, totalRadialAccel),
   );
 
-  // --- 着弾面に垂直な方向（法線軸）へ戻そうとする曲げバネ復元力 ---
-  // 根本が固定されたバネが横に曲げられた時、法線軸（アンカー + s * 法線）へ引き戻す力を加えます
-  if (surfaceNormal && bendingStiffness > 0) {
+  // --- 基準軸へ戻そうとする曲げバネ復元力 ---
+  // 根本が固定されたバネが横に曲げられた時、基準軸（アンカー + s * axis）へ引き戻す力を加えます
+  const referenceAxis = bendingAxis ?? surfaceNormal;
+  if (referenceAxis && bendingStiffness > 0) {
     const rVec = Vector3Utils.subtract(player.location, anchor);
-    // 法線方向への射影長 s = r · surfaceNormal
-    const s = Vector3Utils.dot(rVec, surfaceNormal);
-    // 法線軸からの横ズレ（撓み）ベクトル r_perp = r - s * surfaceNormal
+    // 基準軸方向への射影長 s = r · referenceAxis
+    const s = Vector3Utils.dot(rVec, referenceAxis);
+    // 基準軸からの横ズレ（撓み）ベクトル r_perp = r - s * referenceAxis
     const rPerp = Vector3Utils.subtract(
       rVec,
-      Vector3Utils.scale(surfaceNormal, s),
+      Vector3Utils.scale(referenceAxis, s),
     );
     const lateralOffset = Vector3Utils.magnitude(rPerp);
 
@@ -113,16 +121,21 @@ export function calculateSpringVelocity(
       );
     }
 
-    // 着弾面の裏側（s < 0）にめり込んだ場合は、法線方向へ押し戻す反発力
-    if (s < 0) {
-      const penetrationPush = Math.min(
-        Math.abs(s) * (stiffness * 1.5),
-        maxAcceleration,
-      );
-      target = Vector3Utils.add(
-        target,
-        Vector3Utils.scale(surfaceNormal, penetrationPush),
-      );
+    // 着弾面（surfaceNormal）の裏側、または基準軸の後ろ側にめり込んだ場合の反発力
+    const pushNormal =
+      surfaceNormal ?? (s < 0 ? referenceAxis : undefined);
+    if (pushNormal) {
+      const pushDot = Vector3Utils.dot(rVec, pushNormal);
+      if (pushDot < 0) {
+        const penetrationPush = Math.min(
+          Math.abs(pushDot) * (stiffness * 1.5),
+          maxAcceleration,
+        );
+        target = Vector3Utils.add(
+          target,
+          Vector3Utils.scale(pushNormal, penetrationPush),
+        );
+      }
     }
   }
 

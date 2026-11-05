@@ -106,10 +106,19 @@ export class HookshotSystem {
     const anchor = this.calculateAnchorPosition(player, hit, normal);
     const distance = Vector3Utils.distance(player.location, anchor);
 
+    // アンカーからプレイヤーへの初期方向ベクトル（刺さった瞬間の角度）
+    const initialVector = Vector3Utils.subtract(player.location, anchor);
+    const initialDistance = Vector3Utils.magnitude(initialVector);
+    const initialDirection =
+      initialDistance > 0.0001
+        ? Vector3Utils.scale(initialVector, 1 / initialDistance)
+        : normal;
+
     const state: HookshotState = {
       hookshotId: def.id,
       anchor,
       normal,
+      initialDirection,
       currentLength: distance,
       jumpConsumed:
         isInputButtonPressed(player, "Jump") || player.isJumping,
@@ -327,14 +336,15 @@ export class HookshotSystem {
           player.applyImpulse(impulse);
         }
 
-        // ワイヤーの描画
+        // ワイヤーの描画（定義側で getWireAxis が指定されている場合はその軸、無ければ state.normal）
+        const wireAxis = def.getWireAxis ? def.getWireAxis(state) : state.normal;
         HookRenderManager.renderHookshot(
           player,
           state.anchor,
           state.hookshotId,
           def.wireStyle,
           state.currentLength,
-          state.normal,
+          wireAxis,
         );
 
         // 接続中距離UIの更新（○○m / ○○m）

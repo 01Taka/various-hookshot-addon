@@ -13,7 +13,7 @@ export const BAMBOO_ITEM_ID = "minecraft:bamboo";
 export const bambooHookshotDefinition: HookshotDefinition = {
   id: BAMBOO_HOOKSHOT_ID,
   itemTypeId: BAMBOO_ITEM_ID,
-  maxDistance: 22,
+  maxDistance: 40,
   reelSpeed: 1.2,
   reelMode: "shorten",
   initialReelDelta: 1.5,

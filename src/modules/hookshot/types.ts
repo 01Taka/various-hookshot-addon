@@ -8,6 +8,8 @@ export interface HookshotState {
   anchor: AnchorPosition;
   /** 着弾面の法線ベクトル（外向き） */
   normal?: Vector3;
+  /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
+  initialDirection?: Vector3;
   currentLength: number;
   jumpConsumed?: boolean;
   sneakConsumed?: boolean;
@@ -34,6 +36,8 @@ export interface HookshotDefinition {
   maxRopeLength?: number;
   /** ワイヤーの描画スタイル（パーティクル、形状モードなど） */
   wireStyle?: WireStyle;
+  /** ワイヤー描画時の基準軸（法線または曲げ軸）を解決するコールバック（省略時は state.normal が使用されます） */
+  getWireAxis?: (state: HookshotState) => Vector3 | undefined;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */
