@@ -19,6 +19,8 @@ export interface WireRenderContext {
   dimensionId: string;
   start: Vector3;
   end: Vector3;
+  /** 着弾面の法線ベクトル（曲げバネ描画用） */
+  normal?: Vector3;
   /** 現在のロープ設定長 (たるみ計算用) */
   currentLength?: number;
   style: WireStyle;

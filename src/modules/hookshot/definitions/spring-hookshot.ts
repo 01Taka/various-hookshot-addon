@@ -24,6 +24,9 @@ export const springHookshotDefinition: HookshotDefinition = {
       maxLength: Math.max(200, state.currentLength * 1.5),
       stiffness: 0.03,
       damping: 0.01,
+      surfaceNormal: state.normal,
+      bendingStiffness: 0.02,
+      bendingDamping: 0.02,
     });
   },
 };

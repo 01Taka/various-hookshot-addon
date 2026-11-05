@@ -20,6 +20,12 @@ export interface SpringRopeParams {
   damping?: number;
   /** 1Tickあたりの最大加速度 (blocks/tick²)。急激な伸び縮みでの暴発防止 */
   maxAcceleration?: number;
+  /** 着弾面の法線ベクトル（指定すると、着弾面に垂直な方向へ復元する曲げバネ力が有効になる） */
+  surfaceNormal?: Vector3;
+  /** 曲げバネ定数 (blocks/tick² per block)。大きいほど法線方向へ強く戻ろうとする */
+  bendingStiffness?: number;
+  /** 曲げ方向の減衰率 (0〜1)。大きいほど横揺れが早く収まる */
+  bendingDamping?: number;
 }
 
 /**
@@ -35,6 +41,9 @@ export function calculateSpringVelocity(
     stiffness = 0.03,
     damping = 0.01,
     maxAcceleration = 10,
+    surfaceNormal,
+    bendingStiffness = 0,
+    bendingDamping = 0.02,
   }: SpringRopeParams,
 ): Vector3 | null {
   const { dir: normal, distance: r } = getDirectionAndDistance(
@@ -72,6 +81,50 @@ export function calculateSpringVelocity(
     vPred,
     Vector3Utils.scale(normal, totalRadialAccel),
   );
+
+  // --- 着弾面に垂直な方向（法線軸）へ戻そうとする曲げバネ復元力 ---
+  // 根本が固定されたバネが横に曲げられた時、法線軸（アンカー + s * 法線）へ引き戻す力を加えます
+  if (surfaceNormal && bendingStiffness > 0) {
+    const rVec = Vector3Utils.subtract(player.location, anchor);
+    // 法線方向への射影長 s = r · surfaceNormal
+    const s = Vector3Utils.dot(rVec, surfaceNormal);
+    // 法線軸からの横ズレ（撓み）ベクトル r_perp = r - s * surfaceNormal
+    const rPerp = Vector3Utils.subtract(
+      rVec,
+      Vector3Utils.scale(surfaceNormal, s),
+    );
+    const lateralOffset = Vector3Utils.magnitude(rPerp);
+
+    if (lateralOffset > 0.0001) {
+      const lateralDir = Vector3Utils.scale(rPerp, 1 / lateralOffset);
+      // 横ズレを戻す復元加速度（-lateralDir 方向）
+      const clampedBendingAccel = Math.min(
+        bendingStiffness * lateralOffset,
+        maxAcceleration,
+      );
+      // 横ズレ方向の速度成分に対するダンピング（横揺れの収束）
+      const lateralVel = Vector3Utils.dot(vPred, lateralDir);
+      const lateralDampingAccel = lateralVel * bendingDamping;
+
+      const totalLateralAccel = clampedBendingAccel + lateralDampingAccel;
+      target = Vector3Utils.subtract(
+        target,
+        Vector3Utils.scale(lateralDir, totalLateralAccel),
+      );
+    }
+
+    // 着弾面の裏側（s < 0）にめり込んだ場合は、法線方向へ押し戻す反発力
+    if (s < 0) {
+      const penetrationPush = Math.min(
+        Math.abs(s) * (stiffness * 1.5),
+        maxAcceleration,
+      );
+      target = Vector3Utils.add(
+        target,
+        Vector3Utils.scale(surfaceNormal, penetrationPush),
+      );
+    }
+  }
 
   // --- 限界長を超えたら硬い拘束 ---
   if (maxLength) {

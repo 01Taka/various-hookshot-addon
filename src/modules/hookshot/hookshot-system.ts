@@ -1,5 +1,11 @@
 import { Vector3Utils } from "@minecraft/math";
-import { BlockRaycastHit, Player, system, world } from "@minecraft/server";
+import {
+  BlockRaycastHit,
+  Player,
+  system,
+  Vector3,
+  world,
+} from "@minecraft/server";
 import {
   getDirectionVector,
   getMainhandItem,
@@ -89,12 +95,14 @@ export class HookshotSystem {
       handler(player);
     }
 
-    const anchor = this.calculateAnchorPosition(player, hit);
+    const normal = getDirectionVector(hit.face);
+    const anchor = this.calculateAnchorPosition(player, hit, normal);
     const distance = Vector3Utils.distance(player.location, anchor);
 
     const state: HookshotState = {
       hookshotId: def.id,
       anchor,
+      normal,
       currentLength: distance,
       jumpConsumed:
         isInputButtonPressed(player, "Jump") || player.isJumping,
@@ -319,6 +327,7 @@ export class HookshotSystem {
           state.hookshotId,
           def.wireStyle,
           state.currentLength,
+          state.normal,
         );
 
         // 接続中距離UIの更新（○○m / ○○m）
@@ -333,8 +342,8 @@ export class HookshotSystem {
   private static calculateAnchorPosition(
     player: Player,
     hit: BlockRaycastHit,
+    normal: Vector3 = getDirectionVector(hit.face),
   ): AnchorPosition {
-    const normal = getDirectionVector(hit.face);
     const head = player.getHeadLocation();
     const view = player.getViewDirection();
 

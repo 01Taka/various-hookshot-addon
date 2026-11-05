@@ -6,6 +6,8 @@ export type AnchorPosition = Vector3 & { dimensionId: string };
 export interface HookshotState {
   hookshotId: string;
   anchor: AnchorPosition;
+  /** 着弾面の法線ベクトル（外向き） */
+  normal?: Vector3;
   currentLength: number;
   jumpConsumed?: boolean;
   sneakConsumed?: boolean;

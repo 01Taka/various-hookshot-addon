@@ -79,15 +79,29 @@ export class LineRenderer {
     );
 
     // ばね（コイル）用の直交基底ベクトルの準備
-    let u: Vector3 = { x: 0, y: 0, z: 0 };
-    let v: Vector3 = { x: 0, y: 0, z: 0 };
-    if (style.shapeMode === "spring") {
+    const isSpring = style.shapeMode === "spring";
+    const normal = context.normal;
+    const isBendingSpring = isSpring && !!normal;
+
+    // 2次ベジェ制御点 (曲げバネ用: アンカーから法線方向へ突き出した制御点 p1)
+    const p0: Vector3 = start;
+    let p1: Vector3 = { x: 0, y: 0, z: 0 };
+    const p2: Vector3 = end;
+    if (isBendingSpring && normal) {
+      const bendLength = Math.min(Math.max(1.0, dist * 0.45), 8.0);
+      p1 = Vector3Utils.add(end, Vector3Utils.scale(normal, bendLength));
+    }
+
+    // 直交基底用のグローバル参照ベクトル
+    const globalRef: Vector3 =
+      Math.abs(diff.y / dist) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+
+    let uFixed: Vector3 = { x: 0, y: 0, z: 0 };
+    let vFixed: Vector3 = { x: 0, y: 0, z: 0 };
+    if (isSpring && !isBendingSpring) {
       const dir = Vector3Utils.scale(diff, 1 / dist);
-      // dir に平行でない基準ベクトルを選択
-      const arbitrary: Vector3 =
-        Math.abs(dir.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
-      u = Vector3Utils.normalize(Vector3Utils.cross(dir, arbitrary));
-      v = Vector3Utils.cross(dir, u);
+      uFixed = Vector3Utils.normalize(Vector3Utils.cross(dir, globalRef));
+      vFixed = Vector3Utils.cross(dir, uFixed);
     }
 
     // たるみ（放物線）の深度計算
@@ -97,15 +111,49 @@ export class LineRenderer {
     // 始点手前から終点（アンカー手前）まで補間配置
     for (let i = 1; i <= steps; i++) {
       const t = i / (steps + 1);
-      let px = start.x + diff.x * t;
-      let py = start.y + diff.y * t;
-      let pz = start.z + diff.z * t;
+      let px: number;
+      let py: number;
+      let pz: number;
+      let u = uFixed;
+      let v = vFixed;
+
+      if (isBendingSpring) {
+        // 2次ベジェ曲線補間: B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+        const oneMinusT = 1 - t;
+        const w0 = oneMinusT * oneMinusT;
+        const w1 = 2 * oneMinusT * t;
+        const w2 = t * t;
+
+        px = w0 * p0.x + w1 * p1.x + w2 * p2.x;
+        py = w0 * p0.y + w1 * p1.y + w2 * p2.y;
+        pz = w0 * p0.z + w1 * p1.z + w2 * p2.z;
+
+        // 接線ベクトル dB/dt = 2(1-t)(P1 - P0) + 2t(P2 - P1)
+        const tx = 2 * oneMinusT * (p1.x - p0.x) + 2 * t * (p2.x - p1.x);
+        const ty = 2 * oneMinusT * (p1.y - p0.y) + 2 * t * (p2.y - p1.y);
+        const tz = 2 * oneMinusT * (p1.z - p0.z) + 2 * t * (p2.z - p1.z);
+        const tLen = Math.hypot(tx, ty, tz);
+
+        if (tLen > 0.0001) {
+          const tan = { x: tx / tLen, y: ty / tLen, z: tz / tLen };
+          let cross = Vector3Utils.cross(tan, globalRef);
+          if (Vector3Utils.magnitude(cross) < 0.1) {
+            cross = Vector3Utils.cross(tan, { x: 0, y: 0, z: 1 });
+          }
+          u = Vector3Utils.normalize(cross);
+          v = Vector3Utils.cross(tan, u);
+        }
+      } else {
+        px = start.x + diff.x * t;
+        py = start.y + diff.y * t;
+        pz = start.z + diff.z * t;
+      }
 
       if (style.shapeMode === "sag" && sagDepth > 0.05) {
         // 放物線 4 * sagDepth * t * (1 - t) (t=0.5で最大値 sagDepth)
         const sag = 4 * sagDepth * t * (1 - t);
         py -= sag;
-      } else if (style.shapeMode === "spring") {
+      } else if (isSpring) {
         const radius = style.amplitude ?? 0.2;
         // 1ブロックあたり約1.2回転
         const theta = dist * t * 1.2 * Math.PI * 2;

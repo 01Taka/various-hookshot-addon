@@ -25,6 +25,7 @@ export class HookRenderManager {
     anchor: Vector3,
     style: WireStyle,
     currentLength?: number,
+    normal?: Vector3,
   ): void {
     if (!player.isValid) return;
 
@@ -33,6 +34,7 @@ export class HookRenderManager {
       dimensionId: player.dimension.id,
       start,
       end: anchor,
+      normal,
       currentLength,
       style,
     });
@@ -47,10 +49,11 @@ export class HookRenderManager {
     hookshotId: string,
     customStyle?: WireStyle,
     currentLength?: number,
+    normal?: Vector3,
   ): void {
     const style =
       customStyle ?? DEFAULT_STYLES_BY_ID[hookshotId] ?? RIGID_WIRE_STYLE;
-    this.render(player, anchor, style, currentLength);
+    this.render(player, anchor, style, currentLength, normal);
   }
 
   /**
