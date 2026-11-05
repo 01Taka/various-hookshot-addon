@@ -13,6 +13,14 @@ export interface WireStyle {
   anchorParticleId?: string;
   /** たるみの最大深度係数、またはばねの半径 */
   amplitude?: number;
+  /** 自然長に対する伸縮比率に応じてパーティクル間隔を変化させるか (ゴム紐用) */
+  elasticSpacing?: boolean;
+  /** 伸びた時の伸縮感度指数 (デフォルト 3.0: 伸びた時に大きく間隔が開く) */
+  elasticSensitivity?: number;
+  /** パーティクル間隔の最大上限 (blocks, 間が空きすぎないように制限) */
+  maxStepDistance?: number;
+  /** パーティクル間隔の最小下限 (blocks, 詰まりすぎ防止) */
+  minStepDistance?: number;
 }
 
 export interface WireRenderContext {

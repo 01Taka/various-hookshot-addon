@@ -2,7 +2,7 @@ import { Vector3Utils } from "@minecraft/math";
 import { Dimension, Player, Vector3 } from "@minecraft/server";
 import { WireRenderContext, WireStyle } from "./types";
 
-const MAX_PARTICLES_PER_WIRE = 75;
+const MAX_PARTICLES_PER_WIRE = 500;
 
 export class LineRenderer {
   /**
@@ -65,16 +65,45 @@ export class LineRenderer {
     // 距離が極めて近い場合は描画不要
     if (dist < 0.25) return;
 
-    // 距離に応じた適応型ステップ幅
+    // たるみ（放物線）の深度計算
+    const isSag = style.shapeMode === "sag";
+    const slack = isSag ? Math.max(0, (currentLength ?? dist) - dist) : 0;
+    const sagDepth = Math.min(slack * (style.amplitude ?? 0.5), 3.5);
+
+    // 紐の実効長（たるみ時は放物線の弧長を近似計算）
+    const pathLength =
+      isSag && sagDepth > 0.05
+        ? Math.sqrt(dist * dist + (16 / 3) * sagDepth * sagDepth)
+        : dist;
+
+    // 基本ステップ幅（着弾距離によらず一定の基準間隔）
     let step = style.stepDistance;
-    if (dist > 20) {
-      step = Math.max(style.stepDistance * 1.8, 0.7);
-    } else if (dist > 8) {
-      step = style.stepDistance * 1.3;
+
+    // ゴム紐の伸縮表現: 自然長 (currentLength) に対する現在長 (dist) の比率に応じて間隔を伸縮
+    // 縮んだ時 (<= 1.0) は等倍（線形）で詰め、伸びた時 (> 1.0) は感度指数により大きく間隔を開ける
+    const isElastic = !!style.elasticSpacing;
+    if (isElastic && currentLength !== undefined && currentLength > 0.001) {
+      const stretchRatio = dist / currentLength;
+      let scaledRatio: number;
+      if (stretchRatio <= 1.0) {
+        // 縮んだ時は等倍（感度指数導入前と同等の線形スケーリング）
+        scaledRatio = stretchRatio;
+      } else {
+        // 伸びた時はより大きく間隔が開くよう感度指数を適用 (デフォルト: 3.0)
+        const sensitivity = style.elasticSensitivity ?? 3.0;
+        scaledRatio = Math.pow(stretchRatio, sensitivity);
+      }
+
+      // 間隔の上下限（間が空きすぎないように上限を適用、詰まりすぎ防止の下限）
+      const maxStep = style.maxStepDistance ?? 2.6;
+      const minStep = style.minStepDistance ?? 0.08;
+
+      const dynamicStep = style.stepDistance * scaledRatio;
+      step = Math.min(Math.max(dynamicStep, minStep), maxStep);
     }
 
     const steps = Math.min(
-      Math.max(2, Math.floor(dist / Math.max(0.1, step))),
+      Math.max(2, Math.floor(pathLength / Math.max(0.05, step))),
       MAX_PARTICLES_PER_WIRE,
     );
 
@@ -103,10 +132,6 @@ export class LineRenderer {
       uFixed = Vector3Utils.normalize(Vector3Utils.cross(dir, globalRef));
       vFixed = Vector3Utils.cross(dir, uFixed);
     }
-
-    // たるみ（放物線）の深度計算
-    const slack = Math.max(0, (currentLength ?? dist) - dist);
-    const sagDepth = Math.min(slack * (style.amplitude ?? 0.5), 3.5);
 
     // 始点手前から終点（アンカー手前）まで補間配置
     for (let i = 1; i <= steps; i++) {
