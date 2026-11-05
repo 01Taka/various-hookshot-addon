@@ -39,6 +39,13 @@ export class HookshotSystem {
   }
 
   /**
+   * 指定されたアイテム typeId が登録済みのフックショットアイテムかどうかを判定します。
+   */
+  public static isHookshotItem(itemTypeId: string): boolean {
+    return this.definitionsByItem.has(itemTypeId);
+  }
+
+  /**
    * 外部の特殊フックショットシステムが発射された時に、このシステムを解除するためのハンドラを登録します。
    * （疎結合な排他制御用）
    */
