@@ -65,15 +65,19 @@ export class LineRenderer {
     // 距離が極めて近い場合は描画不要
     if (dist < 0.25) return;
 
-    // たるみ（放物線）の深度計算
+    // たるみ（放物線）およびしなり（弓なり曲げ）の深度計算
     const isSag = style.shapeMode === "sag";
+    const isBent = style.shapeMode === "bent";
     const slack = isSag ? Math.max(0, (currentLength ?? dist) - dist) : 0;
+    const compression = isBent ? Math.max(0, (currentLength ?? dist) - dist) : 0;
     const sagDepth = Math.min(slack * (style.amplitude ?? 0.5), 3.5);
+    const bendDepth = Math.min(compression * (style.amplitude ?? 0.85), 3.5);
 
-    // 紐の実効長（たるみ時は放物線の弧長を近似計算）
+    // 紐の実効長（たるみ・しなり時は放物線の弧長を近似計算）
+    const maxDeflection = Math.max(sagDepth, bendDepth);
     const pathLength =
-      isSag && sagDepth > 0.05
-        ? Math.sqrt(dist * dist + (16 / 3) * sagDepth * sagDepth)
+      (isSag && sagDepth > 0.05) || (isBent && bendDepth > 0.05)
+        ? Math.sqrt(dist * dist + (16 / 3) * maxDeflection * maxDeflection)
         : dist;
 
     // 基本ステップ幅（着弾距離によらず一定の基準間隔）
@@ -133,6 +137,30 @@ export class LineRenderer {
       vFixed = Vector3Utils.cross(dir, uFixed);
     }
 
+    // しなり（弓なり曲げ）用の曲げ方向ベクトルの準備
+    let bendDir: Vector3 = { x: 0, y: 1, z: 0 };
+    if (isBent) {
+      const dir = Vector3Utils.scale(diff, 1 / dist);
+      if (normal) {
+        const dot = Vector3Utils.dot(normal, dir);
+        const perp = Vector3Utils.subtract(normal, Vector3Utils.scale(dir, dot));
+        const perpLen = Vector3Utils.magnitude(perp);
+        if (perpLen > 0.05) {
+          bendDir = Vector3Utils.scale(perp, 1 / perpLen);
+        } else {
+          const dotUp = Vector3Utils.dot(globalRef, dir);
+          const perpUp = Vector3Utils.subtract(globalRef, Vector3Utils.scale(dir, dotUp));
+          const perpUpLen = Vector3Utils.magnitude(perpUp);
+          bendDir = perpUpLen > 0.05 ? Vector3Utils.scale(perpUp, 1 / perpUpLen) : { x: 0, y: 1, z: 0 };
+        }
+      } else {
+        const dotUp = Vector3Utils.dot(globalRef, dir);
+        const perpUp = Vector3Utils.subtract(globalRef, Vector3Utils.scale(dir, dotUp));
+        const perpUpLen = Vector3Utils.magnitude(perpUp);
+        bendDir = perpUpLen > 0.05 ? Vector3Utils.scale(perpUp, 1 / perpUpLen) : { x: 0, y: 1, z: 0 };
+      }
+    }
+
     // 始点手前から終点（アンカー手前）まで補間配置
     for (let i = 1; i <= steps; i++) {
       const t = i / (steps + 1);
@@ -178,6 +206,12 @@ export class LineRenderer {
         // 放物線 4 * sagDepth * t * (1 - t) (t=0.5で最大値 sagDepth)
         const sag = 4 * sagDepth * t * (1 - t);
         py -= sag;
+      } else if (isBent && bendDepth > 0.02) {
+        // 圧縮荷重による弓なりのしなり弧: 4 * bendDepth * t * (1 - t)
+        const arc = 4 * bendDepth * t * (1 - t);
+        px += bendDir.x * arc;
+        py += bendDir.y * arc;
+        pz += bendDir.z * arc;
       } else if (isSpring) {
         const radius = style.amplitude ?? 0.2;
         // 1ブロックあたり約1.2回転

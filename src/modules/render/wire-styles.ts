@@ -61,3 +61,16 @@ export const PATHFINDER_WIRE_STYLE: WireStyle = {
   shapeMode: "straight",
   anchorParticleId: "various_hookshot_addon:wire_pathfinder",
 };
+
+/**
+ * 竹（しなる棒高跳びポール）のワイヤースタイル
+ * 鮮やかな竹色パーティクルで、圧縮荷重に応じたしなり（bent）を表現
+ */
+export const BAMBOO_WIRE_STYLE: WireStyle = {
+  particleId: "various_hookshot_addon:wire_bamboo",
+  stepDistance: 0.4,
+  shapeMode: "bent",
+  anchorParticleId: "various_hookshot_addon:wire_bamboo",
+  amplitude: 0.85,
+};
+

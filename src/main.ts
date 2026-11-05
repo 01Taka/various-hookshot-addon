@@ -12,7 +12,7 @@ world.afterEvents.worldLoad.subscribe(() => {
   world.sendMessage("§7地上でスニーク＋左クリック、または /scriptevent hookshot:explosion で爆発サポートのON/OFFを設定できます。");
 });
 
-// 通常フックショットシステム初期化（リード: 伸縮、糸: 剛体、棒: ロッド、スライムボール: ばね）
+// 通常フックショットシステム初期化（リード: 伸縮、糸: 剛体、棒: ロッド、スライムボール: ばね、竹: 棒高跳びポール）
 initHookshotSystem();
 
 // パスファインダー型グラップル初期化（鉄インゴット: 独立した視線ステアリング・スリングショット）

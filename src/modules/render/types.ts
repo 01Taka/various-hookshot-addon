@@ -1,13 +1,13 @@
 import { Vector3 } from "@minecraft/server";
 
-export type WireShapeMode = "straight" | "sag" | "spring";
+export type WireShapeMode = "straight" | "sag" | "spring" | "bent";
 
 export interface WireStyle {
   /** 使用するパーティクルID (例: "minecraft:basic_crit_particle") */
   particleId: string;
   /** パーティクル配置の基本間隔 (blocks, 例: 0.35〜0.6) */
   stepDistance: number;
-  /** 形状モード ("straight": 直線, "sag": たるみ, "spring": コイルばね) */
+  /** 形状モード ("straight": 直線, "sag": たるみ, "spring": コイルばね, "bent": 荷重しなり) */
   shapeMode: WireShapeMode;
   /** アンカー先端（着弾点）に表示するパーティクルID (省略可) */
   anchorParticleId?: string;
