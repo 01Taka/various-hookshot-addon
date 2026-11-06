@@ -13,6 +13,8 @@ export interface HookshotState {
   currentLength: number;
   jumpConsumed?: boolean;
   sneakConsumed?: boolean;
+  /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
+  isReelingIn?: boolean;
 }
 
 export type ReelMode = "shorten" | "extend";
@@ -38,6 +40,10 @@ export interface HookshotDefinition {
   wireStyle?: WireStyle;
   /** ワイヤー描画時の基準軸（法線または曲げ軸）を解決するコールバック（省略時は state.normal が使用されます） */
   getWireAxis?: (state: HookshotState) => Vector3 | undefined;
+  /** 視線ステアリング推進力を有効にするかどうか */
+  enableGazeSteering?: boolean;
+  /** 手動解除時に低空気抵抗な慣性飛行へ移行するかどうか */
+  enablePostFlight?: boolean;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */

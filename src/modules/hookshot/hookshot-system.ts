@@ -14,6 +14,8 @@ import {
   PlayerStateManager,
 } from "addon-utils";
 import { HookRenderManager } from "../render";
+import { startPostFlight } from "../pathfinder-grapple/physics";
+import { calculateReelSpeedMultiplier } from "./math/steering-math";
 import { AnchorPosition, HookshotDefinition, HookshotState } from "./types";
 
 const ACTIVE_HOOK_KEY = "hookshotActiveState";
@@ -77,6 +79,9 @@ export class HookshotSystem {
     this.clearDistanceUiIfActive(player);
 
     const def = this.definitionsById.get(state.hookshotId);
+    if (def?.enablePostFlight) {
+      startPostFlight(player);
+    }
     if (def?.onDetach) {
       def.onDetach(player, state);
     }
@@ -227,8 +232,24 @@ export class HookshotSystem {
     const baseMode = def.reelMode ?? "shorten";
     const reverseMode = baseMode === "extend" ? "shorten" : "extend";
 
+    // 両方同時押しなら中立（何もしない）
+    if (jumpPressed && sneakPressed) {
+      if (state.isReelingIn) {
+        state.isReelingIn = false;
+        stateDirty = true;
+      }
+      if (stateDirty) {
+        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      }
+      return;
+    }
+
     // シフト（スニーク）は地上・空中のどちらでも逆方向（長くする）に動作
     if (sneakPressed) {
+      if (state.isReelingIn) {
+        state.isReelingIn = false;
+        stateDirty = true;
+      }
       const isInitial = !state.sneakConsumed;
       if (isInitial) {
         state.sneakConsumed = true;
@@ -240,6 +261,10 @@ export class HookshotSystem {
 
     // ジャンプは空中時のみ通常方向（短くする）に動作
     if (jumpPressed && !onGround) {
+      if (baseMode === "shorten" && !state.isReelingIn) {
+        state.isReelingIn = true;
+        stateDirty = true;
+      }
       const isInitial = !state.jumpConsumed;
       if (isInitial) {
         state.jumpConsumed = true;
@@ -247,6 +272,11 @@ export class HookshotSystem {
       }
       this.reel(player, state, def, baseMode, isInitial, stateDirty);
       return;
+    }
+
+    if (state.isReelingIn) {
+      state.isReelingIn = false;
+      stateDirty = true;
     }
 
     if (stateDirty) {
@@ -274,7 +304,18 @@ export class HookshotSystem {
         : def.initialReelDelta;
 
     const initialStep = isInitial ? (configuredInitial ?? 0) : 0;
-    const delta = reelSpeed + initialStep;
+    let delta = reelSpeed + initialStep;
+
+    // 視線ステアリング対応フックショットで短縮（巻き取り）中の場合、
+    // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）
+    if (mode === "shorten" && def.enableGazeSteering) {
+      const multiplier = calculateReelSpeedMultiplier(
+        player,
+        state.anchor,
+        state.currentLength,
+      );
+      delta *= multiplier;
+    }
 
     let nextLength = state.currentLength;
     if (mode === "extend") {

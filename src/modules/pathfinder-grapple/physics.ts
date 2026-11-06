@@ -6,8 +6,11 @@ import {
   MINECRAFT_DRAG,
   MINECRAFT_GRAVITY,
   PlayerDirectionResolver,
+  PlayerStateManager,
 } from "addon-utils";
 import { PathfinderActiveState, PathfinderPostFlightState } from "./types";
+
+export const PATHFINDER_POST_FLIGHT_KEY = "pathfinderPostFlightState";
 
 /** 視線・ストレイフによる接線方向ステアリング加速度 (blocks/tick²) */
 const STEER_ACCEL = 0.085;
@@ -220,6 +223,28 @@ export function calculatePathfinderVelocityImpulse(
     dragY: MINECRAFT_DRAG.air.y,
     gravity: MINECRAFT_GRAVITY,
   });
+}
+
+/**
+ * 空中でスリングショット切断された際、着地まで低空気抵抗な放物線慣性飛行（エアストレイフ維持）を開始します。
+ */
+export function startPostFlight(player: Player): void {
+  if (
+    !player.isOnGround &&
+    !player.isFlying &&
+    !player.isGliding &&
+    !player.isInWater
+  ) {
+    const currentVel = player.getVelocity();
+    const horizSpeed = Math.hypot(currentVel.x, currentVel.z);
+    if (horizSpeed >= 0.25) {
+      const postFlight: PathfinderPostFlightState = {
+        detachedTick: system.currentTick,
+        lastProcessedTick: system.currentTick,
+      };
+      PlayerStateManager.set(player.id, PATHFINDER_POST_FLIGHT_KEY, postFlight);
+    }
+  }
 }
 
 /**

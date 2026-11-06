@@ -14,6 +14,7 @@ export * from "./math/elastic-math";
 export * from "./math/rigid-math";
 export * from "./math/rod-math";
 export * from "./math/spring-math";
+export * from "./math/steering-math";
 export * from "./math/physics-utils";
 
 /**

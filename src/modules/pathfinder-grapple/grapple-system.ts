@@ -20,7 +20,9 @@ import {
   calculatePathfinderVelocityImpulse,
   calculatePostFlightImpulse,
   getPlayerChestLocation,
+  PATHFINDER_POST_FLIGHT_KEY,
   playSoundSafe,
+  startPostFlight,
 } from "./physics";
 import {
   PathfinderActiveState,
@@ -32,7 +34,6 @@ export const PATHFINDER_ITEM_ID = "minecraft:iron_ingot";
 export const PATHFINDER_MAX_DISTANCE = 72;
 
 const PATHFINDER_ACTIVE_KEY = "pathfinderActiveState";
-const PATHFINDER_POST_FLIGHT_KEY = "pathfinderPostFlightState";
 const PATHFINDER_LAST_USE_TICK_KEY = "pathfinderLastUseTick";
 const PATHFINDER_LAST_JUMP_TICK_KEY = "pathfinderLastJumpTick";
 
@@ -160,13 +161,7 @@ export class PathfinderGrappleSystem {
     }
 
     // 空中でスリングショット切断された場合、着地まで低空気抵抗の放物線慣性飛行へ移行
-    if (!player.isOnGround && !player.isFlying) {
-      const postFlight: PathfinderPostFlightState = {
-        detachedTick: system.currentTick,
-        lastProcessedTick: system.currentTick,
-      };
-      PlayerStateManager.set(player.id, PATHFINDER_POST_FLIGHT_KEY, postFlight);
-    }
+    startPostFlight(player);
   }
 
   /**
