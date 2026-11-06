@@ -1,3 +1,4 @@
+import { Vector3Utils } from "@minecraft/math";
 import { BAMBOO_WIRE_STYLE } from "../../render";
 import {
   BambooPhysicsParams,
@@ -26,6 +27,29 @@ export interface BambooHookshotConfig {
    * デフォルト: 0.35 (35%)
    */
   tangentTransferRatio?: number;
+  /**
+   * 水平方向（X/Z 軸の走る速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick)。
+   * デフォルト: 4.0
+   */
+  speedFlexBonusFactorXZ?: number;
+  /**
+   * 水平方向（X 軸）のしなりボーナス係数エイリアス
+   */
+  speedFlexBonusFactorX?: number;
+  /**
+   * 鉛直方向（Y 軸の落下・上昇速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick)。
+   * デフォルト: 2.0
+   */
+  speedFlexBonusFactorY?: number;
+  /**
+   * 速度しなりボーナスの共通係数（未指定時のフォールバック用）
+   */
+  speedFlexBonusFactor?: number;
+  /**
+   * 速度しなりボーナスの最大追加長 (blocks)。
+   * デフォルト: 3.5
+   */
+  maxSpeedFlexBonus?: number;
   /** 動径減衰係数 */
   damping?: number;
   /** 最大反発加速度 */
@@ -41,6 +65,9 @@ export const bambooHookshotConfig: BambooHookshotConfig = {
   flexibility: 1.0,
   maxCompression: 5.0,
   tangentTransferRatio: 0.7,
+  maxSpeedFlexBonus: 12.0,
+  speedFlexBonusFactorXZ: 16.0,
+  speedFlexBonusFactorY: 1.0,
 };
 
 /**
@@ -52,7 +79,7 @@ export const bambooHookshotConfig: BambooHookshotConfig = {
 export const bambooHookshotDefinition: HookshotDefinition = {
   id: BAMBOO_HOOKSHOT_ID,
   itemTypeId: BAMBOO_ITEM_ID,
-  maxDistance: 48,
+  maxDistance: 40,
   reelSpeed: 0.8,
   reelMode: "extend",
   initialReelDelta: 0.0,
@@ -69,5 +96,39 @@ export const bambooHookshotDefinition: HookshotDefinition = {
       damping: bambooHookshotConfig.damping,
       maxAcceleration: bambooHookshotConfig.maxAcceleration,
     });
+  },
+  onAttach: (player, state) => {
+    // 着弾した瞬間にアンカー（着弾）方向への速度を持っている場合、速度に応じたしなりボーナスを付与
+    // （水平方向 X/Z と鉛直方向 Y で個別の重み係数を分離適用）
+    const vel = player.getVelocity();
+    const toAnchor = Vector3Utils.subtract(state.anchor, player.location);
+    const dist = Vector3Utils.magnitude(toAnchor);
+    if (dist > 0.0001) {
+      const dirToAnchor = Vector3Utils.scale(toAnchor, 1 / dist);
+
+      // 水平方向（X, Z）および鉛直方向（Y）それぞれのアンカー接近速度成分
+      const inwardXZ = Math.max(
+        0,
+        vel.x * dirToAnchor.x + vel.z * dirToAnchor.z,
+      );
+      const inwardY = Math.max(0, vel.y * dirToAnchor.y);
+
+      const factorXZ =
+        bambooHookshotConfig.speedFlexBonusFactorXZ ??
+        bambooHookshotConfig.speedFlexBonusFactorX ??
+        bambooHookshotConfig.speedFlexBonusFactor ??
+        4.0;
+      const factorY =
+        bambooHookshotConfig.speedFlexBonusFactorY ??
+        bambooHookshotConfig.speedFlexBonusFactor ??
+        2.0;
+
+      const rawBonus = inwardXZ * factorXZ + inwardY * factorY;
+      if (rawBonus > 0) {
+        const maxBonus = bambooHookshotConfig.maxSpeedFlexBonus ?? 3.5;
+        const bonus = Math.min(rawBonus, maxBonus);
+        state.currentLength += bonus;
+      }
+    }
   },
 };

@@ -129,6 +129,7 @@ export class HookshotSystem {
 
     if (def.onAttach) {
       def.onAttach(player, state);
+      PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
 
     return true;
