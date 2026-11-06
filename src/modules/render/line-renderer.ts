@@ -140,24 +140,29 @@ export class LineRenderer {
     // しなり（弓なり曲げ）用の曲げ方向ベクトルの準備
     let bendDir: Vector3 = { x: 0, y: 1, z: 0 };
     if (isBent) {
-      const dir = Vector3Utils.scale(diff, 1 / dist);
-      if (normal) {
-        const dot = Vector3Utils.dot(normal, dir);
-        const perp = Vector3Utils.subtract(normal, Vector3Utils.scale(dir, dot));
-        const perpLen = Vector3Utils.magnitude(perp);
-        if (perpLen > 0.05) {
-          bendDir = Vector3Utils.scale(perp, 1 / perpLen);
+      // 側面に刺さった時は、上方向に力が加わる方向（アンカーとプレイヤーを結んだ直線をy軸だけの範囲で曲げて凸にする）
+      if (normal && Math.abs(normal.y) < 0.5) {
+        bendDir = { x: 0, y: 1, z: 0 };
+      } else {
+        const dir = Vector3Utils.scale(diff, 1 / dist);
+        if (normal) {
+          const dot = Vector3Utils.dot(normal, dir);
+          const perp = Vector3Utils.subtract(normal, Vector3Utils.scale(dir, dot));
+          const perpLen = Vector3Utils.magnitude(perp);
+          if (perpLen > 0.05) {
+            bendDir = Vector3Utils.scale(perp, 1 / perpLen);
+          } else {
+            const dotUp = Vector3Utils.dot(globalRef, dir);
+            const perpUp = Vector3Utils.subtract(globalRef, Vector3Utils.scale(dir, dotUp));
+            const perpUpLen = Vector3Utils.magnitude(perpUp);
+            bendDir = perpUpLen > 0.05 ? Vector3Utils.scale(perpUp, 1 / perpUpLen) : { x: 0, y: 1, z: 0 };
+          }
         } else {
           const dotUp = Vector3Utils.dot(globalRef, dir);
           const perpUp = Vector3Utils.subtract(globalRef, Vector3Utils.scale(dir, dotUp));
           const perpUpLen = Vector3Utils.magnitude(perpUp);
           bendDir = perpUpLen > 0.05 ? Vector3Utils.scale(perpUp, 1 / perpUpLen) : { x: 0, y: 1, z: 0 };
         }
-      } else {
-        const dotUp = Vector3Utils.dot(globalRef, dir);
-        const perpUp = Vector3Utils.subtract(globalRef, Vector3Utils.scale(dir, dotUp));
-        const perpUpLen = Vector3Utils.magnitude(perpUp);
-        bendDir = perpUpLen > 0.05 ? Vector3Utils.scale(perpUp, 1 / perpUpLen) : { x: 0, y: 1, z: 0 };
       }
     }
 
