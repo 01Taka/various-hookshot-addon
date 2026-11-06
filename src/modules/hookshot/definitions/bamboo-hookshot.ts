@@ -52,10 +52,10 @@ export const bambooHookshotConfig: BambooHookshotConfig = {
 export const bambooHookshotDefinition: HookshotDefinition = {
   id: BAMBOO_HOOKSHOT_ID,
   itemTypeId: BAMBOO_ITEM_ID,
-  maxDistance: 40,
-  reelSpeed: 1.2,
+  maxDistance: 48,
+  reelSpeed: 0.8,
   reelMode: "extend",
-  initialReelDelta: 1.5,
+  initialReelDelta: 0.0,
   minRopeLength: 1.5,
   wireStyle: BAMBOO_WIRE_STYLE,
   calculateImpulse: (player, state) => {
