@@ -35,14 +35,33 @@ export function getPlayerChestLocation(player: Player): Vector3 {
 }
 
 /**
+ * 視線とアンカーの角度から、巻き取りパワー配分のための回転比率 (0.0 〜 1.0) を計算します。
+ * 角度を 2 倍（2θ）にして評価することで、約 45 度の視線オフセットで最大回転比率 1.0（60% 回転 / 40% 巻き取り）に到達します。
+ */
+export function calculateGazeRotationRatio(
+  lookDir: Vector3,
+  toAnchorDir: Vector3,
+): number {
+  const gazeDot = Math.max(
+    -1,
+    Math.min(1, Vector3Utils.dot(lookDir, toAnchorDir)),
+  );
+  const theta = Math.acos(gazeDot); // 0 〜 PI (ラジアン)
+  // 角度を2倍し、最大90度 (PI / 2) でクランプ
+  const scaledTheta = Math.min(Math.PI / 2, 2 * theta);
+  return Math.sin(scaledTheta);
+}
+
+/**
  * 視線および移動キー入力から接線ステアリング加速度を計算します。
  *
  * 1. 視線単体による接線インパルス:
- *    視線移動だけでも、巻き取り速度が削れた分（視線とアンカーの直交度合い）に比例した接線方向のインパルスを受けます。
+ *    視線移動だけでも、巻き取り速度が削れた分（角度2倍で約45度で最大）に比例した接線方向のインパルスを受けます。
  *
  * 2. キー入力による独立した接線インパルス強化:
- *    視線ベクトルを入力角度分だけ「画面中央を水平に横切る線（viewRight）と視線の先の線（lookDir）を持つ平面上」で回転させた
- *    合成ベクトル effectiveDir を作成し、そのベクトルとアンカーベクトルの内積が小さい（90度に近い）ほど
+ *    移動入力の基準となる視線ベクトルは2倍せずそのまま使用し、
+ *    入力角度分だけ「画面中央を水平に横切る線（viewRight）と視線の先の線（lookDir）を持つ平面上」で回転させた
+ *    合成ベクトル effectiveDir を作成。そのベクトルとアンカーベクトルの内積が小さい（90度に近い）ほど
  *    追加の接線方向の勢いを加算します（巻き取り速度のパワーは奪いません）。
  *
  * 3. 距離減衰:
@@ -66,15 +85,26 @@ export function calculateGazeSteeringAcceleration(
   const distFactor = getDistanceRotationFactor(r);
   const effectiveSteerAccel = steerAccel * distFactor;
 
-  // --- 1. 視線移動単体による接線インパルス（巻き取り速度が削れた分） ---
+  // --- 1. 視線移動単体による接線インパルス（巻き取り速度が削れた分、45度で最大比率） ---
   const gazeDot = Vector3Utils.dot(lookDir, toAnchorDir);
   const tangentGaze = Vector3Utils.subtract(
     lookDir,
     Vector3Utils.scale(toAnchorDir, gazeDot),
   );
-  let totalSteer = Vector3Utils.scale(tangentGaze, effectiveSteerAccel);
+  const tangentGazeLen = Vector3Utils.magnitude(tangentGaze);
+  let totalSteer: Vector3;
+  if (tangentGazeLen > 0.0001) {
+    const gazeRatio = calculateGazeRotationRatio(lookDir, toAnchorDir);
+    const tangentGazeDir = Vector3Utils.scale(tangentGaze, 1 / tangentGazeLen);
+    totalSteer = Vector3Utils.scale(
+      tangentGazeDir,
+      effectiveSteerAccel * gazeRatio,
+    );
+  } else {
+    totalSteer = { x: 0, y: 0, z: 0 };
+  }
 
-  // --- 2. キー入力による追加の接線インパルス（視線ベクトルを入力に応じて平面上で回転） ---
+  // --- 2. キー入力による追加の接線インパルス（※ 基準となる視線方向は2倍せずそのまま使用） ---
   const input = resolver.input;
   const inputLen = Math.hypot(input.vector.x, input.vector.z);
   if (inputLen > 0.05) {
@@ -91,7 +121,7 @@ export function calculateGazeSteeringAcceleration(
     // 入力方向の角度 (W=0, D=+90度, A=-90度, W+D=+45度など)
     const alpha = Math.atan2(input.vector.x, input.vector.z);
 
-    // 視線方向のベクトルを入力角度に応じて画面水平平面上で回転
+    // そのままの視線方向ベクトルを入力角度に応じて画面水平平面上で回転
     const effectiveDir = {
       x: Math.cos(alpha) * lookDir.x + Math.sin(alpha) * viewRight.x,
       y: Math.cos(alpha) * lookDir.y + Math.sin(alpha) * viewRight.y,
@@ -120,7 +150,8 @@ export function calculateGazeSteeringAcceleration(
  * 視線とアンカーの角度、および距離に基づいてロープ短縮速度の補正倍率を計算します。
  * キー入力は関係なく、巻き取りパワーを奪いません。
  *
- * - 距離が30m以内: 90度直交時に最大値である60%を回転（短縮速度は40%まで低下）
+ * - 角度を2倍して評価: アンカーから約45度横を向いた時点で最大回転力（60%回転 / 40%巻き取り）に到達
+ * - 距離が30m以内: 約45度視線オフセット時に最大値である60%を回転（短縮速度は40%まで低下）
  * - 距離が30mを超える: 遠くなるほど回転にまわせるパワー上限が低下し、直線巻き取りの割合が増加
  * - 視線がアンカー正面を向いている時: 距離に関わらず1.0（全速力で直線引き寄せ）
  *
@@ -145,9 +176,8 @@ export function calculateReelSpeedMultiplier(
   const resolver = PlayerDirectionResolver.get(player);
   const lookDir = resolver.view.vector; // 純粋な視線ベクトル（キー入力は影響しない）
 
-  const gazeDot = Vector3Utils.dot(lookDir, toAnchorDir);
-  // 視線とアンカーの直交度合い sin(theta) = sqrt(1 - cos^2)
-  const gazeRotationalRatio = Math.sqrt(Math.max(0, 1 - gazeDot * gazeDot));
+  // 角度を2倍にして評価（約45度で最大回転比率 1.0 に到達）
+  const gazeRotationalRatio = calculateGazeRotationRatio(lookDir, toAnchorDir);
 
   // 距離に応じた回転パワー上限（30m以内で最大60%、遠くなるほど低下）
   const distFactor = getDistanceRotationFactor(r);
