@@ -16,18 +16,15 @@ import {
 } from "addon-utils";
 import { HookshotSystem } from "../hookshot/hookshot-system";
 import { HookRenderManager } from "../render";
+import { startPostFlight, stopPostFlight } from "../post-flight";
 import {
   calculatePathfinderVelocityImpulse,
-  calculatePostFlightImpulse,
   getPlayerChestLocation,
-  PATHFINDER_POST_FLIGHT_KEY,
   playSoundSafe,
-  startPostFlight,
 } from "./physics";
 import {
   PathfinderActiveState,
   PathfinderAnchor,
-  PathfinderPostFlightState,
 } from "./types";
 
 export const PATHFINDER_ITEM_ID = "minecraft:iron_ingot";
@@ -87,7 +84,7 @@ export class PathfinderGrappleSystem {
     HookshotSystem.unhook(player);
 
     // 既存の慣性飛行状態をクリア
-    PlayerStateManager.delete(player.id, PATHFINDER_POST_FLIGHT_KEY);
+    stopPostFlight(player);
 
     const anchor: PathfinderAnchor = {
       dimensionId: player.dimension.id,
@@ -325,30 +322,6 @@ export class PathfinderGrappleSystem {
 
           // ワイヤーの描画
           HookRenderManager.renderPathfinder(player, state.anchor);
-          continue;
-        }
-
-        // 未接続時の放物線慣性飛行（スリングショット後の滑空維持）
-        const postFlight =
-          PlayerStateManager.get<PathfinderPostFlightState | null>(
-            player.id,
-            PATHFINDER_POST_FLIGHT_KEY,
-            null,
-          );
-        if (postFlight) {
-          const impulse = calculatePostFlightImpulse(player, postFlight);
-          if (impulse) {
-            PlayerStateManager.set(
-              player.id,
-              PATHFINDER_POST_FLIGHT_KEY,
-              postFlight,
-            );
-            if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
-              player.applyImpulse(impulse);
-            }
-          } else {
-            PlayerStateManager.delete(player.id, PATHFINDER_POST_FLIGHT_KEY);
-          }
         }
       }
     });

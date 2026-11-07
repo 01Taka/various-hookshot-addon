@@ -6,11 +6,19 @@ import {
   MINECRAFT_DRAG,
   MINECRAFT_GRAVITY,
   PlayerDirectionResolver,
-  PlayerStateManager,
 } from "addon-utils";
-import { PathfinderActiveState, PathfinderPostFlightState } from "./types";
+import {
+  calculatePostFlightImpulse,
+  POST_FLIGHT_STATE_KEY,
+  PostFlightOptions,
+  PostFlightState,
+  PostFlightSystem,
+  startPostFlight,
+} from "../post-flight";
+import { PathfinderActiveState } from "./types";
 
-export const PATHFINDER_POST_FLIGHT_KEY = "pathfinderPostFlightState";
+export const PATHFINDER_POST_FLIGHT_KEY = POST_FLIGHT_STATE_KEY;
+export { calculatePostFlightImpulse, startPostFlight };
 
 /** 視線・ストレイフによる接線方向ステアリング加速度 (blocks/tick²) */
 const STEER_ACCEL = 0.085;
@@ -225,100 +233,3 @@ export function calculatePathfinderVelocityImpulse(
   });
 }
 
-/**
- * 空中でスリングショット切断された際、着地まで低空気抵抗な放物線慣性飛行（エアストレイフ維持）を開始します。
- */
-export function startPostFlight(player: Player): void {
-  if (
-    !player.isOnGround &&
-    !player.isFlying &&
-    !player.isGliding &&
-    !player.isInWater
-  ) {
-    const currentVel = player.getVelocity();
-    const horizSpeed = Math.hypot(currentVel.x, currentVel.z);
-    if (horizSpeed >= 0.25) {
-      const postFlight: PathfinderPostFlightState = {
-        detachedTick: system.currentTick,
-        lastProcessedTick: system.currentTick,
-      };
-      PlayerStateManager.set(player.id, PATHFINDER_POST_FLIGHT_KEY, postFlight);
-    }
-  }
-}
-
-/**
- * グラップル切断後の放物線慣性飛行 + Source Engine 風エアストレイフ
- */
-export function calculatePostFlightImpulse(
-  player: Player,
-  postFlight: PathfinderPostFlightState,
-): Vector3 | null {
-  // 同一Tick内で切断された直後の場合は次Tickまで待機
-  if (postFlight.lastProcessedTick === system.currentTick) {
-    return null;
-  }
-
-  // 着地・水中・飛行状態・時間切れで終了
-  if (
-    postFlight.lastProcessedTick < system.currentTick - 1 ||
-    player.isOnGround ||
-    player.isFlying ||
-    player.isGliding ||
-    player.isInWater ||
-    player.isClimbing ||
-    system.currentTick - postFlight.detachedTick > MAX_POST_FLIGHT_TICKS
-  ) {
-    return null;
-  }
-
-  const currentVel = player.getVelocity();
-  const horizSpeed = Math.hypot(currentVel.x, currentVel.z);
-
-  // 通常ダッシュ速度以下まで減速したら終了
-  if (horizSpeed < 0.3) {
-    return null;
-  }
-
-  postFlight.lastProcessedTick = system.currentTick;
-
-  let nextVx = currentVel.x * POST_FLIGHT_RETENTION_XZ;
-  let nextVz = currentVel.z * POST_FLIGHT_RETENTION_XZ;
-
-  // 空中ストレイフ（速度を増大させずに軌道を曲げる）
-  const worldInput = PlayerDirectionResolver.get(player).worldInput;
-  if (worldInput.horizontalLength > 0.1) {
-    const wishDir = worldInput.normalizedXZ;
-    const AIR_WISH_SPEED = 0.3;
-    const AIR_ACCEL = 0.035;
-    const currentProj = nextVx * wishDir.x + nextVz * wishDir.z;
-    const addSpeed = AIR_WISH_SPEED - currentProj;
-
-    if (addSpeed > 0) {
-      const accelMag = Math.min(AIR_ACCEL, addSpeed);
-      const baseSpeed = Math.hypot(nextVx, nextVz);
-      nextVx += wishDir.x * accelMag;
-      nextVz += wishDir.z * accelMag;
-
-      const newSpeed = Math.hypot(nextVx, nextVz);
-      const maxAllowed = Math.max(baseSpeed, AIR_WISH_SPEED);
-      if (newSpeed > maxAllowed && newSpeed > 0.001) {
-        const scale = maxAllowed / newSpeed;
-        nextVx *= scale;
-        nextVz *= scale;
-      }
-    }
-  }
-
-  return calculateVelocityImpulse({
-    targetVelocity: {
-      x: nextVx,
-      y: null, // Y軸はバニラ重力に任せる
-      z: nextVz,
-    },
-    currentVelocity: currentVel,
-    dragXZ: MINECRAFT_DRAG.air.xz,
-    dragY: MINECRAFT_DRAG.air.y,
-    gravity: MINECRAFT_GRAVITY,
-  });
-}

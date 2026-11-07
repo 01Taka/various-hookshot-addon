@@ -1,4 +1,5 @@
 import { Vector3 } from "@minecraft/server";
+import { PostFlightState } from "../post-flight";
 
 export type PathfinderAnchor = Vector3 & { dimensionId: string };
 
@@ -21,7 +22,5 @@ export interface PathfinderActiveState {
   detachReason: PathfinderDetachReason;
 }
 
-export interface PathfinderPostFlightState {
-  detachedTick: number;
-  lastProcessedTick: number;
-}
+export type PathfinderPostFlightState = PostFlightState;
+

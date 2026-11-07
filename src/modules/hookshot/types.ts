@@ -1,4 +1,5 @@
 import { Player, Vector3 } from "@minecraft/server";
+import { PostFlightOptions } from "../post-flight";
 import { WireStyle } from "../render/types";
 
 export type AnchorPosition = Vector3 & { dimensionId: string };
@@ -42,8 +43,10 @@ export interface HookshotDefinition {
   getWireAxis?: (state: HookshotState) => Vector3 | undefined;
   /** 視線ステアリング推進力を有効にするかどうか */
   enableGazeSteering?: boolean;
-  /** 手動解除時に低空気抵抗な慣性飛行へ移行するかどうか */
+  /** 手動解除・切断時に低空気抵抗な慣性飛行（速度維持）へ移行するかどうか（デフォルト: true） */
   enablePostFlight?: boolean;
+  /** 速度維持（ポストフライト）のカスタム設定オプション */
+  postFlightOptions?: PostFlightOptions;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */

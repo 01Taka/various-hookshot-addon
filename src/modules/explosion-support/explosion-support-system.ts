@@ -36,7 +36,8 @@ export const EXPLOSION_SUPPORT_UPWARD_IMPULSE = 0.85;
 /**
  * 爆発サポートシステム
  * パスファインダーのグラップル以外のフックショット所持中に空中を左クリック（パンチ）すると、
- * 足元に爆発を起こしてy方向速度を相殺し、上方向インパルスと0.1秒の浮遊効果（落下ダメージ無効化）を付与します。
+ * 接続中のフックショットを即座に解除し、足元に爆発を起こしてy方向速度を相殺し、
+ * 上方向インパルスと0.1秒の浮遊効果（落下ダメージ無効化）を付与します。
  * 1秒のクールダウン（インターバル）が適用されます。
  *
  * 【簡単なON/OFF切り替え】
@@ -196,6 +197,9 @@ export class ExplosionSupportSystem {
    * 爆発サポートを実行
    */
   private static executeExplosionSupport(player: Player): void {
+    // 0. 爆発した瞬間にフックショットを解除
+    HookshotSystem.unhook(player);
+
     const loc = player.location;
     const dimension = player.dimension;
 
