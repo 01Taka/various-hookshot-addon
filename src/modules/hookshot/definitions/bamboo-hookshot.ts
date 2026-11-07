@@ -1,4 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
+import { system, world } from "@minecraft/server";
+import { PlayerStateManager } from "addon-utils";
 import { BAMBOO_WIRE_STYLE } from "../../render";
 import {
   BambooPhysicsParams,
@@ -8,6 +10,19 @@ import { HookshotDefinition } from "../types";
 
 export const BAMBOO_HOOKSHOT_ID = "bamboo";
 export const BAMBOO_ITEM_ID = "minecraft:bamboo";
+export const BAMBOO_AIR_CHAIN_KEY = "bambooAirChainState";
+
+/**
+ * 竹フックショットの空中連続使用状態
+ */
+export interface BambooAirChainState {
+  /** 着地せずに竹を使用した回数 (0: 未使用/接地済み, 1: 1回使用済み, 2: 2回使用済み...) */
+  count: number;
+  /** 現在竹フックに接続中かどうか */
+  isHooked: boolean;
+  /** 竹使用後に空中（非接地）にいたかどうか */
+  hasBeenAirborne: boolean;
+}
 
 /**
  * 竹フックショットの設定インターフェース
@@ -50,6 +65,19 @@ export interface BambooHookshotConfig {
    * デフォルト: 3.5
    */
   maxSpeedFlexBonus?: number;
+  /**
+   * 一度竹を使用した後、着地せずにもう一度竹を使用した場合（空中2回目以降）のしなりボーナス倍率 (0.0〜1.0)。
+   * 空中1回目は100%（減衰なし）、空中2回目でこの設定倍率に減衰し、3回目以降もこの倍率で固定されます。
+   * - 1.0: 減衰なし（常に100%のボーナス）
+   * - 0.5: 空中2回目以降はボーナスが50%で固定
+   * - 0.0: 空中2回目以降はボーナスなし (0%)
+   * デフォルト: 0.5
+   */
+  consecutiveAirBonusDecayRate?: number;
+  /** consecutiveAirBonusDecayRate のエイリアス */
+  consecutiveAirDecayRate?: number;
+  /** consecutiveAirBonusDecayRate のエイリアス */
+  consecutiveAirBonusDecay?: number;
   /** 動径減衰係数 */
   damping?: number;
   /** 最大反発加速度 */
@@ -68,7 +96,53 @@ export const bambooHookshotConfig: BambooHookshotConfig = {
   maxSpeedFlexBonus: 12.0,
   speedFlexBonusFactorXZ: 16.0,
   speedFlexBonusFactorY: 1.0,
+  consecutiveAirBonusDecayRate: 0.5,
 };
+
+let isTrackingInitialized = false;
+
+/**
+ * 竹フックショットの空中連続使用状態追跡（着地監視ループ）を初期化します。
+ */
+export function initBambooHookshotTracking(): void {
+  if (isTrackingInitialized) return;
+  isTrackingInitialized = true;
+
+  system.runInterval(() => {
+    for (const player of world.getAllPlayers()) {
+      if (!player.isValid) continue;
+
+      const chain = PlayerStateManager.get<BambooAirChainState | null>(
+        player.id,
+        BAMBOO_AIR_CHAIN_KEY,
+        null,
+      );
+      if (!chain) continue;
+
+      const isGrounded =
+        player.isOnGround || player.isInWater || player.isClimbing;
+
+      if (!isGrounded) {
+        // 空中にいる場合、空中フラグを立てる
+        if (!chain.hasBeenAirborne) {
+          chain.hasBeenAirborne = true;
+          PlayerStateManager.set(player.id, BAMBOO_AIR_CHAIN_KEY, chain);
+        }
+      } else {
+        // 接地している場合
+        // 発射直後でまだ空中に飛び立つ前の助走期間中はリセットを保留
+        if (chain.isHooked && !chain.hasBeenAirborne) {
+          continue;
+        }
+        // 空中を経験した後に着地した、またはフック解除後に接地している場合はリセット
+        PlayerStateManager.delete(player.id, BAMBOO_AIR_CHAIN_KEY);
+      }
+    }
+  });
+}
+
+// モジュールロード時にも自動で初期化
+initBambooHookshotTracking();
 
 /**
  * 竹（minecraft:bamboo）を使用した弾性圧縮ポール（しなる棒）フックショットの定義
@@ -99,6 +173,13 @@ export const bambooHookshotDefinition: HookshotDefinition = {
     });
   },
   onAttach: (player, state) => {
+    const chain = PlayerStateManager.get<BambooAirChainState | null>(
+      player.id,
+      BAMBOO_AIR_CHAIN_KEY,
+      null,
+    );
+    const airUses = chain?.count ?? 0;
+
     // 着弾した瞬間にアンカー（着弾）方向への速度を持っている場合、速度に応じたしなりボーナスを付与
     // （水平方向 X/Z と鉛直方向 Y で個別の重み係数を分離適用）
     const vel = player.getVelocity();
@@ -127,8 +208,50 @@ export const bambooHookshotDefinition: HookshotDefinition = {
       const rawBonus = inwardXZ * factorXZ + inwardY * factorY;
       if (rawBonus > 0) {
         const maxBonus = bambooHookshotConfig.maxSpeedFlexBonus ?? 3.5;
-        const bonus = Math.min(rawBonus, maxBonus);
-        state.currentLength += bonus;
+        let bonus = Math.min(rawBonus, maxBonus);
+
+        // 一度竹を使い、着地せずにもう一度竹を使用した場合（空中2回目以降）のしなりボーナス減衰処理
+        if (airUses > 0) {
+          const decayRate = Math.max(
+            0,
+            Math.min(
+              1,
+              bambooHookshotConfig.consecutiveAirBonusDecayRate ??
+                bambooHookshotConfig.consecutiveAirDecayRate ??
+                bambooHookshotConfig.consecutiveAirBonusDecay ??
+                0.5,
+            ),
+          );
+          bonus *= decayRate;
+        }
+
+        if (bonus > 0.0001) {
+          state.currentLength += bonus;
+        }
+      }
+    }
+
+    // 竹使用状態を記録（連続使用回数をインクリメント）
+    PlayerStateManager.set(player.id, BAMBOO_AIR_CHAIN_KEY, {
+      count: airUses + 1,
+      isHooked: true,
+      hasBeenAirborne: !player.isOnGround,
+    });
+  },
+  onDetach: (player, _state) => {
+    const chain = PlayerStateManager.get<BambooAirChainState | null>(
+      player.id,
+      BAMBOO_AIR_CHAIN_KEY,
+      null,
+    );
+    if (chain) {
+      chain.isHooked = false;
+      const isGrounded =
+        player.isOnGround || player.isInWater || player.isClimbing;
+      if (chain.hasBeenAirborne && isGrounded) {
+        PlayerStateManager.delete(player.id, BAMBOO_AIR_CHAIN_KEY);
+      } else {
+        PlayerStateManager.set(player.id, BAMBOO_AIR_CHAIN_KEY, chain);
       }
     }
   },
