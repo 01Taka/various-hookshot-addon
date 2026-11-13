@@ -206,10 +206,11 @@ export class HookshotSystem {
     const distance = Vector3Utils.distance(player.location, anchor);
 
     // アンカーからプレイヤーへの初期方向ベクトル（刺さった瞬間の角度）
+    // プレイヤーが着弾点に重なっている場合（真下撃ち等）は面法線を使用する
     const initialVector = Vector3Utils.subtract(player.location, anchor);
     const initialDistance = Vector3Utils.magnitude(initialVector);
     const initialDirection =
-      initialDistance > 0.0001
+      initialDistance >= 0.25
         ? Vector3Utils.scale(initialVector, 1 / initialDistance)
         : normal;
 

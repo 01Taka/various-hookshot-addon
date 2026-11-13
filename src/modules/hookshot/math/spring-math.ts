@@ -62,11 +62,14 @@ export function calculateSpringVelocity(
     bendingDamping = 0.02,
   }: SpringRopeParams,
 ): Vector3 | null {
-  const { dir: normal, distance: r } = getDirectionAndDistance(
+  const { dir: rawNormal, distance: r } = getDirectionAndDistance(
     anchor,
     player.location,
   );
-  if (r < 0.0001) return null;
+  const referenceAxis = bendingAxis ?? surfaceNormal;
+  // アンカーと足元が重なっている場合（真下撃ち等）は、微小な水平ズレで真横に飛ばないよう基準軸を使用する
+  const normal =
+    r >= 0.25 ? rawNormal : (referenceAxis ?? { x: 0, y: 1, z: 0 });
 
   const currentVel = player.getVelocity();
   const speed = Vector3Utils.magnitude(currentVel);
@@ -112,7 +115,6 @@ export function calculateSpringVelocity(
 
   // --- 基準軸へ戻そうとする曲げバネ復元力 ---
   // 根本が固定されたバネが横に曲げられた時、基準軸（アンカー + s * axis）へ引き戻す力を加えます
-  const referenceAxis = bendingAxis ?? surfaceNormal;
   if (referenceAxis && effectiveBendingStiffness > 0) {
     const rVec = Vector3Utils.subtract(player.location, anchor);
     // 基準軸方向への射影長 s = r · referenceAxis
