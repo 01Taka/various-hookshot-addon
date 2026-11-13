@@ -4,21 +4,20 @@ import {
   EquipmentSlot,
   GameMode,
   Player,
-  system,
   world,
 } from "@minecraft/server";
-import { getMainhandItem, PlayerStateManager } from "addon-utils";
+import { getMainhandItem } from "addon-utils";
 import { HookshotSystem } from "../hookshot";
 import { PATHFINDER_ITEM_ID } from "../pathfinder-grapple";
 
 /** 爆発サポート用消費アイテムID */
 export const EXPLOSION_ITEM_ID = "various_hookshot_addon:burst_charge";
 
-/** 爆発サポートの前回実行Tick保存キー */
-const EXPLOSION_SUPPORT_LAST_TICK_KEY = "explosionSupportLastTick";
+/** ネイティブクールダウンカテゴリ */
+export const EXPLOSION_COOLDOWN_CATEGORY = "burst_charge";
 
-/** 1秒のインターバル (Minecraftは20 ticks/秒) */
-export const EXPLOSION_SUPPORT_COOLDOWN_TICKS = 20;
+/** 0.85秒のインターバル (Minecraftは20 ticks/秒 -> 17 ticks) */
+export const EXPLOSION_SUPPORT_COOLDOWN_TICKS = 17;
 
 /** 浮遊効果の持続時間 (0.1秒 = 2 ticks) */
 export const EXPLOSION_SUPPORT_LEVITATION_TICKS = 2;
@@ -114,13 +113,7 @@ export class ExplosionSupportSystem {
   ): void {
     if (!player.isValid) return;
 
-    const currentTick = system.currentTick;
-    const lastTick = PlayerStateManager.get<number>(
-      player.id,
-      EXPLOSION_SUPPORT_LAST_TICK_KEY,
-      -9999,
-    );
-    if (currentTick - lastTick < EXPLOSION_SUPPORT_COOLDOWN_TICKS) {
+    if (player.getItemCooldown(EXPLOSION_COOLDOWN_CATEGORY) > 0) {
       return;
     }
 
@@ -133,10 +126,9 @@ export class ExplosionSupportSystem {
       return;
     }
 
-    PlayerStateManager.set(
-      player.id,
-      EXPLOSION_SUPPORT_LAST_TICK_KEY,
-      currentTick,
+    player.startItemCooldown(
+      EXPLOSION_COOLDOWN_CATEGORY,
+      EXPLOSION_SUPPORT_COOLDOWN_TICKS,
     );
 
     this.executeExplosionSupport(player, consumeResult.remainingAmount);
