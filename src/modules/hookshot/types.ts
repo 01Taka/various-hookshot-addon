@@ -107,6 +107,10 @@ export interface HookshotDefinition {
   airProbing?: AirProbingConfig;
   /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた（最高速度到達）時に自動解除するか */
   detachOnMaxExtend?: boolean;
+  /** 自然長以上へ到達した際、外側への動径速度 (blocks/tick) がこの値以上なら自動でアンカーを解除する */
+  detachOnOutwardSpeed?: number;
+  /** 自動解除時の効果音ID */
+  detachSoundId?: string;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */

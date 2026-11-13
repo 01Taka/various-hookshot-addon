@@ -164,6 +164,8 @@ export const bambooHookshotDefinition: HookshotDefinition = {
   },
   reelMode: "extend",
   minRopeLength: 2.0,
+  detachOnOutwardSpeed: 0.4,
+  detachSoundId: "block.bamboo.break",
   airProbing: {
     initialLength: 2.0,
     extend: {
