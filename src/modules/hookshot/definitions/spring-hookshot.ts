@@ -76,7 +76,8 @@ export const springHookshotDefinition: HookshotDefinition = {
       minBendingDenominator: 1.0,
       surfaceNormal: state.normal,
       bendingAxis,
-      bendingStiffness: 0.4,
+      bendingStiffness: 1.8,
+      bendingPower: 2,
       bendingDamping: 0.02,
     });
   },

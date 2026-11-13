@@ -34,8 +34,10 @@ export interface SpringRopeParams {
    * 指定がない場合は surfaceNormal が使用される。
    */
   bendingAxis?: Vector3;
-  /** 曲げ方向の弾性係数。実効曲げバネ定数は `bendingStiffness / Math.max(naturalLength, minDenominator)` */
+  /** 曲げ方向の弾性係数。曲げひずみ `lateralOffset / bendingDenominator` に応じた復元力を計算します */
   bendingStiffness?: number;
+  /** 曲げひずみのべき乗指数 (デフォルト: 1 = 線形, 2 = 2次プログレッシブ) */
+  bendingPower?: number;
   /** 曲げ方向の減衰率 (0〜1)。大きいほど横揺れが早く収まる */
   bendingDamping?: number;
 }
@@ -59,6 +61,7 @@ export function calculateSpringVelocity(
     surfaceNormal,
     bendingAxis,
     bendingStiffness = 0,
+    bendingPower = 1,
     bendingDamping = 0.02,
   }: SpringRopeParams,
 ): Vector3 | null {
@@ -89,7 +92,6 @@ export function calculateSpringVelocity(
     minBendingDenominator ?? minDenominator,
   );
   const effectiveStiffness = stiffness / radialDenominator;
-  const effectiveBendingStiffness = bendingStiffness / bendingDenominator;
 
   // --- 双方向のバネ復元力（フックの法則＋ヤング率: a = -C * (r - L0) / L0） ---
   // stretch > 0 (伸びている): 内向き(-normal)に引く力
@@ -115,7 +117,7 @@ export function calculateSpringVelocity(
 
   // --- 基準軸へ戻そうとする曲げバネ復元力 ---
   // 根本が固定されたバネが横に曲げられた時、基準軸（アンカー + s * axis）へ引き戻す力を加えます
-  if (referenceAxis && effectiveBendingStiffness > 0) {
+  if (referenceAxis && bendingStiffness > 0) {
     const rVec = Vector3Utils.subtract(player.location, anchor);
     // 基準軸方向への射影長 s = r · referenceAxis
     const s = Vector3Utils.dot(rVec, referenceAxis);
@@ -128,9 +130,10 @@ export function calculateSpringVelocity(
 
     if (lateralOffset > 0.0001) {
       const lateralDir = Vector3Utils.scale(rPerp, 1 / lateralOffset);
+      const bendingStrain = lateralOffset / bendingDenominator;
       // 横ズレを戻す復元加速度（-lateralDir 方向）
       const clampedBendingAccel = Math.min(
-        effectiveBendingStiffness * lateralOffset,
+        bendingStiffness * Math.pow(bendingStrain, bendingPower),
         maxAcceleration,
       );
       // 横ズレ方向の速度成分に対するダンピング（横揺れの収束）
