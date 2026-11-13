@@ -12,12 +12,12 @@
     ],
     "key": {
       "#": {
-        "item": "minecraft:string"
+        "item": "minecraft:iron_chain"
       }
     },
     "unlock": [
       {
-        "item": "minecraft:string"
+        "item": "minecraft:iron_chain"
       }
     ],
     "result": {
