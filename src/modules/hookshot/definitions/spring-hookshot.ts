@@ -69,11 +69,12 @@ export const springHookshotDefinition: HookshotDefinition = {
     return calculateSpringHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
       maxLength: Math.max(200, state.currentLength * 1.5),
-      stiffness: 0.03,
+      stiffness: 0.9,
       damping: 0.01,
+      minDenominator: 1.5,
       surfaceNormal: state.normal,
       bendingAxis,
-      bendingStiffness: 0.02,
+      bendingStiffness: 0.4,
       bendingDamping: 0.02,
     });
   },

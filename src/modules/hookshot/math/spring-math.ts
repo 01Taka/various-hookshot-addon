@@ -12,14 +12,16 @@ import {
 export interface SpringRopeParams {
   /** バネの自然長。これより伸びると引力、縮むと反発力（斥力）が働く */
   naturalLength: number;
-  /** バネの限界長。これを超えると硬い拘束に切り替わる */
+  /** 限界長。これを超えると硬い拘束に切り替わる */
   maxLength?: number;
-  /** バネ定数 (blocks/tick² per block)。大きいほど強く押し引きする */
+  /** 動径方向の弾性係数 (ヤング率×断面積相当)。実効バネ定数は `stiffness / Math.max(naturalLength, minDenominator)` */
   stiffness?: number;
-  /** 動径方向の減衰率 (0〜1)。大きいほど振動が早く収まる */
+  /** 動径方向の速度減衰率 (0〜1)。大きいほど振動が早く収まる */
   damping?: number;
   /** 1Tickあたりの最大加速度 (blocks/tick²)。急激な伸び縮みでの暴発防止 */
   maxAcceleration?: number;
+  /** ひずみ計算時の分母（自然長）の下限値 (blocks, デフォルト: 1.5) */
+  minDenominator?: number;
   /** 着弾面の法線ベクトル（面の裏側へのめり込み防止に使用。また bendingAxis 未指定時の基準軸としてもフォールバック利用される） */
   surfaceNormal?: Vector3;
   /**
@@ -28,7 +30,7 @@ export interface SpringRopeParams {
    * 指定がない場合は surfaceNormal が使用される。
    */
   bendingAxis?: Vector3;
-  /** 曲げバネ定数 (blocks/tick² per block)。大きいほど法線方向へ強く戻ろうとする */
+  /** 曲げ方向の弾性係数。実効曲げバネ定数は `bendingStiffness / Math.max(naturalLength, minDenominator)` */
   bendingStiffness?: number;
   /** 曲げ方向の減衰率 (0〜1)。大きいほど横揺れが早く収まる */
   bendingDamping?: number;
@@ -44,9 +46,10 @@ export function calculateSpringVelocity(
   {
     naturalLength,
     maxLength,
-    stiffness = 0.03,
+    stiffness = 0.9,
     damping = 0.01,
     maxAcceleration = 10,
+    minDenominator = 1.5,
     surfaceNormal,
     bendingAxis,
     bendingStiffness = 0,
@@ -67,12 +70,17 @@ export function calculateSpringVelocity(
     dragXZ: getAirDrag(speed),
   });
 
-  // --- 双方向のバネ復元力（フックの法則: F = -k * stretch） ---
+  // ヤング率に基づく実効バネ定数（自然長が短いほど硬く、長いほど柔らかい）
+  const effectiveLength = Math.max(naturalLength, minDenominator);
+  const effectiveStiffness = stiffness / effectiveLength;
+  const effectiveBendingStiffness = bendingStiffness / effectiveLength;
+
+  // --- 双方向のバネ復元力（フックの法則＋ヤング率: a = -C * (r - L0) / L0） ---
   // stretch > 0 (伸びている): 内向き(-normal)に引く力
   // stretch < 0 (縮んでいる): 外向き(+normal)に押し出す力
   const stretch = r - naturalLength;
   const clampedStretchAccel = Math.min(
-    stiffness * Math.abs(stretch),
+    effectiveStiffness * Math.abs(stretch),
     maxAcceleration,
   );
   const springAccel = Math.sign(stretch) * clampedStretchAccel;
@@ -92,7 +100,7 @@ export function calculateSpringVelocity(
   // --- 基準軸へ戻そうとする曲げバネ復元力 ---
   // 根本が固定されたバネが横に曲げられた時、基準軸（アンカー + s * axis）へ引き戻す力を加えます
   const referenceAxis = bendingAxis ?? surfaceNormal;
-  if (referenceAxis && bendingStiffness > 0) {
+  if (referenceAxis && effectiveBendingStiffness > 0) {
     const rVec = Vector3Utils.subtract(player.location, anchor);
     // 基準軸方向への射影長 s = r · referenceAxis
     const s = Vector3Utils.dot(rVec, referenceAxis);
@@ -107,7 +115,7 @@ export function calculateSpringVelocity(
       const lateralDir = Vector3Utils.scale(rPerp, 1 / lateralOffset);
       // 横ズレを戻す復元加速度（-lateralDir 方向）
       const clampedBendingAccel = Math.min(
-        bendingStiffness * lateralOffset,
+        effectiveBendingStiffness * lateralOffset,
         maxAcceleration,
       );
       // 横ズレ方向の速度成分に対するダンピング（横揺れの収束）
@@ -128,7 +136,7 @@ export function calculateSpringVelocity(
       const pushDot = Vector3Utils.dot(rVec, pushNormal);
       if (pushDot < 0) {
         const penetrationPush = Math.min(
-          Math.abs(pushDot) * (stiffness * 1.5),
+          Math.abs(pushDot) * (effectiveStiffness * 1.5),
           maxAcceleration,
         );
         target = Vector3Utils.add(
