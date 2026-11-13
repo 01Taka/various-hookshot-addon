@@ -26,6 +26,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   raycastGraceTicks: 10,
   shotSoundId: "armor.equip_leather",
   hitSoundId: "leashknot.place",
+  missSoundId: "leashknot.break",
   wireStyle: ELASTIC_WIRE_STYLE,
   enableGazeSteering: true,
   calculateImpulse: (player, state) => {

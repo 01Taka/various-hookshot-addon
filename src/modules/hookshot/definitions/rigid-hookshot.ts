@@ -26,6 +26,7 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   raycastGraceTicks: 10,
   shotSoundId: "crossbow.shoot",
   hitSoundId: "place.chain",
+  missSoundId: "dig.chain",
   wireStyle: RIGID_WIRE_STYLE,
   enableGazeSteering: true,
   calculateImpulse: (player, state) => {

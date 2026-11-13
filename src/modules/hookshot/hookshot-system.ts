@@ -1022,6 +1022,7 @@ export class HookshotSystem {
     if (remainingTicks <= 0) {
       this.clearPendingRaycast(player);
       this.clearDistanceUiIfActive(player);
+      this.playSoundSafe(player, def.missSoundId);
       return false;
     }
 

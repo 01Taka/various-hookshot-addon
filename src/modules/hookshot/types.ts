@@ -127,6 +127,8 @@ export interface HookshotDefinition {
   shotSoundId?: string;
   /** 着弾（アンカー確定）時の効果音ID */
   hitSoundId?: string;
+  /** 猶予探索（raycastGraceTicks）が着弾せず終了した時の効果音ID */
+  missSoundId?: string;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */
