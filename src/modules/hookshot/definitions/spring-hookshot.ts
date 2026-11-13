@@ -51,6 +51,7 @@ export const springHookshotDefinition: HookshotDefinition = {
   },
   reelMode: "extend",
   minRopeLength: 0.5,
+  detachOnMaxExtend: true,
   airProbing: {
     initialLength: 2.0,
     extend: {

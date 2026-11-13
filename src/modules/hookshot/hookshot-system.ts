@@ -385,8 +385,8 @@ export class HookshotSystem {
     player: Player,
     state: HookshotState,
     def: HookshotDefinition,
-  ): void {
-    if (!player.isValid) return;
+  ): ReelMode | null {
+    if (!player.isValid) return null;
 
     let jumpPressed = false;
     let sneakPressed = false;
@@ -397,7 +397,7 @@ export class HookshotSystem {
       sneakPressed = isSneakButtonPressed(player);
       onGround = player.isOnGround;
     } catch {
-      return;
+      return null;
     }
 
     let stateDirty = false;
@@ -423,7 +423,7 @@ export class HookshotSystem {
       if (stateDirty) {
         PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
       }
-      return;
+      return null;
     }
 
     const baseMode = def.reelMode ?? "shorten";
@@ -448,7 +448,7 @@ export class HookshotSystem {
         isInitial,
         stateDirty,
       );
-      return;
+      return reverseMode;
     }
 
     // ジャンプは空中時のみ通常方向（短くする）に動作
@@ -470,7 +470,7 @@ export class HookshotSystem {
         isInitial,
         stateDirty,
       );
-      return;
+      return baseMode;
     }
 
     if (state.isReelingIn) {
@@ -484,6 +484,29 @@ export class HookshotSystem {
     if (stateDirty) {
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
+    return null;
+  }
+
+  private static shouldDetachOnMaxExtend(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    activeReelMode: ReelMode | null,
+  ): boolean {
+    if (
+      !def.detachOnMaxExtend ||
+      state.isAnchored === false ||
+      activeReelMode !== "extend"
+    ) {
+      return false;
+    }
+    const maxLength =
+      def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+    if (state.currentLength < maxLength) {
+      return false;
+    }
+    const distance = Vector3Utils.distance(player.location, state.anchor);
+    return distance >= state.currentLength;
   }
 
   private static resetStepReelState(state: HookshotState): boolean {
@@ -698,7 +721,7 @@ export class HookshotSystem {
         if (!def) continue;
 
         // キー入力によるロープ長の変更（ジャンプ＝短縮、シフト＝伸長、押下時の瞬間変化対応）
-        this.handleReelInput(player, state, def);
+        const activeReelMode = this.handleReelInput(player, state, def);
 
         // 構え中（未着弾）の平行移動およびブロック接触判定
         if (state.isAnchored === false) {
@@ -706,6 +729,12 @@ export class HookshotSystem {
         }
 
         if (state.isAnchored !== false) {
+          // 最大長まで伸ばしきった状態で自然長を通過した瞬間に自動解除（最高速度リリース）
+          if (this.shouldDetachOnMaxExtend(player, state, def, activeReelMode)) {
+            this.unhook(player);
+            continue;
+          }
+
           // 物理インパルス計算と適用
           const impulse = def.calculateImpulse(player, state);
           if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {

@@ -105,6 +105,8 @@ export interface HookshotDefinition {
   enableGazeSteering?: boolean;
   /** 未着弾構え・自動伸長の設定 */
   airProbing?: AirProbingConfig;
+  /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた（最高速度到達）時に自動解除するか */
+  detachOnMaxExtend?: boolean;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */
