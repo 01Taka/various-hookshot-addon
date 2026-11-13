@@ -52,14 +52,17 @@ export const springHookshotDefinition: HookshotDefinition = {
   reelMode: "extend",
   minRopeLength: 0.5,
   detachOnMaxExtend: true,
+  shotSoundId: "mob.slime.jump",
   airProbing: {
     initialLength: 2.0,
     extend: {
       mode: "continuous",
       speed: 4.0,
+      soundId: "step.slime",
+      soundIntervalTicks: 2,
     },
     minHitDistance: 0.5,
-    hitSoundId: "block.slime.place",
+    hitSoundId: "place.slime.big",
   },
   wireStyle: SPRING_WIRE_STYLE,
   getWireAxis: (state) => getSpringBendingAxis(state),

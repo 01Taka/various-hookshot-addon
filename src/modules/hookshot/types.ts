@@ -29,6 +29,8 @@ export interface HookshotState {
   currentStepIntervalTicks?: number;
   /** 直近のステップ伸縮方向（方向転換時のリセット判定用） */
   lastStepMode?: ReelMode;
+  /** 連続伸縮時の効果音再生直近Tick */
+  lastContinuousReelSoundTick?: number;
 }
 
 export type ReelMode = "shorten" | "extend";
@@ -40,6 +42,10 @@ export type ReelConfig =
       speed: number;
       /** ボタンを押した瞬間に追加で一気に変更する瞬間変化量 (blocks, 単一数値または { shorten?, extend? } で指定可能) */
       initialDelta?: number | { shorten?: number; extend?: number };
+      /** 連続伸縮時の効果音ID */
+      soundId?: string;
+      /** 連続伸縮時の効果音再生間隔 (ticks, デフォルト: 4) */
+      soundIntervalTicks?: number;
     }
   | {
       mode: "step";
@@ -60,6 +66,10 @@ export type AirProbingExtendConfig =
       mode: "continuous";
       /** 着弾までに自動で伸びる速度 (blocks/tick) */
       speed: number;
+      /** 自動伸長時の効果音ID */
+      soundId?: string;
+      /** 自動伸長時の効果音再生間隔 (ticks, デフォルト: 2) */
+      soundIntervalTicks?: number;
     }
   | {
       mode: "step";
@@ -113,6 +123,10 @@ export interface HookshotDefinition {
   detachOnOutwardSpeed?: number;
   /** 自動解除時の効果音ID */
   detachSoundId?: string;
+  /** 発射時の効果音ID */
+  shotSoundId?: string;
+  /** 着弾（アンカー確定）時の効果音ID */
+  hitSoundId?: string;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */

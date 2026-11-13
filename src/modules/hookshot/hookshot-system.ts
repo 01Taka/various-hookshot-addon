@@ -125,6 +125,7 @@ export class HookshotSystem {
     if (def.airProbing) {
       this.clearPendingRaycast(player);
       this.enterProbingState(player, def);
+      this.playSoundSafe(player, def.shotSoundId);
       return true;
     }
 
@@ -144,11 +145,13 @@ export class HookshotSystem {
           remainingTicks: graceTicks,
           dimensionId: player.dimension.id,
         } satisfies PendingRaycastState);
+        this.playSoundSafe(player, def.shotSoundId);
         return true;
       }
       return false;
     }
 
+    this.playSoundSafe(player, def.shotSoundId);
     this.attachFromHit(player, def, hit);
     return true;
   }
@@ -275,6 +278,7 @@ export class HookshotSystem {
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
 
+    this.playSoundSafe(player, def.hitSoundId ?? def.airProbing?.hitSoundId);
     this.consumeMainhandDurability(player, def.itemTypeId);
   }
 
@@ -359,7 +363,6 @@ export class HookshotSystem {
 
       if (hitDistance >= minHitDistance) {
         this.applyHitAnchor(player, state, def, hit, head, dir);
-        this.playSoundSafe(player, probing?.hitSoundId);
         return;
       }
     }
@@ -388,10 +391,22 @@ export class HookshotSystem {
 
     if (extend.mode === "continuous") {
       if (extend.speed > 0) {
-        state.currentLength = Math.min(
+        const nextLength = Math.min(
           state.currentLength + extend.speed,
           maxLength,
         );
+        if (nextLength !== state.currentLength) {
+          state.currentLength = nextLength;
+          if (extend.soundId) {
+            const now = system.currentTick;
+            const interval = extend.soundIntervalTicks ?? 2;
+            const lastTick = state.lastAutoExtendTick ?? now;
+            if (now - lastTick >= interval) {
+              state.lastAutoExtendTick = now;
+              this.playSoundSafe(player, extend.soundId);
+            }
+          }
+        }
       }
     } else {
       const now = system.currentTick;
@@ -708,7 +723,28 @@ export class HookshotSystem {
       delta *= multiplier;
     }
 
-    this.applyLengthDelta(player, state, def, mode, delta, forceSave);
+    let continuousSoundId: string | undefined;
+    if (reelConfig.soundId) {
+      const interval = reelConfig.soundIntervalTicks ?? 4;
+      const lastSoundTick = state.lastContinuousReelSoundTick;
+      if (
+        isInitial ||
+        lastSoundTick === undefined ||
+        system.currentTick - lastSoundTick >= interval
+      ) {
+        continuousSoundId = reelConfig.soundId;
+      }
+    }
+
+    this.applyLengthDelta(
+      player,
+      state,
+      def,
+      mode,
+      delta,
+      forceSave,
+      continuousSoundId,
+    );
   }
 
   /**
@@ -791,7 +827,10 @@ export class HookshotSystem {
     const changed = state.currentLength !== nextLength;
     if (changed) {
       state.currentLength = nextLength;
-      this.playSoundSafe(player, soundId);
+      if (soundId) {
+        state.lastContinuousReelSoundTick = system.currentTick;
+        this.playSoundSafe(player, soundId);
+      }
     }
     if (changed || forceSave) {
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
