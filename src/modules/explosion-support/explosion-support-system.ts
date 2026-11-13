@@ -124,7 +124,12 @@ export class ExplosionSupportSystem {
       return;
     }
 
-    if (!this.consumeItemFromSlot(player, slot, expectedItemTypeId)) {
+    const consumeResult = this.consumeItemFromSlot(
+      player,
+      slot,
+      expectedItemTypeId,
+    );
+    if (!consumeResult.consumed) {
       return;
     }
 
@@ -134,40 +139,47 @@ export class ExplosionSupportSystem {
       currentTick,
     );
 
-    this.executeExplosionSupport(player);
+    this.executeExplosionSupport(player, consumeResult.remainingAmount);
   }
 
   /**
-   * 指定スロットのアイテムを1個消費します（クリエイティブモード時は消費せず成功を返します）
+   * 指定スロットのアイテムを1個消費し、消費成否と消費後の残り個数を返します
+   * （クリエイティブモード時は消費せず残数を十分大きい値として返します）
    */
   private static consumeItemFromSlot(
     player: Player,
     slot: EquipmentSlot,
     expectedItemTypeId: string,
-  ): boolean {
+  ): { consumed: boolean; remainingAmount: number } {
     const equippable = player.getComponent(EntityComponentTypes.Equippable);
-    if (!equippable) return false;
+    if (!equippable) return { consumed: false, remainingAmount: 0 };
 
     const item = equippable.getEquipment(slot);
-    if (!item || item.typeId !== expectedItemTypeId) return false;
-
-    if (player.getGameMode() === GameMode.Creative) {
-      return true;
+    if (!item || item.typeId !== expectedItemTypeId) {
+      return { consumed: false, remainingAmount: 0 };
     }
 
-    if (item.amount > 1) {
-      item.amount -= 1;
+    if (player.getGameMode() === GameMode.Creative) {
+      return { consumed: true, remainingAmount: Number.MAX_SAFE_INTEGER };
+    }
+
+    const remainingAmount = item.amount - 1;
+    if (remainingAmount > 0) {
+      item.amount = remainingAmount;
       equippable.setEquipment(slot, item);
     } else {
       equippable.setEquipment(slot, undefined);
     }
-    return true;
+    return { consumed: true, remainingAmount };
   }
 
   /**
    * 爆発サポートを実行
    */
-  private static executeExplosionSupport(player: Player): void {
+  private static executeExplosionSupport(
+    player: Player,
+    remainingAmount: number,
+  ): void {
     // 0. 爆発した瞬間にフックショットを解除
     HookshotSystem.unhook(player);
 
@@ -181,6 +193,15 @@ export class ExplosionSupportSystem {
         volume: 0.9,
         pitch: 1.2,
       });
+
+      // 残数3個以下で危険通知音を鳴らす（3→2→1でピッチ上昇、0で弾切れ音）
+      if (remainingAmount === 0) {
+        player.playSound("random.break", { volume: 1.0, pitch: 0.9 });
+        player.playSound("note.bass", { volume: 1.0, pitch: 0.6 });
+      } else if (remainingAmount <= 3) {
+        const pitch = 1.0 + (3 - remainingAmount) * 0.25;
+        player.playSound("note.pling", { volume: 1.0, pitch });
+      }
     } catch {
       // パーティクル・サウンド再生時のエラー抑止
     }
