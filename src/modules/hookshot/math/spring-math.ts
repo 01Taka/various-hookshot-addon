@@ -20,8 +20,12 @@ export interface SpringRopeParams {
   damping?: number;
   /** 1Tickあたりの最大加速度 (blocks/tick²)。急激な伸び縮みでの暴発防止 */
   maxAcceleration?: number;
-  /** ひずみ計算時の分母（自然長）の下限値 (blocks, デフォルト: 1.5) */
+  /** ひずみ計算時の分母（自然長）の共通下限値 (blocks, デフォルト: 1.5) */
   minDenominator?: number;
+  /** 動径（縦）方向のひずみ計算時の分母下限値 (blocks, 省略時は minDenominator) */
+  minRadialDenominator?: number;
+  /** 曲げ（横）方向のひずみ計算時の分母下限値 (blocks, 省略時は minDenominator) */
+  minBendingDenominator?: number;
   /** 着弾面の法線ベクトル（面の裏側へのめり込み防止に使用。また bendingAxis 未指定時の基準軸としてもフォールバック利用される） */
   surfaceNormal?: Vector3;
   /**
@@ -50,6 +54,8 @@ export function calculateSpringVelocity(
     damping = 0.01,
     maxAcceleration = 10,
     minDenominator = 1.5,
+    minRadialDenominator,
+    minBendingDenominator,
     surfaceNormal,
     bendingAxis,
     bendingStiffness = 0,
@@ -71,9 +77,16 @@ export function calculateSpringVelocity(
   });
 
   // ヤング率に基づく実効バネ定数（自然長が短いほど硬く、長いほど柔らかい）
-  const effectiveLength = Math.max(naturalLength, minDenominator);
-  const effectiveStiffness = stiffness / effectiveLength;
-  const effectiveBendingStiffness = bendingStiffness / effectiveLength;
+  const radialDenominator = Math.max(
+    naturalLength,
+    minRadialDenominator ?? minDenominator,
+  );
+  const bendingDenominator = Math.max(
+    naturalLength,
+    minBendingDenominator ?? minDenominator,
+  );
+  const effectiveStiffness = stiffness / radialDenominator;
+  const effectiveBendingStiffness = bendingStiffness / bendingDenominator;
 
   // --- 双方向のバネ復元力（フックの法則＋ヤング率: a = -C * (r - L0) / L0） ---
   // stretch > 0 (伸びている): 内向き(-normal)に引く力
