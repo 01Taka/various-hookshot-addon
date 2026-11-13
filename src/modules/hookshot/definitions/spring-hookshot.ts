@@ -52,9 +52,11 @@ export const springHookshotDefinition: HookshotDefinition = {
   reelMode: "extend",
   minRopeLength: 0.5,
   airProbing: {
-    launchMode: "always",
     initialLength: 2.0,
-    extendSpeed: 4.0,
+    extend: {
+      mode: "continuous",
+      speed: 4.0,
+    },
     minHitDistance: 0.5,
     hitSoundId: "block.slime.place",
   },

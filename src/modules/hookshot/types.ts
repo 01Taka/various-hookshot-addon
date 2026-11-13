@@ -12,6 +12,8 @@ export interface HookshotState {
   probingDirection?: Vector3;
   /** 構え中の自動伸長が有効かどうか */
   isAutoExtending?: boolean;
+  /** 自動ステップ伸長の直近実行Tick */
+  lastAutoExtendTick?: number;
   /** 着弾面の法線ベクトル（外向き） */
   normal?: Vector3;
   /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
@@ -53,15 +55,27 @@ export type ReelConfig =
       soundId?: string;
     };
 
-export type AirProbingLaunchMode = "on_miss" | "always";
+export type AirProbingExtendConfig =
+  | {
+      mode: "continuous";
+      /** 着弾までに自動で伸びる速度 (blocks/tick) */
+      speed: number;
+    }
+  | {
+      mode: "step";
+      /** 1ステップで伸びる長さ (blocks) */
+      stepLength: number;
+      /** 何Tickごとに伸びるか (ticks) */
+      intervalTicks: number;
+      /** ステップ伸長時の効果音ID */
+      soundId?: string;
+    };
 
 export interface AirProbingConfig {
-  /** 構え状態へ移行するタイミング ("on_miss": 外れた時のみ, "always": 常に初期長から飛ばす) */
-  launchMode: AirProbingLaunchMode;
   /** 発射直後の初期長 (blocks) */
   initialLength: number;
-  /** 着弾までに自動で伸びる速度 (blocks/tick, 0または未指定で自動伸長なし) */
-  extendSpeed?: number;
+  /** 着弾までの自動伸長設定 */
+  extend: AirProbingExtendConfig;
   /** 手元・足元の誤爆防止で除外する最小距離 (blocks, デフォルト: 1.5) */
   minHitDistance?: number;
   /** 構えからブロックに刺さった時の効果音ID */

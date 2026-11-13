@@ -165,8 +165,13 @@ export const bambooHookshotDefinition: HookshotDefinition = {
   reelMode: "extend",
   minRopeLength: 2.0,
   airProbing: {
-    launchMode: "on_miss",
-    initialLength: 12,
+    initialLength: 2.0,
+    extend: {
+      mode: "step",
+      stepLength: 4.0,
+      intervalTicks: 1,
+      soundId: "block.bamboo.place",
+    },
     minHitDistance: 1.5,
     hitSoundId: "block.bamboo.place",
   },

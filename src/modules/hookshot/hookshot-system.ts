@@ -95,7 +95,7 @@ export class HookshotSystem {
    * フックを発射・接続します。
    */
   public static shot(player: Player, def: HookshotDefinition): boolean {
-    if (def.airProbing?.launchMode === "always") {
+    if (def.airProbing) {
       this.enterProbingState(player, def);
       return true;
     }
@@ -108,11 +108,7 @@ export class HookshotSystem {
       includePassableBlocks: false,
     });
     if (!hit) {
-      if (!def.airProbing) {
-        return false;
-      }
-      this.enterProbingState(player, def);
-      return true;
+      return false;
     }
 
     this.notifyExternalUnhook(player);
@@ -168,7 +164,8 @@ export class HookshotSystem {
       },
       isAnchored: false,
       probingDirection: dir,
-      isAutoExtending: (probing.extendSpeed ?? 0) > 0,
+      isAutoExtending: true,
+      lastAutoExtendTick: system.currentTick,
       currentLength: initialLength,
       jumpConsumed:
         isInputButtonPressed(player, "Jump") || player.isJumping,
@@ -244,16 +241,8 @@ export class HookshotSystem {
     if (!dir) return;
 
     const probing = def.airProbing;
-    if (state.isAutoExtending && probing?.extendSpeed && probing.extendSpeed > 0) {
-      const maxLength =
-        def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
-      state.currentLength = Math.min(
-        state.currentLength + probing.extendSpeed,
-        maxLength,
-      );
-      if (state.currentLength >= maxLength) {
-        state.isAutoExtending = false;
-      }
+    if (state.isAutoExtending && probing) {
+      this.applyAutoExtend(player, state, def, probing.extend);
     }
 
     const head = player.getHeadLocation();
@@ -295,6 +284,43 @@ export class HookshotSystem {
       z: tip.z,
     };
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+  }
+
+  private static applyAutoExtend(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    extend: NonNullable<HookshotDefinition["airProbing"]>["extend"],
+  ): void {
+    const maxLength =
+      def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+
+    if (extend.mode === "continuous") {
+      if (extend.speed > 0) {
+        state.currentLength = Math.min(
+          state.currentLength + extend.speed,
+          maxLength,
+        );
+      }
+    } else {
+      const now = system.currentTick;
+      const lastTick = state.lastAutoExtendTick ?? now;
+      if (now - lastTick >= extend.intervalTicks) {
+        state.lastAutoExtendTick = now;
+        const nextLength = Math.min(
+          state.currentLength + extend.stepLength,
+          maxLength,
+        );
+        if (nextLength !== state.currentLength) {
+          state.currentLength = nextLength;
+          this.playSoundSafe(player, extend.soundId);
+        }
+      }
+    }
+
+    if (state.currentLength >= maxLength) {
+      state.isAutoExtending = false;
+    }
   }
 
   private static playSoundSafe(player: Player, soundId?: string): void {
