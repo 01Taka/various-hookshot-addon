@@ -16,7 +16,7 @@ import {
 } from "addon-utils";
 import { HookshotSystem } from "../hookshot/hookshot-system";
 import { HookRenderManager } from "../render";
-import { startPostFlight, stopPostFlight } from "../post-flight";
+import { PostFlightSystem } from "../post-flight";
 import {
   calculatePathfinderVelocityImpulse,
   getPlayerChestLocation,
@@ -82,9 +82,6 @@ export class PathfinderGrappleSystem {
 
     // メインの通常フックショットが接続中なら自動解除（排他連携）
     HookshotSystem.unhook(player);
-
-    // 既存の慣性飛行状態をクリア
-    stopPostFlight(player);
 
     const anchor: PathfinderAnchor = {
       dimensionId: player.dimension.id,
@@ -156,9 +153,6 @@ export class PathfinderGrappleSystem {
     if (reason === "jump" && currentVel.y < 0.45) {
       player.applyImpulse({ x: 0, y: 0.14, z: 0 });
     }
-
-    // 空中でスリングショット切断された場合、着地まで低空気抵抗の放物線慣性飛行へ移行
-    startPostFlight(player);
   }
 
   /**
@@ -250,6 +244,12 @@ export class PathfinderGrappleSystem {
     HookshotSystem.registerExternalUnhookHandler((player) => {
       this.unhook(player);
     });
+
+    // グラップル接続中は慣性飛行を一時抑制
+    PostFlightSystem.init();
+    PostFlightSystem.registerSuppressor(
+      (player) => this.getActiveState(player) !== null,
+    );
 
     const handleUse = (player: Player, itemTypeId?: string) => {
       if (itemTypeId !== PATHFINDER_ITEM_ID) return;

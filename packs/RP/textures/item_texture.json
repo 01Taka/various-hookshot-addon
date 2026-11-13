@@ -1,0 +1,12 @@
+{
+  "resource_pack_name": "various_hookshot_addon",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "aero_vest": {
+      "textures": "textures/items/aero_vest"
+    },
+    "phantom_aero_vest": {
+      "textures": "textures/items/phantom_aero_vest"
+    }
+  }
+}

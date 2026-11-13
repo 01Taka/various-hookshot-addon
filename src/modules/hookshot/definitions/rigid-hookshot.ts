@@ -20,7 +20,6 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   minRopeLength: 1.5,
   wireStyle: RIGID_WIRE_STYLE,
   enableGazeSteering: true,
-  enablePostFlight: true,
   calculateImpulse: (player, state) => {
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,

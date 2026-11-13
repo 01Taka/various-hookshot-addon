@@ -49,7 +49,6 @@ export const springHookshotDefinition: HookshotDefinition = {
   initialReelDelta: 3.0,
   minRopeLength: 0.5,
   wireStyle: SPRING_WIRE_STYLE,
-  enablePostFlight: true,
   getWireAxis: (state) => getSpringBendingAxis(state),
   calculateImpulse: (player, state) => {
     // 設定された bendingMode に応じた基準軸を選択

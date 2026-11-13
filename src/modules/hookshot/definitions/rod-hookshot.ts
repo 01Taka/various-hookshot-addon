@@ -18,7 +18,6 @@ export const rodHookshotDefinition: HookshotDefinition = {
   initialReelDelta: 0.0,
   minRopeLength: 1.5,
   wireStyle: ROD_WIRE_STYLE,
-  enablePostFlight: true,
   calculateImpulse: (player, state) => {
     return calculateRodHookshot(player, state.anchor, state.currentLength);
   },

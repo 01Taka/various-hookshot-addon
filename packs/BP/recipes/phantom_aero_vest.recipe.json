@@ -1,0 +1,28 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "various_hookshot_addon:phantom_aero_vest"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "P P",
+      "PAP",
+      "PWP"
+    ],
+    "key": {
+      "P": {
+        "item": "minecraft:phantom_membrane"
+      },
+      "A": {
+        "item": "various_hookshot_addon:aero_vest"
+      },
+      "W": {
+        "item": "minecraft:wind_charge"
+      }
+    },
+    "result": {
+      "item": "various_hookshot_addon:phantom_aero_vest"
+    }
+  }
+}

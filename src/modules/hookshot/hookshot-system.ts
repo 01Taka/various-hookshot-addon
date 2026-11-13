@@ -14,11 +14,7 @@ import {
   PlayerStateManager,
 } from "addon-utils";
 import { HookRenderManager } from "../render";
-import {
-  PostFlightSystem,
-  startPostFlight,
-  stopPostFlight,
-} from "../post-flight";
+import { PostFlightSystem } from "../post-flight";
 import { calculateReelSpeedMultiplier } from "./math/steering-math";
 import { AnchorPosition, HookshotDefinition, HookshotState } from "./types";
 
@@ -83,9 +79,6 @@ export class HookshotSystem {
     this.clearDistanceUiIfActive(player);
 
     const def = this.definitionsById.get(state.hookshotId);
-    if (def?.enablePostFlight ?? true) {
-      startPostFlight(player, def?.postFlightOptions);
-    }
     if (def?.onDetach) {
       def.onDetach(player, state);
     }
@@ -105,9 +98,6 @@ export class HookshotSystem {
     if (!hit) {
       return false;
     }
-
-    // 新たにフックを接続した場合は慣性飛行を終了
-    stopPostFlight(player);
 
     // 外部の特殊フックショット（パスファインダー等）が動作中なら解除を通知
     for (const handler of this.externalUnhookHandlers) {
@@ -347,8 +337,11 @@ export class HookshotSystem {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // 速度維持（ポストフライト）システムの初期化
+    // 速度維持（ポストフライト）システムの初期化とフック接続中の抑制登録
     PostFlightSystem.init();
+    PostFlightSystem.registerSuppressor(
+      (player) => this.getActiveState(player) !== null,
+    );
 
     // 右クリック（空中での使用）
     world.afterEvents.itemUse.subscribe((event) => {

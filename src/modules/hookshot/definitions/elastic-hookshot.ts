@@ -20,7 +20,6 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   minRopeLength: 1.5,
   wireStyle: ELASTIC_WIRE_STYLE,
   enableGazeSteering: true,
-  enablePostFlight: true,
   calculateImpulse: (player, state) => {
     return calculateElasticHookshot(player, state.anchor, {
       naturalLength: state.currentLength,

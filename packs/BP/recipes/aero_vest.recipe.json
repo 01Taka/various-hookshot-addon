@@ -1,0 +1,28 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "various_hookshot_addon:aero_vest"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "F F",
+      "FLF",
+      "FSF"
+    ],
+    "key": {
+      "F": {
+        "item": "minecraft:feather"
+      },
+      "L": {
+        "item": "minecraft:leather"
+      },
+      "S": {
+        "item": "minecraft:string"
+      }
+    },
+    "result": {
+      "item": "various_hookshot_addon:aero_vest"
+    }
+  }
+}

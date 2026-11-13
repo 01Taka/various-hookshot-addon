@@ -159,7 +159,6 @@ export const bambooHookshotDefinition: HookshotDefinition = {
   initialReelDelta: 0.0,
   minRopeLength: 1.5,
   wireStyle: BAMBOO_WIRE_STYLE,
-  enablePostFlight: true,
   calculateImpulse: (player, state) => {
     return calculateBambooHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
