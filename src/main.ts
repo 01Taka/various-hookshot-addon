@@ -10,7 +10,6 @@ PlayerStateManager.registerAutoCleanup();
 
 world.afterEvents.worldLoad.subscribe(() => {
   world.sendMessage("[Various Hookshot Addon] loaded");
-  world.sendMessage("§7地上でスニーク＋左クリック、または /scriptevent hookshot:explosion で爆発サポートのON/OFFを設定できます。");
 });
 
 // 切断後速度維持（ポストフライト慣性飛行）システム初期化

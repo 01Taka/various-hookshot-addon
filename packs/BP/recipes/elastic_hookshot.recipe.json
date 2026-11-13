@@ -1,0 +1,27 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "various_hookshot_addon:elastic_hookshot"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "  #",
+      " # ",
+      "#  "
+    ],
+    "key": {
+      "#": {
+        "item": "minecraft:lead"
+      }
+    },
+    "unlock": [
+      {
+        "item": "minecraft:lead"
+      }
+    ],
+    "result": {
+      "item": "various_hookshot_addon:elastic_hookshot"
+    }
+  }
+}

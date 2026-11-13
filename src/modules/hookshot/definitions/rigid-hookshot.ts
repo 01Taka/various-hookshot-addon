@@ -3,7 +3,7 @@ import { calculateRigidHookshot } from "../math/rigid-math";
 import { HookshotDefinition } from "../types";
 
 export const RIGID_HOOKSHOT_ID = "rigid";
-export const STRING_ITEM_ID = "minecraft:string";
+export const STRING_ITEM_ID = "various_hookshot_addon:rigid_hookshot";
 
 /**
  * 糸（minecraft:string）を使用した伸びがない（剛体ロープ）フックショットの定義

@@ -7,6 +7,24 @@
     },
     "phantom_aero_vest": {
       "textures": "textures/items/phantom_aero_vest"
+    },
+    "rigid_hookshot": {
+      "textures": "textures/items/rigid_hookshot"
+    },
+    "elastic_hookshot": {
+      "textures": "textures/items/elastic_hookshot"
+    },
+    "bamboo_hookshot": {
+      "textures": "textures/items/bamboo_hookshot"
+    },
+    "rod_hookshot": {
+      "textures": "textures/items/rod_hookshot"
+    },
+    "spring_hookshot": {
+      "textures": "textures/items/spring_hookshot"
+    },
+    "burst_charge": {
+      "textures": "textures/items/burst_charge"
     }
   }
 }

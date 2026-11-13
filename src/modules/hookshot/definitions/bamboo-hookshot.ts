@@ -9,7 +9,7 @@ import {
 import { HookshotDefinition } from "../types";
 
 export const BAMBOO_HOOKSHOT_ID = "bamboo";
-export const BAMBOO_ITEM_ID = "minecraft:bamboo";
+export const BAMBOO_ITEM_ID = "various_hookshot_addon:bamboo_hookshot";
 export const BAMBOO_AIR_CHAIN_KEY = "bambooAirChainState";
 
 /**

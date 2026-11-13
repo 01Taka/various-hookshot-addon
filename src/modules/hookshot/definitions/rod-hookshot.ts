@@ -3,7 +3,7 @@ import { calculateRodHookshot } from "../math/rod-math";
 import { HookshotDefinition } from "../types";
 
 export const ROD_HOOKSHOT_ID = "rod";
-export const STICK_ITEM_ID = "minecraft:stick";
+export const STICK_ITEM_ID = "various_hookshot_addon:rod_hookshot";
 
 /**
  * 棒（minecraft:stick）を使用した内側にも縮まない剛体棒フックショットの定義

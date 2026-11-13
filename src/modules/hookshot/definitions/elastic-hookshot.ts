@@ -3,7 +3,7 @@ import { calculateElasticHookshot } from "../math/elastic-math";
 import { HookshotDefinition } from "../types";
 
 export const ELASTIC_HOOKSHOT_ID = "elastic";
-export const LEAD_ITEM_ID = "minecraft:lead";
+export const LEAD_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
 
 /**
  * リード（minecraft:lead）を使用した伸縮性（ゴム紐）フックショットの定義

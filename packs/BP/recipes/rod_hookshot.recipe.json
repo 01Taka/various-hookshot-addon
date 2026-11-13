@@ -1,0 +1,27 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "various_hookshot_addon:rod_hookshot"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "  #",
+      " # ",
+      "#  "
+    ],
+    "key": {
+      "#": {
+        "item": "minecraft:stick"
+      }
+    },
+    "unlock": [
+      {
+        "item": "minecraft:stick"
+      }
+    ],
+    "result": {
+      "item": "various_hookshot_addon:rod_hookshot"
+    }
+  }
+}

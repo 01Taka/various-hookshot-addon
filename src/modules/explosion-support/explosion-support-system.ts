@@ -1,31 +1,24 @@
 import {
+  EntityComponentTypes,
   EntitySwingSource,
+  EquipmentSlot,
+  GameMode,
   Player,
   system,
   world,
 } from "@minecraft/server";
-import {
-  getMainhandItem,
-  isSneakButtonPressed,
-  PlayerStateManager,
-} from "addon-utils";
+import { getMainhandItem, PlayerStateManager } from "addon-utils";
 import { HookshotSystem } from "../hookshot";
 import { PATHFINDER_ITEM_ID } from "../pathfinder-grapple";
 
-/** 爆発サポートが無効化されていることを示すプレイヤータグ */
-export const EXPLOSION_DISABLED_TAG = "hookshot:explosion_disabled";
+/** 爆発サポート用消費アイテムID */
+export const EXPLOSION_ITEM_ID = "various_hookshot_addon:burst_charge";
 
 /** 爆発サポートの前回実行Tick保存キー */
 const EXPLOSION_SUPPORT_LAST_TICK_KEY = "explosionSupportLastTick";
 
-/** 設定トグルの前回実行Tick保存キー（誤連打防止） */
-const EXPLOSION_TOGGLE_LAST_TICK_KEY = "explosionToggleLastTick";
-
 /** 1秒のインターバル (Minecraftは20 ticks/秒) */
 export const EXPLOSION_SUPPORT_COOLDOWN_TICKS = 20;
-
-/** 設定トグルのクールダウン (0.5秒 = 10 ticks) */
-const TOGGLE_COOLDOWN_TICKS = 10;
 
 /** 浮遊効果の持続時間 (0.1秒 = 2 ticks) */
 export const EXPLOSION_SUPPORT_LEVITATION_TICKS = 2;
@@ -35,14 +28,9 @@ export const EXPLOSION_SUPPORT_UPWARD_IMPULSE = 0.85;
 
 /**
  * 爆発サポートシステム
- * パスファインダーのグラップル以外のフックショット所持中に空中を左クリック（パンチ）すると、
- * 接続中のフックショットを即座に解除し、足元に爆発を起こしてy方向速度を相殺し、
- * 上方向インパルスと0.1秒の浮遊効果（落下ダメージ無効化）を付与します。
- * 1秒のクールダウン（インターバル）が適用されます。
- *
- * 【簡単なON/OFF切り替え】
- * - 地上でスニークしながら左クリック: ON/OFF を即座にトグル
- * - `/scriptevent hookshot:explosion` : コマンドでトグル (on/off/menu)
+ * - 単体使用: メインハンドにバーストチャージを持って右クリックで1個消費して発動
+ * - フックショット併用: オフハンドにバーストチャージ、メインハンドにフックショット（パスファインダー除く）を持って左クリックで1個消費して発動
+ * 1秒のクールダウン（インターバル）が適用されます。クリエイティブモードでは消費しません。
  */
 export class ExplosionSupportSystem {
   private static isInitialized = false;
@@ -61,40 +49,18 @@ export class ExplosionSupportSystem {
         event.heldItemStack?.typeId,
       );
     });
-  }
 
-  /**
-   * プレイヤーの爆発サポートが有効かどうかを返します（デフォルト: true）
-   */
-  public static isEnabled(player: Player): boolean {
-    if (!player.isValid) return false;
-    return !player.hasTag(EXPLOSION_DISABLED_TAG);
-  }
+    world.afterEvents.itemUse.subscribe((event) => {
+      const player = event.source;
+      if (!player || player.typeId !== "minecraft:player") return;
+      if (event.itemStack.typeId !== EXPLOSION_ITEM_ID) return;
 
-  /**
-   * プレイヤーの爆発サポートの有効/無効を設定します
-   */
-  public static setEnabled(player: Player, enabled: boolean): void {
-    if (!player.isValid) return;
-    if (enabled) {
-      if (player.hasTag(EXPLOSION_DISABLED_TAG)) {
-        player.removeTag(EXPLOSION_DISABLED_TAG);
-      }
-    } else {
-      if (!player.hasTag(EXPLOSION_DISABLED_TAG)) {
-        player.addTag(EXPLOSION_DISABLED_TAG);
-      }
-    }
-  }
-
-  /**
-   * プレイヤーの爆発サポートの有効/無効を切り替えます
-   * @returns 切り替え後の有効状態 (true: ON, false: OFF)
-   */
-  public static toggleEnabled(player: Player): boolean {
-    const nextState = !this.isEnabled(player);
-    this.setEnabled(player, nextState);
-    return nextState;
+      this.tryTriggerExplosion(
+        player as Player,
+        EquipmentSlot.Mainhand,
+        EXPLOSION_ITEM_ID,
+      );
+    });
   }
 
   /**
@@ -115,7 +81,6 @@ export class ExplosionSupportSystem {
       return;
     }
 
-    // 手持ちアイテムの判定（イベントのheldItemStackまたはメインハンド）
     const itemTypeId = heldItemTypeId ?? getMainhandItem(player)?.typeId;
     if (!itemTypeId) return;
 
@@ -129,50 +94,27 @@ export class ExplosionSupportSystem {
       return;
     }
 
+    // オフハンドにバーストチャージを所持している場合のみ発動
+    const equippable = player.getComponent(EntityComponentTypes.Equippable);
+    const offhandItem = equippable?.getEquipment(EquipmentSlot.Offhand);
+    if (!offhandItem || offhandItem.typeId !== EXPLOSION_ITEM_ID) {
+      return;
+    }
+
+    this.tryTriggerExplosion(player, EquipmentSlot.Offhand, EXPLOSION_ITEM_ID);
+  }
+
+  /**
+   * クールダウン判定とアイテム消費を行い、爆発サポートを発動します
+   */
+  private static tryTriggerExplosion(
+    player: Player,
+    slot: EquipmentSlot,
+    expectedItemTypeId: string,
+  ): void {
+    if (!player.isValid) return;
+
     const currentTick = system.currentTick;
-
-    // --- 簡単ON/OFFトグル操作 ---
-    // 地上でスニークしながら左クリックした場合は、爆発を起こさず設定を即座にトグル
-    let isSneaking = false;
-    try {
-      isSneaking = isSneakButtonPressed(player);
-    } catch {}
-
-    if (player.isOnGround && isSneaking) {
-      const lastToggleTick = PlayerStateManager.get<number>(
-        player.id,
-        EXPLOSION_TOGGLE_LAST_TICK_KEY,
-        -9999,
-      );
-      if (currentTick - lastToggleTick < TOGGLE_COOLDOWN_TICKS) {
-        return;
-      }
-      PlayerStateManager.set(
-        player.id,
-        EXPLOSION_TOGGLE_LAST_TICK_KEY,
-        currentTick,
-      );
-
-      const newState = this.toggleEnabled(player);
-      if (newState) {
-        player.sendMessage("§a[爆発サポート] §lON§r§a (有効) に切り替えました。");
-        player.onScreenDisplay.setActionBar("§a爆発サポート: ON");
-        player.playSound("random.orb", { pitch: 1.5 });
-      } else {
-        player.sendMessage("§c[爆発サポート] §lOFF§r§c (無効) に切り替えました。");
-        player.onScreenDisplay.setActionBar("§c爆発サポート: OFF");
-        player.playSound("random.orb", { pitch: 0.8 });
-      }
-      return;
-    }
-
-    // --- 爆発サポート発動処理 ---
-    // プレイヤーが爆発サポートをOFFに設定している場合はスキップ
-    if (!this.isEnabled(player)) {
-      return;
-    }
-
-    // 1秒 (20 ticks) のインターバル判定
     const lastTick = PlayerStateManager.get<number>(
       player.id,
       EXPLOSION_SUPPORT_LAST_TICK_KEY,
@@ -182,15 +124,44 @@ export class ExplosionSupportSystem {
       return;
     }
 
-    // 実行記録（インターバル開始）
+    if (!this.consumeItemFromSlot(player, slot, expectedItemTypeId)) {
+      return;
+    }
+
     PlayerStateManager.set(
       player.id,
       EXPLOSION_SUPPORT_LAST_TICK_KEY,
       currentTick,
     );
 
-    // 爆発サポート発動
     this.executeExplosionSupport(player);
+  }
+
+  /**
+   * 指定スロットのアイテムを1個消費します（クリエイティブモード時は消費せず成功を返します）
+   */
+  private static consumeItemFromSlot(
+    player: Player,
+    slot: EquipmentSlot,
+    expectedItemTypeId: string,
+  ): boolean {
+    const equippable = player.getComponent(EntityComponentTypes.Equippable);
+    if (!equippable) return false;
+
+    const item = equippable.getEquipment(slot);
+    if (!item || item.typeId !== expectedItemTypeId) return false;
+
+    if (player.getGameMode() === GameMode.Creative) {
+      return true;
+    }
+
+    if (item.amount > 1) {
+      item.amount -= 1;
+      equippable.setEquipment(slot, item);
+    } else {
+      equippable.setEquipment(slot, undefined);
+    }
+    return true;
   }
 
   /**
@@ -217,7 +188,6 @@ export class ExplosionSupportSystem {
     // 2. y方向の速度を打ち消し、上方向のインパルスを付与
     try {
       const currentVelocity = player.getVelocity();
-      // 現在の落下・上昇速度を相殺し、指定の上方向インパルスを追加
       const impulseY = -currentVelocity.y + EXPLOSION_SUPPORT_UPWARD_IMPULSE;
       player.applyImpulse({ x: 0, y: impulseY, z: 0 });
     } catch {

@@ -1,6 +1,10 @@
 import { Vector3Utils } from "@minecraft/math";
 import {
   BlockRaycastHit,
+  EntityComponentTypes,
+  EquipmentSlot,
+  GameMode,
+  ItemComponentTypes,
   Player,
   system,
   Vector3,
@@ -269,6 +273,50 @@ export class HookshotSystem {
     if (def.onAttach) {
       def.onAttach(player, state);
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+    }
+
+    this.consumeMainhandDurability(player, def.itemTypeId);
+  }
+
+  /**
+   * メインハンドに所持しているフックショットアイテムの耐久値を1消費します。
+   * クリエイティブモードでは消費しません。
+   */
+  private static consumeMainhandDurability(
+    player: Player,
+    expectedItemTypeId: string,
+  ): void {
+    if (!player.isValid) return;
+    if (player.getGameMode() === GameMode.Creative) return;
+
+    const equippable = player.getComponent(EntityComponentTypes.Equippable);
+    if (!equippable) return;
+
+    const item = equippable.getEquipment(EquipmentSlot.Mainhand);
+    if (!item || item.typeId !== expectedItemTypeId) return;
+
+    const durability = item.getComponent(ItemComponentTypes.Durability);
+    if (!durability) return;
+
+    const enchantable = item.getComponent(ItemComponentTypes.Enchantable);
+    const unbreakingLevel =
+      enchantable?.getEnchantment("unbreaking")?.level ?? 0;
+    if (unbreakingLevel > 0 && Math.random() >= 1 / (unbreakingLevel + 1)) {
+      return;
+    }
+
+    const nextDamage = durability.damage + 1;
+    if (nextDamage >= durability.maxDurability) {
+      equippable.setEquipment(EquipmentSlot.Mainhand, undefined);
+      try {
+        player.dimension.playSound("random.break", player.location, {
+          volume: 1.0,
+          pitch: 1.0,
+        });
+      } catch {}
+    } else {
+      durability.damage = nextDamage;
+      equippable.setEquipment(EquipmentSlot.Mainhand, item);
     }
   }
 

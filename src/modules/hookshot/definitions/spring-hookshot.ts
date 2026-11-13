@@ -3,7 +3,7 @@ import { calculateSpringHookshot } from "../math/spring-math";
 import { HookshotDefinition } from "../types";
 
 export const SPRING_HOOKSHOT_ID = "spring";
-export const SLIME_BALL_ITEM_ID = "minecraft:slime_ball";
+export const SLIME_BALL_ITEM_ID = "various_hookshot_addon:spring_hookshot";
 
 /**
  * バネの曲げ復元力（角度維持）の基準モード
