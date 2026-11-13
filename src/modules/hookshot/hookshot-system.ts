@@ -16,7 +16,7 @@ import {
 import { HookRenderManager } from "../render";
 import { PostFlightSystem } from "../post-flight";
 import { calculateReelSpeedMultiplier } from "./math/steering-math";
-import { AnchorPosition, HookshotDefinition, HookshotState } from "./types";
+import { AnchorPosition, HookshotDefinition, HookshotState, ReelMode } from "./types";
 
 const ACTIVE_HOOK_KEY = "hookshotActiveState";
 const LAST_USE_TICK_KEY = "hookshotLastUseTick";
@@ -25,6 +25,8 @@ const UI_ACTIVE_KEY = "hookshotUiActive";
 const DEFAULT_MAX_DISTANCE = 1200;
 const DEFAULT_REEL_SPEED = 1.25;
 const DEFAULT_MIN_ROPE_LENGTH = 1.5;
+const DEFAULT_PROBING_INITIAL_LENGTH = 12;
+const DEFAULT_PROBING_MIN_HIT_DISTANCE = 1.5;
 
 export class HookshotSystem {
   private static definitionsByItem = new Map<string, HookshotDefinition>();
@@ -96,16 +98,92 @@ export class HookshotSystem {
       includePassableBlocks: false,
     });
     if (!hit) {
-      return false;
+      if (!def.allowAirProbing) {
+        return false;
+      }
+
+      this.notifyExternalUnhook(player);
+
+      const head = player.getHeadLocation();
+      const dir = Vector3Utils.normalize(player.getViewDirection());
+      const initialLength = Math.min(
+        def.probingInitialLength ?? DEFAULT_PROBING_INITIAL_LENGTH,
+        maxDistance,
+      );
+      const tip = Vector3Utils.add(head, Vector3Utils.scale(dir, initialLength));
+
+      const probingState: HookshotState = {
+        hookshotId: def.id,
+        anchor: {
+          dimensionId: player.dimension.id,
+          x: tip.x,
+          y: tip.y,
+          z: tip.z,
+        },
+        isAnchored: false,
+        probingDirection: dir,
+        currentLength: initialLength,
+        jumpConsumed:
+          isInputButtonPressed(player, "Jump") || player.isJumping,
+        sneakConsumed: isSneakButtonPressed(player),
+      };
+
+      PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, probingState);
+      return true;
     }
 
-    // 外部の特殊フックショット（パスファインダー等）が動作中なら解除を通知
+    this.notifyExternalUnhook(player);
+
+    const state: HookshotState = {
+      hookshotId: def.id,
+      anchor: { dimensionId: player.dimension.id, x: 0, y: 0, z: 0 },
+      isAnchored: true,
+      currentLength: 0,
+      jumpConsumed:
+        isInputButtonPressed(player, "Jump") || player.isJumping,
+      sneakConsumed: isSneakButtonPressed(player),
+    };
+
+    this.applyHitAnchor(
+      player,
+      state,
+      def,
+      hit,
+      player.getHeadLocation(),
+      player.getViewDirection(),
+    );
+
+    return true;
+  }
+
+  /**
+   * 外部の特殊フックショット解除ハンドラを実行します。
+   */
+  private static notifyExternalUnhook(player: Player): void {
     for (const handler of this.externalUnhookHandlers) {
       handler(player);
     }
+  }
 
+  /**
+   * レイキャスト衝突結果をフックショット状態に反映してアンカー確定処理を行います。
+   */
+  private static applyHitAnchor(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    hit: BlockRaycastHit,
+    origin: Vector3,
+    direction: Vector3,
+  ): void {
     const normal = getDirectionVector(hit.face);
-    const anchor = this.calculateAnchorPosition(player, hit, normal);
+    const anchor = this.calculateAnchorPosition(
+      player.dimension.id,
+      origin,
+      direction,
+      hit,
+      normal,
+    );
     const distance = Vector3Utils.distance(player.location, anchor);
 
     // アンカーからプレイヤーへの初期方向ベクトル（刺さった瞬間の角度）
@@ -116,16 +194,12 @@ export class HookshotSystem {
         ? Vector3Utils.scale(initialVector, 1 / initialDistance)
         : normal;
 
-    const state: HookshotState = {
-      hookshotId: def.id,
-      anchor,
-      normal,
-      initialDirection,
-      currentLength: distance,
-      jumpConsumed:
-        isInputButtonPressed(player, "Jump") || player.isJumping,
-      sneakConsumed: isSneakButtonPressed(player),
-    };
+    state.anchor = anchor;
+    state.isAnchored = true;
+    state.probingDirection = undefined;
+    state.normal = normal;
+    state.initialDirection = initialDirection;
+    state.currentLength = distance;
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
 
@@ -133,8 +207,65 @@ export class HookshotSystem {
       def.onAttach(player, state);
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
+  }
 
-    return true;
+  /**
+   * 構え（未着弾）状態の平行移動とブロック接触判定を更新します。
+   */
+  private static updateProbingState(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+  ): void {
+    const dir = state.probingDirection;
+    if (!dir) return;
+
+    const head = player.getHeadLocation();
+    const minHitDistance =
+      def.probingMinHitDistance ?? DEFAULT_PROBING_MIN_HIT_DISTANCE;
+
+    const hit = player.dimension.getBlockFromRay(head, dir, {
+      maxDistance: state.currentLength,
+      includeLiquidBlocks: false,
+      includePassableBlocks: false,
+    });
+
+    if (hit) {
+      const normal = getDirectionVector(hit.face);
+      const hitPos = this.calculateAnchorPosition(
+        player.dimension.id,
+        head,
+        dir,
+        hit,
+        normal,
+      );
+      const hitDistance = Vector3Utils.distance(head, hitPos);
+
+      if (hitDistance >= minHitDistance) {
+        this.applyHitAnchor(player, state, def, hit, head, dir);
+        this.playSoundSafe(player, def.probingHitSoundId);
+        return;
+      }
+    }
+
+    const tip = Vector3Utils.add(
+      head,
+      Vector3Utils.scale(dir, state.currentLength),
+    );
+    state.anchor = {
+      dimensionId: player.dimension.id,
+      x: tip.x,
+      y: tip.y,
+      z: tip.z,
+    };
+    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+  }
+
+  private static playSoundSafe(player: Player, soundId?: string): void {
+    if (!soundId) return;
+    try {
+      player.playSound(soundId);
+    } catch {}
   }
 
   /**
@@ -220,6 +351,13 @@ export class HookshotSystem {
 
     // 両方同時押しなら中立（何もしない）
     if (jumpPressed && sneakPressed) {
+      if (state.isReelingIn) {
+        state.isReelingIn = false;
+        stateDirty = true;
+      }
+      if (this.resetStepReelState(state)) {
+        stateDirty = true;
+      }
       if (stateDirty) {
         PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
       }
@@ -228,18 +366,6 @@ export class HookshotSystem {
 
     const baseMode = def.reelMode ?? "shorten";
     const reverseMode = baseMode === "extend" ? "shorten" : "extend";
-
-    // 両方同時押しなら中立（何もしない）
-    if (jumpPressed && sneakPressed) {
-      if (state.isReelingIn) {
-        state.isReelingIn = false;
-        stateDirty = true;
-      }
-      if (stateDirty) {
-        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
-      }
-      return;
-    }
 
     // シフト（スニーク）は地上・空中のどちらでも逆方向（長くする）に動作
     if (sneakPressed) {
@@ -275,10 +401,25 @@ export class HookshotSystem {
       state.isReelingIn = false;
       stateDirty = true;
     }
+    if (this.resetStepReelState(state)) {
+      stateDirty = true;
+    }
 
     if (stateDirty) {
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
+  }
+
+  private static resetStepReelState(state: HookshotState): boolean {
+    if (
+      state.currentStepIntervalTicks === undefined &&
+      state.lastStepMode === undefined
+    ) {
+      return false;
+    }
+    state.currentStepIntervalTicks = undefined;
+    state.lastStepMode = undefined;
+    return true;
   }
 
   /**
@@ -288,10 +429,15 @@ export class HookshotSystem {
     player: Player,
     state: HookshotState,
     def: HookshotDefinition,
-    mode: "shorten" | "extend",
+    mode: ReelMode,
     isInitial = false,
     forceSave = false,
   ): void {
+    if (def.stepReel) {
+      this.reelByStep(player, state, def, mode, isInitial, forceSave);
+      return;
+    }
+
     const reelSpeed = def.reelSpeed ?? DEFAULT_REEL_SPEED;
     const configuredInitial =
       typeof def.initialReelDelta === "object"
@@ -314,6 +460,78 @@ export class HookshotSystem {
       delta *= multiplier;
     }
 
+    this.applyLengthDelta(player, state, def, mode, delta, forceSave);
+  }
+
+  /**
+   * ステップ式（一定ブロック数＋長押し加速）の伸縮処理
+   */
+  private static reelByStep(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    mode: ReelMode,
+    isInitial: boolean,
+    forceSave: boolean,
+  ): void {
+    const stepConfig = def.stepReel;
+    if (!stepConfig) return;
+
+    const now = system.currentTick;
+    const isNewDirectionOrTap = isInitial || state.lastStepMode !== mode;
+
+    if (isNewDirectionOrTap) {
+      state.lastStepReelTick = now;
+      state.currentStepIntervalTicks = stepConfig.initialIntervalTicks;
+      state.lastStepMode = mode;
+      this.applyLengthDelta(
+        player,
+        state,
+        def,
+        mode,
+        stepConfig.stepLength,
+        true,
+        def.stepSoundId,
+      );
+      return;
+    }
+
+    const lastTick = state.lastStepReelTick ?? now;
+    const currentInterval =
+      state.currentStepIntervalTicks ?? stepConfig.initialIntervalTicks;
+
+    if (now - lastTick < currentInterval) {
+      if (forceSave) {
+        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      }
+      return;
+    }
+
+    state.lastStepReelTick = now;
+    state.currentStepIntervalTicks = Math.max(
+      stepConfig.minIntervalTicks,
+      currentInterval - stepConfig.intervalDecayTicks,
+    );
+    this.applyLengthDelta(
+      player,
+      state,
+      def,
+      mode,
+      stepConfig.stepLength,
+      true,
+      def.stepSoundId,
+    );
+  }
+
+  private static applyLengthDelta(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    mode: ReelMode,
+    delta: number,
+    forceSave: boolean,
+    soundId?: string,
+  ): void {
     let nextLength = state.currentLength;
     if (mode === "extend") {
       const maxLength =
@@ -324,8 +542,12 @@ export class HookshotSystem {
       nextLength = Math.max(state.currentLength - delta, minLength);
     }
 
-    if (state.currentLength !== nextLength || forceSave) {
+    const changed = state.currentLength !== nextLength;
+    if (changed) {
       state.currentLength = nextLength;
+      this.playSoundSafe(player, soundId);
+    }
+    if (changed || forceSave) {
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
   }
@@ -337,11 +559,12 @@ export class HookshotSystem {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // 速度維持（ポストフライト）システムの初期化とフック接続中の抑制登録
+    // 速度維持（ポストフライト）システムの初期化とフック接続中の抑制登録（構え中は抑制しない）
     PostFlightSystem.init();
-    PostFlightSystem.registerSuppressor(
-      (player) => this.getActiveState(player) !== null,
-    );
+    PostFlightSystem.registerSuppressor((player) => {
+      const state = this.getActiveState(player);
+      return state !== null && state.isAnchored !== false;
+    });
 
     // 右クリック（空中での使用）
     world.afterEvents.itemUse.subscribe((event) => {
@@ -375,25 +598,44 @@ export class HookshotSystem {
         // キー入力によるロープ長の変更（ジャンプ＝短縮、シフト＝伸長、押下時の瞬間変化対応）
         this.handleReelInput(player, state, def);
 
-        // 物理インパルス計算と適用
-        const impulse = def.calculateImpulse(player, state);
-        if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
-          player.applyImpulse(impulse);
+        // 構え中（未着弾）の平行移動およびブロック接触判定
+        if (state.isAnchored === false) {
+          this.updateProbingState(player, state, def);
         }
 
-        // ワイヤーの描画（定義側で getWireAxis が指定されている場合はその軸、無ければ state.normal）
-        const wireAxis = def.getWireAxis ? def.getWireAxis(state) : state.normal;
-        HookRenderManager.renderHookshot(
-          player,
-          state.anchor,
-          state.hookshotId,
-          def.wireStyle,
-          state.currentLength,
-          wireAxis,
-        );
+        if (state.isAnchored !== false) {
+          // 物理インパルス計算と適用
+          const impulse = def.calculateImpulse(player, state);
+          if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
+            player.applyImpulse(impulse);
+          }
+
+          // ワイヤーの描画（定義側で getWireAxis が指定されている場合はその軸、無ければ state.normal）
+          const wireAxis = def.getWireAxis
+            ? def.getWireAxis(state)
+            : state.normal;
+          HookRenderManager.renderHookshot(
+            player,
+            state.anchor,
+            state.hookshotId,
+            def.wireStyle,
+            state.currentLength,
+            wireAxis,
+          );
+        } else {
+          // 構え中はしなり・たるみ無しの直線として描画
+          HookRenderManager.renderHookshot(
+            player,
+            state.anchor,
+            state.hookshotId,
+            def.wireStyle,
+            undefined,
+            undefined,
+          );
+        }
 
         // 接続中距離UIの更新（○○m / ○○m）
-        this.updateDistanceUi(player, state);
+        this.updateDistanceUi(player, state, def);
       }
     });
   }
@@ -402,50 +644,50 @@ export class HookshotSystem {
    * レイキャスト衝突結果からアンカー座標を計算します。
    */
   private static calculateAnchorPosition(
-    player: Player,
+    dimensionId: string,
+    origin: Vector3,
+    direction: Vector3,
     hit: BlockRaycastHit,
     normal: Vector3 = getDirectionVector(hit.face),
   ): AnchorPosition {
-    const head = player.getHeadLocation();
-    const view = player.getViewDirection();
-
     // 衝突面の中心座標
     const faceCenterX = hit.block.x + 0.5 + normal.x * 0.5;
     const faceCenterY = hit.block.y + 0.5 + normal.y * 0.5;
     const faceCenterZ = hit.block.z + 0.5 + normal.z * 0.5;
 
     // レイと平面の交点距離 t
-    const dot = normal.x * view.x + normal.y * view.y + normal.z * view.z;
+    const dot =
+      normal.x * direction.x + normal.y * direction.y + normal.z * direction.z;
     let anchorX = faceCenterX;
     let anchorY = faceCenterY;
     let anchorZ = faceCenterZ;
 
     if (Math.abs(dot) > 0.0001) {
       const t =
-        (normal.x * (faceCenterX - head.x) +
-          normal.y * (faceCenterY - head.y) +
-          normal.z * (faceCenterZ - head.z)) /
+        (normal.x * (faceCenterX - origin.x) +
+          normal.y * (faceCenterY - origin.y) +
+          normal.z * (faceCenterZ - origin.z)) /
         dot;
 
       if (t > 0) {
         // 交点座標をブロック面の境界内 [0, 1] にクランプ
         anchorX = Math.max(
           hit.block.x,
-          Math.min(hit.block.x + 1, head.x + view.x * t),
+          Math.min(hit.block.x + 1, origin.x + direction.x * t),
         );
         anchorY = Math.max(
           hit.block.y,
-          Math.min(hit.block.y + 1, head.y + view.y * t),
+          Math.min(hit.block.y + 1, origin.y + direction.y * t),
         );
         anchorZ = Math.max(
           hit.block.z,
-          Math.min(hit.block.z + 1, head.z + view.z * t),
+          Math.min(hit.block.z + 1, origin.z + direction.z * t),
         );
       }
     }
 
     return {
-      dimensionId: player.dimension.id,
+      dimensionId,
       x: anchorX,
       y: anchorY,
       z: anchorZ,
@@ -483,7 +725,12 @@ export class HookshotSystem {
       return;
     }
 
-    const anchor = this.calculateAnchorPosition(player, hit);
+    const anchor = this.calculateAnchorPosition(
+      player.dimension.id,
+      player.getHeadLocation(),
+      player.getViewDirection(),
+      hit,
+    );
     const distance = Vector3Utils.distance(player.location, anchor);
 
     try {
@@ -519,12 +766,21 @@ export class HookshotSystem {
   private static updateDistanceUi(
     player: Player,
     state: HookshotState,
+    def: HookshotDefinition,
   ): void {
     try {
-      const distance = Vector3Utils.distance(player.location, state.anchor);
-      player.onScreenDisplay.setActionBar(
-        `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`,
-      );
+      if (state.isAnchored === false) {
+        const maxLength =
+          def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+        player.onScreenDisplay.setActionBar(
+          `[構え] ${state.currentLength.toFixed(1)}m / ${maxLength.toFixed(1)}m`,
+        );
+      } else {
+        const distance = Vector3Utils.distance(player.location, state.anchor);
+        player.onScreenDisplay.setActionBar(
+          `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`,
+        );
+      }
       PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
     } catch {
       // プレイヤー切断時などのエラー抑止

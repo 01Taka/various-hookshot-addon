@@ -157,7 +157,18 @@ export const bambooHookshotDefinition: HookshotDefinition = {
   reelSpeed: 0.8,
   reelMode: "extend",
   initialReelDelta: 0.0,
-  minRopeLength: 1.5,
+  minRopeLength: 2.0,
+  allowAirProbing: true,
+  probingInitialLength: 12,
+  probingMinHitDistance: 1.5,
+  stepReel: {
+    stepLength: 2.0,
+    initialIntervalTicks: 7,
+    minIntervalTicks: 2,
+    intervalDecayTicks: 1,
+  },
+  stepSoundId: "block.bamboo.place",
+  probingHitSoundId: "block.bamboo.place",
   wireStyle: BAMBOO_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateBambooHookshot(player, state.anchor, {

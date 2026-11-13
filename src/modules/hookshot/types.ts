@@ -6,6 +6,10 @@ export type AnchorPosition = Vector3 & { dimensionId: string };
 export interface HookshotState {
   hookshotId: string;
   anchor: AnchorPosition;
+  /** アンカー確定済みかどうか（省略時は true 扱い、false は未着弾の構え状態） */
+  isAnchored?: boolean;
+  /** 構え中の固定方向ベクトル（単位ベクトル） */
+  probingDirection?: Vector3;
   /** 着弾面の法線ベクトル（外向き） */
   normal?: Vector3;
   /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
@@ -15,9 +19,26 @@ export interface HookshotState {
   sneakConsumed?: boolean;
   /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
   isReelingIn?: boolean;
+  /** ステップ伸縮の直近実行Tick */
+  lastStepReelTick?: number;
+  /** ステップ伸縮の現在の待機間隔（Tick） */
+  currentStepIntervalTicks?: number;
+  /** 直近のステップ伸縮方向（方向転換時のリセット判定用） */
+  lastStepMode?: ReelMode;
 }
 
 export type ReelMode = "shorten" | "extend";
+
+export interface StepReelConfig {
+  /** 1ステップあたりの長さ変化量 (blocks) */
+  stepLength: number;
+  /** 初回長押し間隔 (ticks) */
+  initialIntervalTicks: number;
+  /** 最小間隔 (ticks) */
+  minIntervalTicks: number;
+  /** 1ステップごとに短縮するTick数 */
+  intervalDecayTicks: number;
+}
 
 export interface HookshotDefinition {
   /** 一意な識別子 (例: "elastic", "rigid", "rod", "spring") */
@@ -42,6 +63,18 @@ export interface HookshotDefinition {
   getWireAxis?: (state: HookshotState) => Vector3 | undefined;
   /** 視線ステアリング推進力を有効にするかどうか */
   enableGazeSteering?: boolean;
+  /** 未着弾でも構え状態（平行移動）として発射できるか */
+  allowAirProbing?: boolean;
+  /** 構え状態の初期長 (blocks, デフォルト: 12) */
+  probingInitialLength?: number;
+  /** 構え中のブロック接触判定で除外する手元最小距離 (blocks, デフォルト: 1.5) */
+  probingMinHitDistance?: number;
+  /** ステップ式伸縮設定（指定時は連続reelSpeedではなくステップ伸縮を使用） */
+  stepReel?: StepReelConfig;
+  /** ステップ伸縮時の効果音ID */
+  stepSoundId?: string;
+  /** 構えからブロックに刺さった時の効果音ID */
+  probingHitSoundId?: string;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */

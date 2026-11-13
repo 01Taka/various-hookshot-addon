@@ -16,7 +16,18 @@ export const rodHookshotDefinition: HookshotDefinition = {
   reelSpeed: 0.9,
   reelMode: "extend",
   initialReelDelta: 0.0,
-  minRopeLength: 1.5,
+  minRopeLength: 2.0,
+  allowAirProbing: true,
+  probingInitialLength: 12,
+  probingMinHitDistance: 1.5,
+  stepReel: {
+    stepLength: 2.0,
+    initialIntervalTicks: 7,
+    minIntervalTicks: 2,
+    intervalDecayTicks: 1,
+  },
+  stepSoundId: "block.wood.place",
+  probingHitSoundId: "block.wood.place",
   wireStyle: ROD_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateRodHookshot(player, state.anchor, state.currentLength);
