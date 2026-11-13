@@ -105,6 +105,8 @@ export interface HookshotDefinition {
   enableGazeSteering?: boolean;
   /** 未着弾構え・自動伸長の設定 */
   airProbing?: AirProbingConfig;
+  /** 発射時にブロックへ当たらなかった場合、指定Tick数の間だけ視線方向へのレイキャスト探索を継続する */
+  raycastGraceTicks?: number;
   /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた（最高速度到達）時に自動解除するか */
   detachOnMaxExtend?: boolean;
   /** 自然長以上へ到達した際、外側への動径速度 (blocks/tick) がこの値以上なら自動でアンカーを解除する */

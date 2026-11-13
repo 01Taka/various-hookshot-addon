@@ -21,6 +21,7 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
+  raycastGraceTicks: 10,
   wireStyle: RIGID_WIRE_STYLE,
   enableGazeSteering: true,
   calculateImpulse: (player, state) => {

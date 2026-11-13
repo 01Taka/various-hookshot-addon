@@ -21,6 +21,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
+  raycastGraceTicks: 10,
   wireStyle: ELASTIC_WIRE_STYLE,
   enableGazeSteering: true,
   calculateImpulse: (player, state) => {

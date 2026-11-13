@@ -25,8 +25,15 @@ import {
 } from "./types";
 
 const ACTIVE_HOOK_KEY = "hookshotActiveState";
+const PENDING_RAYCAST_KEY = "hookshotPendingRaycast";
 const LAST_USE_TICK_KEY = "hookshotLastUseTick";
 const UI_ACTIVE_KEY = "hookshotUiActive";
+
+interface PendingRaycastState {
+  hookshotId: string;
+  remainingTicks: number;
+  dimensionId: string;
+}
 
 const DEFAULT_MAX_DISTANCE = 1200;
 const DEFAULT_REEL_SPEED = 1.25;
@@ -79,6 +86,8 @@ export class HookshotSystem {
    * フックを解除します。
    */
   public static unhook(player: Player): void {
+    this.clearPendingRaycast(player);
+
     const state = this.getActiveState(player);
     if (!state) return;
 
@@ -91,11 +100,26 @@ export class HookshotSystem {
     }
   }
 
+  private static getPendingRaycast(player: Player): PendingRaycastState | null {
+    return PlayerStateManager.get<PendingRaycastState | null>(
+      player.id,
+      PENDING_RAYCAST_KEY,
+      null,
+    );
+  }
+
+  private static clearPendingRaycast(player: Player): void {
+    if (this.getPendingRaycast(player)) {
+      PlayerStateManager.delete(player.id, PENDING_RAYCAST_KEY);
+    }
+  }
+
   /**
    * フックを発射・接続します。
    */
   public static shot(player: Player, def: HookshotDefinition): boolean {
     if (def.airProbing) {
+      this.clearPendingRaycast(player);
       this.enterProbingState(player, def);
       return true;
     }
@@ -108,9 +132,29 @@ export class HookshotSystem {
       includePassableBlocks: false,
     });
     if (!hit) {
+      const graceTicks = def.raycastGraceTicks ?? 0;
+      if (graceTicks > 0) {
+        this.notifyExternalUnhook(player);
+        PlayerStateManager.set(player.id, PENDING_RAYCAST_KEY, {
+          hookshotId: def.id,
+          remainingTicks: graceTicks,
+          dimensionId: player.dimension.id,
+        } satisfies PendingRaycastState);
+        return true;
+      }
       return false;
     }
 
+    this.attachFromHit(player, def, hit);
+    return true;
+  }
+
+  private static attachFromHit(
+    player: Player,
+    def: HookshotDefinition,
+    hit: BlockRaycastHit,
+  ): void {
+    this.clearPendingRaycast(player);
     this.notifyExternalUnhook(player);
 
     const state: HookshotState = {
@@ -131,8 +175,6 @@ export class HookshotSystem {
       player.getHeadLocation(),
       player.getViewDirection(),
     );
-
-    return true;
   }
 
   /**
@@ -335,6 +377,15 @@ export class HookshotSystem {
    * フックのトグル処理（排他制御対応）
    */
   public static toggleHook(player: Player, def: HookshotDefinition): void {
+    const pending = this.getPendingRaycast(player);
+    if (pending) {
+      this.clearPendingRaycast(player);
+      this.clearDistanceUiIfActive(player);
+      if (pending.hookshotId === def.id) {
+        return;
+      }
+    }
+
     const currentState = this.getActiveState(player);
 
     if (currentState) {
@@ -728,6 +779,9 @@ export class HookshotSystem {
       for (const player of world.getAllPlayers()) {
         const state = this.getActiveState(player);
         if (!state) {
+          if (this.processPendingRaycast(player)) {
+            continue;
+          }
           // アンカー設置前: メインハンドにフックショットを持っている場合はプレビュー距離UIを更新
           this.updatePreviewDistanceUi(player);
           continue;
@@ -849,6 +903,54 @@ export class HookshotSystem {
       y: anchorY,
       z: anchorZ,
     };
+  }
+
+  /**
+   * 発射後の猶予Tick中の視線レイキャスト探索を処理します。
+   * 探索中または今Tickで着弾した場合は true を返します。
+   */
+  private static processPendingRaycast(player: Player): boolean {
+    const pending = this.getPendingRaycast(player);
+    if (!pending) return false;
+
+    const def = this.definitionsById.get(pending.hookshotId);
+    if (!def || player.dimension.id !== pending.dimensionId) {
+      this.clearPendingRaycast(player);
+      this.clearDistanceUiIfActive(player);
+      return false;
+    }
+
+    const maxDistance = def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+    const hit = player.getBlockFromViewDirection({
+      maxDistance,
+      includeLiquidBlocks: false,
+      includePassableBlocks: false,
+    });
+    if (hit) {
+      this.attachFromHit(player, def, hit);
+      return true;
+    }
+
+    const remainingTicks = pending.remainingTicks - 1;
+    if (remainingTicks <= 0) {
+      this.clearPendingRaycast(player);
+      this.clearDistanceUiIfActive(player);
+      return false;
+    }
+
+    PlayerStateManager.set(player.id, PENDING_RAYCAST_KEY, {
+      ...pending,
+      remainingTicks,
+    });
+
+    try {
+      player.onScreenDisplay.setActionBar(
+        `[探索中] ${maxDistance.toFixed(1)}m (${remainingTicks}t)`,
+      );
+      PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
+    } catch {}
+
+    return true;
   }
 
   /**
