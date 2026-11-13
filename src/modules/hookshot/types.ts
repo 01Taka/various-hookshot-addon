@@ -10,6 +10,8 @@ export interface HookshotState {
   isAnchored?: boolean;
   /** 構え中の固定方向ベクトル（単位ベクトル） */
   probingDirection?: Vector3;
+  /** 構え中の自動伸長が有効かどうか */
+  isAutoExtending?: boolean;
   /** 着弾面の法線ベクトル（外向き） */
   normal?: Vector3;
   /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
@@ -29,15 +31,41 @@ export interface HookshotState {
 
 export type ReelMode = "shorten" | "extend";
 
-export interface StepReelConfig {
-  /** 1ステップあたりの長さ変化量 (blocks) */
-  stepLength: number;
-  /** 初回長押し間隔 (ticks) */
-  initialIntervalTicks: number;
-  /** 最小間隔 (ticks) */
-  minIntervalTicks: number;
-  /** 1ステップごとに短縮するTick数 */
-  intervalDecayTicks: number;
+export type ReelConfig =
+  | {
+      mode: "continuous";
+      /** 継続的な長さ変更速度 (blocks/tick) */
+      speed: number;
+      /** ボタンを押した瞬間に追加で一気に変更する瞬間変化量 (blocks, 単一数値または { shorten?, extend? } で指定可能) */
+      initialDelta?: number | { shorten?: number; extend?: number };
+    }
+  | {
+      mode: "step";
+      /** 1ステップあたりの長さ変化量 (blocks) */
+      stepLength: number;
+      /** 初回長押し間隔 (ticks) */
+      initialIntervalTicks: number;
+      /** 最小間隔 (ticks) */
+      minIntervalTicks: number;
+      /** 1ステップごとに短縮するTick数 */
+      intervalDecayTicks: number;
+      /** ステップ伸縮時の効果音ID */
+      soundId?: string;
+    };
+
+export type AirProbingLaunchMode = "on_miss" | "always";
+
+export interface AirProbingConfig {
+  /** 構え状態へ移行するタイミング ("on_miss": 外れた時のみ, "always": 常に初期長から飛ばす) */
+  launchMode: AirProbingLaunchMode;
+  /** 発射直後の初期長 (blocks) */
+  initialLength: number;
+  /** 着弾までに自動で伸びる速度 (blocks/tick, 0または未指定で自動伸長なし) */
+  extendSpeed?: number;
+  /** 手元・足元の誤爆防止で除外する最小距離 (blocks, デフォルト: 1.5) */
+  minHitDistance?: number;
+  /** 構えからブロックに刺さった時の効果音ID */
+  hitSoundId?: string;
 }
 
 export interface HookshotDefinition {
@@ -47,10 +75,8 @@ export interface HookshotDefinition {
   itemTypeId: string;
   /** Raycast の最大射程距離 (blocks, デフォルト: 1200) */
   maxDistance?: number;
-  /** ジャンプ/シフト入力時の継続的な長さ変更速度 (blocks/tick, デフォルト: 1.25) */
-  reelSpeed?: number;
-  /** ボタンを押した瞬間に追加で一気に変更する瞬間変化量 (blocks, 単一数値または { shorten?, extend? } で指定可能。デフォルト: 0) */
-  initialReelDelta?: number | { shorten?: number; extend?: number };
+  /** ロープ長の変更挙動設定（連続またはステップ） */
+  reel?: ReelConfig;
   /** 長さ変更の挙動モード ("shorten": 縮む, "extend": 伸びる, デフォルト: "shorten") */
   reelMode?: ReelMode;
   /** 最小ロープ長 (blocks, デフォルト: 1.5) */
@@ -63,18 +89,8 @@ export interface HookshotDefinition {
   getWireAxis?: (state: HookshotState) => Vector3 | undefined;
   /** 視線ステアリング推進力を有効にするかどうか */
   enableGazeSteering?: boolean;
-  /** 未着弾でも構え状態（平行移動）として発射できるか */
-  allowAirProbing?: boolean;
-  /** 構え状態の初期長 (blocks, デフォルト: 12) */
-  probingInitialLength?: number;
-  /** 構え中のブロック接触判定で除外する手元最小距離 (blocks, デフォルト: 1.5) */
-  probingMinHitDistance?: number;
-  /** ステップ式伸縮設定（指定時は連続reelSpeedではなくステップ伸縮を使用） */
-  stepReel?: StepReelConfig;
-  /** ステップ伸縮時の効果音ID */
-  stepSoundId?: string;
-  /** 構えからブロックに刺さった時の効果音ID */
-  probingHitSoundId?: string;
+  /** 未着弾構え・自動伸長の設定 */
+  airProbing?: AirProbingConfig;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */

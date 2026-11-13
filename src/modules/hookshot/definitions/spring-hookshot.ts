@@ -44,10 +44,20 @@ export const springHookshotDefinition: HookshotDefinition = {
   id: SPRING_HOOKSHOT_ID,
   itemTypeId: SLIME_BALL_ITEM_ID,
   maxDistance: 48,
-  reelSpeed: 1.0,
+  reel: {
+    mode: "continuous",
+    speed: 1.0,
+    initialDelta: 3.0,
+  },
   reelMode: "extend",
-  initialReelDelta: 3.0,
   minRopeLength: 0.5,
+  airProbing: {
+    launchMode: "always",
+    initialLength: 2.0,
+    extendSpeed: 4.0,
+    minHitDistance: 0.5,
+    hitSoundId: "block.slime.place",
+  },
   wireStyle: SPRING_WIRE_STYLE,
   getWireAxis: (state) => getSpringBendingAxis(state),
   calculateImpulse: (player, state) => {

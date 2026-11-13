@@ -13,21 +13,22 @@ export const rodHookshotDefinition: HookshotDefinition = {
   id: ROD_HOOKSHOT_ID,
   itemTypeId: STICK_ITEM_ID,
   maxDistance: 42,
-  reelSpeed: 0.9,
-  reelMode: "extend",
-  initialReelDelta: 0.0,
-  minRopeLength: 2.0,
-  allowAirProbing: true,
-  probingInitialLength: 12,
-  probingMinHitDistance: 1.5,
-  stepReel: {
+  reel: {
+    mode: "step",
     stepLength: 2.0,
     initialIntervalTicks: 7,
     minIntervalTicks: 2,
     intervalDecayTicks: 1,
+    soundId: "block.wood.place",
   },
-  stepSoundId: "block.wood.place",
-  probingHitSoundId: "block.wood.place",
+  reelMode: "extend",
+  minRopeLength: 2.0,
+  airProbing: {
+    launchMode: "on_miss",
+    initialLength: 12,
+    minHitDistance: 1.5,
+    hitSoundId: "block.wood.place",
+  },
   wireStyle: ROD_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateRodHookshot(player, state.anchor, state.currentLength);

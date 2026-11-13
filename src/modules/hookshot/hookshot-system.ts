@@ -16,7 +16,13 @@ import {
 import { HookRenderManager } from "../render";
 import { PostFlightSystem } from "../post-flight";
 import { calculateReelSpeedMultiplier } from "./math/steering-math";
-import { AnchorPosition, HookshotDefinition, HookshotState, ReelMode } from "./types";
+import {
+  AnchorPosition,
+  HookshotDefinition,
+  HookshotState,
+  ReelConfig,
+  ReelMode,
+} from "./types";
 
 const ACTIVE_HOOK_KEY = "hookshotActiveState";
 const LAST_USE_TICK_KEY = "hookshotLastUseTick";
@@ -25,7 +31,6 @@ const UI_ACTIVE_KEY = "hookshotUiActive";
 const DEFAULT_MAX_DISTANCE = 1200;
 const DEFAULT_REEL_SPEED = 1.25;
 const DEFAULT_MIN_ROPE_LENGTH = 1.5;
-const DEFAULT_PROBING_INITIAL_LENGTH = 12;
 const DEFAULT_PROBING_MIN_HIT_DISTANCE = 1.5;
 
 export class HookshotSystem {
@@ -90,6 +95,11 @@ export class HookshotSystem {
    * フックを発射・接続します。
    */
   public static shot(player: Player, def: HookshotDefinition): boolean {
+    if (def.airProbing?.launchMode === "always") {
+      this.enterProbingState(player, def);
+      return true;
+    }
+
     const maxDistance = def.maxDistance ?? DEFAULT_MAX_DISTANCE;
 
     const hit = player.getBlockFromViewDirection({
@@ -98,37 +108,10 @@ export class HookshotSystem {
       includePassableBlocks: false,
     });
     if (!hit) {
-      if (!def.allowAirProbing) {
+      if (!def.airProbing) {
         return false;
       }
-
-      this.notifyExternalUnhook(player);
-
-      const head = player.getHeadLocation();
-      const dir = Vector3Utils.normalize(player.getViewDirection());
-      const initialLength = Math.min(
-        def.probingInitialLength ?? DEFAULT_PROBING_INITIAL_LENGTH,
-        maxDistance,
-      );
-      const tip = Vector3Utils.add(head, Vector3Utils.scale(dir, initialLength));
-
-      const probingState: HookshotState = {
-        hookshotId: def.id,
-        anchor: {
-          dimensionId: player.dimension.id,
-          x: tip.x,
-          y: tip.y,
-          z: tip.z,
-        },
-        isAnchored: false,
-        probingDirection: dir,
-        currentLength: initialLength,
-        jumpConsumed:
-          isInputButtonPressed(player, "Jump") || player.isJumping,
-        sneakConsumed: isSneakButtonPressed(player),
-      };
-
-      PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, probingState);
+      this.enterProbingState(player, def);
       return true;
     }
 
@@ -154,6 +137,45 @@ export class HookshotSystem {
     );
 
     return true;
+  }
+
+  /**
+   * 構え（未着弾・平行移動）状態を開始します。
+   */
+  private static enterProbingState(
+    player: Player,
+    def: HookshotDefinition,
+  ): void {
+    const probing = def.airProbing;
+    if (!probing) return;
+
+    this.notifyExternalUnhook(player);
+
+    const maxDistance =
+      def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+    const head = player.getHeadLocation();
+    const dir = Vector3Utils.normalize(player.getViewDirection());
+    const initialLength = Math.min(probing.initialLength, maxDistance);
+    const tip = Vector3Utils.add(head, Vector3Utils.scale(dir, initialLength));
+
+    const probingState: HookshotState = {
+      hookshotId: def.id,
+      anchor: {
+        dimensionId: player.dimension.id,
+        x: tip.x,
+        y: tip.y,
+        z: tip.z,
+      },
+      isAnchored: false,
+      probingDirection: dir,
+      isAutoExtending: (probing.extendSpeed ?? 0) > 0,
+      currentLength: initialLength,
+      jumpConsumed:
+        isInputButtonPressed(player, "Jump") || player.isJumping,
+      sneakConsumed: isSneakButtonPressed(player),
+    };
+
+    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, probingState);
   }
 
   /**
@@ -197,6 +219,7 @@ export class HookshotSystem {
     state.anchor = anchor;
     state.isAnchored = true;
     state.probingDirection = undefined;
+    state.isAutoExtending = false;
     state.normal = normal;
     state.initialDirection = initialDirection;
     state.currentLength = distance;
@@ -210,7 +233,7 @@ export class HookshotSystem {
   }
 
   /**
-   * 構え（未着弾）状態の平行移動とブロック接触判定を更新します。
+   * 構え（未着弾）状態の平行移動・自動伸長とブロック接触判定を更新します。
    */
   private static updateProbingState(
     player: Player,
@@ -220,9 +243,22 @@ export class HookshotSystem {
     const dir = state.probingDirection;
     if (!dir) return;
 
+    const probing = def.airProbing;
+    if (state.isAutoExtending && probing?.extendSpeed && probing.extendSpeed > 0) {
+      const maxLength =
+        def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+      state.currentLength = Math.min(
+        state.currentLength + probing.extendSpeed,
+        maxLength,
+      );
+      if (state.currentLength >= maxLength) {
+        state.isAutoExtending = false;
+      }
+    }
+
     const head = player.getHeadLocation();
     const minHitDistance =
-      def.probingMinHitDistance ?? DEFAULT_PROBING_MIN_HIT_DISTANCE;
+      probing?.minHitDistance ?? DEFAULT_PROBING_MIN_HIT_DISTANCE;
 
     const hit = player.dimension.getBlockFromRay(head, dir, {
       maxDistance: state.currentLength,
@@ -243,7 +279,7 @@ export class HookshotSystem {
 
       if (hitDistance >= minHitDistance) {
         this.applyHitAnchor(player, state, def, hit, head, dir);
-        this.playSoundSafe(player, def.probingHitSoundId);
+        this.playSoundSafe(player, probing?.hitSoundId);
         return;
       }
     }
@@ -378,7 +414,14 @@ export class HookshotSystem {
         state.sneakConsumed = true;
         stateDirty = true;
       }
-      this.reel(player, state, def, reverseMode, isInitial, stateDirty);
+      this.handleDirectionalReel(
+        player,
+        state,
+        def,
+        reverseMode,
+        isInitial,
+        stateDirty,
+      );
       return;
     }
 
@@ -393,7 +436,14 @@ export class HookshotSystem {
         state.jumpConsumed = true;
         stateDirty = true;
       }
-      this.reel(player, state, def, baseMode, isInitial, stateDirty);
+      this.handleDirectionalReel(
+        player,
+        state,
+        def,
+        baseMode,
+        isInitial,
+        stateDirty,
+      );
       return;
     }
 
@@ -422,6 +472,30 @@ export class HookshotSystem {
     return true;
   }
 
+  private static handleDirectionalReel(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    mode: ReelMode,
+    isInitial: boolean,
+    forceSave: boolean,
+  ): void {
+    if (state.isAutoExtending) {
+      if (mode === "extend") {
+        // 自動伸長中は伸びるボタンによる二重加速を行わない
+        if (forceSave) {
+          PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+        }
+        return;
+      }
+      // 縮めるボタンで自動伸長を停止し、以降は通常伸縮へ移行
+      state.isAutoExtending = false;
+      forceSave = true;
+    }
+
+    this.reel(player, state, def, mode, isInitial, forceSave);
+  }
+
   /**
    * ロープの長さ変更処理（短縮または伸長）
    */
@@ -433,21 +507,25 @@ export class HookshotSystem {
     isInitial = false,
     forceSave = false,
   ): void {
-    if (def.stepReel) {
-      this.reelByStep(player, state, def, mode, isInitial, forceSave);
+    const reelConfig = def.reel ?? {
+      mode: "continuous" as const,
+      speed: DEFAULT_REEL_SPEED,
+    };
+
+    if (reelConfig.mode === "step") {
+      this.reelByStep(player, state, def, reelConfig, mode, isInitial, forceSave);
       return;
     }
 
-    const reelSpeed = def.reelSpeed ?? DEFAULT_REEL_SPEED;
     const configuredInitial =
-      typeof def.initialReelDelta === "object"
+      typeof reelConfig.initialDelta === "object"
         ? mode === "extend"
-          ? def.initialReelDelta.extend
-          : def.initialReelDelta.shorten
-        : def.initialReelDelta;
+          ? reelConfig.initialDelta.extend
+          : reelConfig.initialDelta.shorten
+        : reelConfig.initialDelta;
 
     const initialStep = isInitial ? (configuredInitial ?? 0) : 0;
-    let delta = reelSpeed + initialStep;
+    let delta = reelConfig.speed + initialStep;
 
     // 視線ステアリング対応フックショットで短縮（巻き取り）中の場合、
     // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）
@@ -470,13 +548,11 @@ export class HookshotSystem {
     player: Player,
     state: HookshotState,
     def: HookshotDefinition,
+    stepConfig: Extract<ReelConfig, { mode: "step" }>,
     mode: ReelMode,
     isInitial: boolean,
     forceSave: boolean,
   ): void {
-    const stepConfig = def.stepReel;
-    if (!stepConfig) return;
-
     const now = system.currentTick;
     const isNewDirectionOrTap = isInitial || state.lastStepMode !== mode;
 
@@ -491,7 +567,7 @@ export class HookshotSystem {
         mode,
         stepConfig.stepLength,
         true,
-        def.stepSoundId,
+        stepConfig.soundId,
       );
       return;
     }
@@ -519,7 +595,7 @@ export class HookshotSystem {
       mode,
       stepConfig.stepLength,
       true,
-      def.stepSoundId,
+      stepConfig.soundId,
     );
   }
 
