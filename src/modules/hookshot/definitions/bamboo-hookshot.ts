@@ -22,6 +22,10 @@ export interface BambooAirChainState {
   isHooked: boolean;
   /** 竹使用後に空中（非接地）にいたかどうか */
   hasBeenAirborne: boolean;
+  /** 現在のフック接続中に一度でも圧縮状態（しなり）に入ったかどうか */
+  hasCompressed?: boolean;
+  /** 伸び切り（ピンと張った状態）のSEを再生済みかどうか */
+  isTaut?: boolean;
 }
 
 /**
@@ -107,6 +111,16 @@ export interface BambooHookshotConfig {
    * デフォルト: 0.88
    */
   stretchHorizontalRetention?: number;
+  /**
+   * 竹がピンと張って減衰を開始するタイミングのSE
+   * デフォルト: "block.bamboo.hit"
+   */
+  tautSoundId?: string;
+  /**
+   * 竹がピンと張ったときのSEピッチ
+   * デフォルト: 1.5
+   */
+  tautSoundPitch?: number;
 }
 
 /**
@@ -127,6 +141,8 @@ export const bambooHookshotConfig: BambooHookshotConfig = {
   upwardDecayExponent: 1.5,
   stretchOutwardRetention: 0.55,
   stretchHorizontalRetention: 0.88,
+  tautSoundId: "block.bamboo.hit",
+  tautSoundPitch: 1.5,
 };
 
 let isTrackingInitialized = false;
@@ -210,6 +226,33 @@ export const bambooHookshotDefinition: HookshotDefinition = {
   },
   wireStyle: BAMBOO_WIRE_STYLE,
   calculateImpulse: (player, state) => {
+    const chain = PlayerStateManager.get<BambooAirChainState | null>(
+      player.id,
+      BAMBOO_AIR_CHAIN_KEY,
+      null,
+    );
+    if (chain) {
+      const dist = Vector3Utils.distance(player.location, state.anchor);
+      if (dist < state.currentLength) {
+        if (!chain.hasCompressed || chain.isTaut) {
+          chain.hasCompressed = true;
+          chain.isTaut = false;
+          PlayerStateManager.set(player.id, BAMBOO_AIR_CHAIN_KEY, chain);
+        }
+      } else if (chain.hasCompressed && !chain.isTaut) {
+        chain.isTaut = true;
+        PlayerStateManager.set(player.id, BAMBOO_AIR_CHAIN_KEY, chain);
+        const soundId = bambooHookshotConfig.tautSoundId;
+        if (soundId) {
+          try {
+            player.playSound(soundId, {
+              pitch: bambooHookshotConfig.tautSoundPitch ?? 1.5,
+            });
+          } catch {}
+        }
+      }
+    }
+
     return calculateBambooHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
       surfaceNormal: state.normal,
@@ -291,6 +334,8 @@ export const bambooHookshotDefinition: HookshotDefinition = {
       count: airUses + 1,
       isHooked: true,
       hasBeenAirborne: !player.isOnGround,
+      hasCompressed: false,
+      isTaut: false,
     });
   },
   onDetach: (player, _state) => {

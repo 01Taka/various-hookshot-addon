@@ -136,6 +136,7 @@ export class HookshotSystem {
     }
 
     if (def && state.isAnchored !== false) {
+      this.playSoundSafe(player, def.detachSoundId);
       this.consumeHookshotDurability(player, def.itemTypeId, state.slotIndex);
     }
   }
@@ -1237,7 +1238,6 @@ export class HookshotSystem {
             this.shouldDetachOnOutwardSpeed(player, state, def) ||
             this.shouldDetachOnOverstretch(player, state, def)
           ) {
-            this.playSoundSafe(player, def.detachSoundId);
             this.unhook(player);
             continue;
           }
