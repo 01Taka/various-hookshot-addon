@@ -38,22 +38,30 @@ export interface ElasticRopeParams {
   releaseShotPending?: boolean;
   /** 射出方向への上向きバイアス (Y成分加算量、山なり軌道用) */
   upwardBias?: number;
-  /** エアロベスト装備時の前後移動入力によるチャージ/巻き取り配分を有効にするかどうか */
+  /** 前後移動入力によるチャージ/巻き取り配分を有効にするかどうか */
   enableInputChargeControl?: boolean;
+  /** エアロベスト装備等によって前後入力の調整幅を強化するかどうか */
+  boostInputChargeControl?: boolean;
 }
 
 /**
- * エアロベスト装備時の前後入力（W/S）に応じたチャージ中バネ定数の倍率を計算します。
- * - 前入力 (W, z > 0): 引っ張り力を強めて巻き取り移動を優先（チャージは遅くなる）
- * - 後入力 (S, z < 0): 引っ張り力を弱めてチャージの蓄積を優先
+ * 前後入力（W/S）に応じたチャージ中バネ定数の倍率を計算します。
+ * - 前入力 (W, z > 0): 引っ張り力を強めて巻き取り移動を優先（未装備最大 1.5倍 / 強化時最大 2.2倍）
+ * - 後入力 (S, z < 0): 引っ張り力を弱めてチャージの蓄積を優先（未装備最小 0.65倍 / 強化時最小 0.3倍）
  */
-function getChargeStiffnessMultiplier(player: Player): number {
+function getChargeStiffnessMultiplier(
+  player: Player,
+  isBoosted?: boolean,
+): number {
   const inputZ = PlayerDirectionResolver.get(player).input.vector.z;
   if (inputZ > 0.05) {
-    return 1.0 + Math.min(1.0, inputZ) * 1.2;
+    const forwardGain = isBoosted ? 1.2 : 0.5;
+    return 1.0 + Math.min(1.0, inputZ) * forwardGain;
   }
   if (inputZ < -0.05) {
-    return Math.max(0.35, 1.0 + Math.max(-1.0, inputZ) * 0.65);
+    const minMultiplier = isBoosted ? 0.3 : 0.65;
+    const backwardGain = 1.0 - minMultiplier;
+    return Math.max(minMultiplier, 1.0 + Math.max(-1.0, inputZ) * backwardGain);
   }
   return 1.0;
 }
@@ -76,6 +84,7 @@ export function calculateElasticVelocity(
     releaseShotPending,
     upwardBias = 0.22,
     enableInputChargeControl,
+    boostInputChargeControl,
   }: ElasticRopeParams,
 ): Vector3 | null {
   const { dir: normal, distance: r } = getDirectionAndDistance(
@@ -133,7 +142,10 @@ export function calculateElasticVelocity(
     ? chargeStiffness
     : (stiffness ?? releaseStiffness);
   if (isCharging && enableInputChargeControl) {
-    activeStiffness *= getChargeStiffnessMultiplier(player);
+    activeStiffness *= getChargeStiffnessMultiplier(
+      player,
+      boostInputChargeControl,
+    );
   }
   const activeDamping = isCharging ? chargeDamping : damping;
 

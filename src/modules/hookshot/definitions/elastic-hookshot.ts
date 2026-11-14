@@ -54,7 +54,8 @@ export const elasticHookshotDefinition: HookshotDefinition = {
       isReelingIn: state.isReelingIn,
       isChargeReleasing: state.isChargeReleasing,
       releaseShotPending: state.releaseShotPending,
-      enableInputChargeControl: canUseGazeSteering(player),
+      enableInputChargeControl: true,
+      boostInputChargeControl: canUseGazeSteering(player),
     });
   },
 };
