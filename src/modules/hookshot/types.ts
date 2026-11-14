@@ -5,6 +5,8 @@ export type AnchorPosition = Vector3 & { dimensionId: string };
 
 export interface HookshotState {
   hookshotId: string;
+  /** 発射時に選択していたホットバースロット番号 (0-8) */
+  slotIndex?: number;
   anchor: AnchorPosition;
   /** アンカー確定済みかどうか（省略時は true 扱い、false は未着弾の構え状態） */
   isAnchored?: boolean;

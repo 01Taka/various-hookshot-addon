@@ -5,6 +5,7 @@ import {
   EquipmentSlot,
   GameMode,
   ItemComponentTypes,
+  ItemStack,
   Player,
   system,
   Vector3,
@@ -38,6 +39,7 @@ const UI_ACTIVE_KEY = "hookshotUiActive";
 
 interface PendingRaycastState {
   hookshotId: string;
+  slotIndex?: number;
   remainingTicks: number;
   dimensionId: string;
 }
@@ -132,6 +134,10 @@ export class HookshotSystem {
     if (def?.onDetach) {
       def.onDetach(player, state);
     }
+
+    if (def && state.isAnchored !== false) {
+      this.consumeHookshotDurability(player, def.itemTypeId, state.slotIndex);
+    }
   }
 
   private static getPendingRaycast(player: Player): PendingRaycastState | null {
@@ -172,6 +178,7 @@ export class HookshotSystem {
         this.notifyExternalUnhook(player);
         PlayerStateManager.set(player.id, PENDING_RAYCAST_KEY, {
           hookshotId: def.id,
+          slotIndex: player.selectedSlotIndex,
           remainingTicks: graceTicks,
           dimensionId: player.dimension.id,
         } satisfies PendingRaycastState);
@@ -196,6 +203,7 @@ export class HookshotSystem {
 
     const state: HookshotState = {
       hookshotId: def.id,
+      slotIndex: player.selectedSlotIndex,
       anchor: { dimensionId: player.dimension.id, x: 0, y: 0, z: 0 },
       isAnchored: true,
       currentLength: 0,
@@ -235,6 +243,7 @@ export class HookshotSystem {
 
     const probingState: HookshotState = {
       hookshotId: def.id,
+      slotIndex: player.selectedSlotIndex,
       anchor: {
         dimensionId: player.dimension.id,
         x: tip.x,
@@ -309,24 +318,55 @@ export class HookshotSystem {
     }
 
     this.playSoundSafe(player, def.hitSoundId ?? def.airProbing?.hitSoundId);
-    this.consumeMainhandDurability(player, def.itemTypeId);
   }
 
   /**
-   * メインハンドに所持しているフックショットアイテムの耐久値を1消費します。
-   * クリエイティブモードでは消費しません。
+   * アイテムを持ち替えたか（スロット変更、またはメインハンドのアイテムが別物に変化したか）を判定します。
    */
-  private static consumeMainhandDurability(
+  private static hasSwitchedItem(
     player: Player,
     expectedItemTypeId: string,
+    slotIndex?: number,
+  ): boolean {
+    if (slotIndex !== undefined && player.selectedSlotIndex !== slotIndex) {
+      return true;
+    }
+    const mainhandItem = getMainhandItem(player);
+    return mainhandItem?.typeId !== expectedItemTypeId;
+  }
+
+  /**
+   * 解除時に使用していたフックショットアイテムの耐久値を1消費します。
+   * クリエイティブモードでは消費しません。
+   */
+  private static consumeHookshotDurability(
+    player: Player,
+    expectedItemTypeId: string,
+    slotIndex?: number,
   ): void {
     if (!player.isValid) return;
     if (player.getGameMode() === GameMode.Creative) return;
 
-    const equippable = player.getComponent(EntityComponentTypes.Equippable);
-    if (!equippable) return;
+    const useMainhand =
+      slotIndex === undefined || slotIndex === player.selectedSlotIndex;
 
-    const item = equippable.getEquipment(EquipmentSlot.Mainhand);
+    let item: ItemStack | undefined;
+    let updateSlot: ((nextItem: ItemStack | undefined) => void) | undefined;
+
+    if (useMainhand) {
+      const equippable = player.getComponent(EntityComponentTypes.Equippable);
+      if (!equippable) return;
+      item = equippable.getEquipment(EquipmentSlot.Mainhand);
+      updateSlot = (nextItem) =>
+        equippable.setEquipment(EquipmentSlot.Mainhand, nextItem);
+    } else {
+      const inventory = player.getComponent(EntityComponentTypes.Inventory);
+      const container = inventory?.container;
+      if (!container || slotIndex < 0 || slotIndex >= container.size) return;
+      item = container.getItem(slotIndex);
+      updateSlot = (nextItem) => container.setItem(slotIndex, nextItem);
+    }
+
     if (!item || item.typeId !== expectedItemTypeId) return;
 
     const durability = item.getComponent(ItemComponentTypes.Durability);
@@ -341,7 +381,7 @@ export class HookshotSystem {
 
     const nextDamage = durability.damage + 1;
     if (nextDamage >= durability.maxDurability) {
-      equippable.setEquipment(EquipmentSlot.Mainhand, undefined);
+      updateSlot(undefined);
       try {
         player.dimension.playSound("random.break", player.location, {
           volume: 1.0,
@@ -350,7 +390,7 @@ export class HookshotSystem {
       } catch {}
     } else {
       durability.damage = nextDamage;
-      equippable.setEquipment(EquipmentSlot.Mainhand, item);
+      updateSlot(item);
     }
   }
 
@@ -1057,6 +1097,12 @@ export class HookshotSystem {
         const def = this.definitionsById.get(state.hookshotId);
         if (!def) continue;
 
+        // アイテムを持ち替えた場合（スロット変更またはメインハンドから別アイテムへ変化）は解除と同等の扱い
+        if (this.hasSwitchedItem(player, def.itemTypeId, state.slotIndex)) {
+          this.unhook(player);
+          continue;
+        }
+
         // キー入力によるロープ長の変更（ジャンプ＝短縮、シフト＝伸長、押下時の瞬間変化対応）
         const wasReelingIn = !!state.isReelingIn;
         const activeReelMode = this.handleReelInput(player, state, def);
@@ -1285,7 +1331,11 @@ export class HookshotSystem {
     if (!pending) return false;
 
     const def = this.definitionsById.get(pending.hookshotId);
-    if (!def || player.dimension.id !== pending.dimensionId) {
+    if (
+      !def ||
+      player.dimension.id !== pending.dimensionId ||
+      this.hasSwitchedItem(player, def.itemTypeId, pending.slotIndex)
+    ) {
       this.clearPendingRaycast(player);
       this.clearDistanceUiIfActive(player);
       return false;
