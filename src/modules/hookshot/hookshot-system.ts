@@ -591,6 +591,14 @@ export class HookshotSystem {
       return baseMode;
     }
 
+    // すでに巻き取り中（チャージ中）に着地した場合は、ジャンプキーを離すまでチャージ状態を維持する
+    if (jumpPressed && onGround && state.isReelingIn) {
+      if (stateDirty) {
+        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      }
+      return null;
+    }
+
     if (state.isReelingIn) {
       state.isReelingIn = false;
       stateDirty = true;
