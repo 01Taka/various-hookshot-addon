@@ -30,6 +30,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   hitSoundId: "leashknot.place",
   missSoundId: "leashknot.break",
   releaseSoundId: "random.bow",
+  minReleaseStretch: 5.0,
   wireStyle: ELASTIC_WIRE_STYLE,
   enableGazeSteering: false,
   formatDistanceUi: (_player, state, distance) => {

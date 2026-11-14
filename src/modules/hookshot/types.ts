@@ -125,6 +125,8 @@ export interface HookshotDefinition {
   detachSoundId?: string;
   /** 巻き取り終了（チャージ解放）時の効果音ID */
   releaseSoundId?: string;
+  /** 巻き取り終了時に発射を有効とする最小の伸び量 (blocks)。これ以下の場合は現在距離を自然長にリセットして発射を無効化する */
+  minReleaseStretch?: number;
   /** 発射時の効果音ID */
   shotSoundId?: string;
   /** 着弾（アンカー確定）時の効果音ID */
