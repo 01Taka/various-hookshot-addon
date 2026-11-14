@@ -1,5 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
+import { PlayerDirectionResolver } from "addon-utils";
 import {
   clampOutwardVelocity,
   convertTargetVelocityToImpulse,
@@ -8,28 +9,47 @@ import {
   getNormalComponent,
   predictTickPhysics,
 } from "./physics-utils";
-import {
-  calculateGazeSteeringAcceleration,
-  MAX_HOOKSHOT_SPEED,
-} from "./steering-math";
+import { MAX_HOOKSHOT_SPEED } from "./steering-math";
 
 export interface ElasticRopeParams {
   /** ロープの自然長。これ以下ではたるんで力が働かない */
   naturalLength: number;
   /** ロープの限界長。これを超えると硬い拘束に切り替わる */
   maxLength?: number;
-  /** バネ定数 (blocks/tick² per block)。大きいほど強く引く。0.2 超は不安定になりやすい */
+  /** バネ定数（解放時のフォールバック用） */
   stiffness?: number;
-  /** 法線方向の減衰率 (0〜1)。大きいほど振動が早く収まる */
+  /** チャージ中（isReelingIn=true）の基本バネ定数。小さいほど移動せず張力が溜まりやすい */
+  chargeStiffness?: number;
+  /** 解放時（isReelingIn=false）のバネ定数。大きいほど一気に弾け飛ぶ */
+  releaseStiffness?: number;
+  /** 解放時の法線方向減衰率 (0〜1) */
   damping?: number;
+  /** チャージ中の法線方向減衰率 (0〜1)。巻き取り速度との収束点を決める */
+  chargeDamping?: number;
   /** 1Tickあたりの最大引き込み加速度 (blocks/tick²)。急な伸びでの暴発防止 */
   maxAcceleration?: number;
-  /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
+  /** 解放時の最高速度上限 (blocks/tick) */
+  releaseMaxSpeed?: number;
+  /** 空中ジャンプ入力によって現在チャージ（巻き取り）中かどうか */
   isReelingIn?: boolean;
-  /** 視線ステアリング推進力を有効にするかどうか */
-  enableSteering?: boolean;
-  /** ステアリング加速度 (blocks/tick²) */
-  steerAccel?: number;
+  /** エアロベスト装備時の前後移動入力によるチャージ/巻き取り配分を有効にするかどうか */
+  enableInputChargeControl?: boolean;
+}
+
+/**
+ * エアロベスト装備時の前後入力（W/S）に応じたチャージ中バネ定数の倍率を計算します。
+ * - 前入力 (W, z > 0): 引っ張り力を強めて巻き取り移動を優先（チャージは遅くなる）
+ * - 後入力 (S, z < 0): 引っ張り力を弱めてチャージの蓄積を優先
+ */
+function getChargeStiffnessMultiplier(player: Player): number {
+  const inputZ = PlayerDirectionResolver.get(player).input.vector.z;
+  if (inputZ > 0.05) {
+    return 1.0 + Math.min(1.0, inputZ) * 1.2;
+  }
+  if (inputZ < -0.05) {
+    return Math.max(0.35, 1.0 + Math.max(-1.0, inputZ) * 0.65);
+  }
+  return 1.0;
 }
 
 export function calculateElasticVelocity(
@@ -38,12 +58,15 @@ export function calculateElasticVelocity(
   {
     naturalLength,
     maxLength,
-    stiffness = 0.03,
+    stiffness,
+    chargeStiffness = 0.008,
+    releaseStiffness = 0.11,
     damping = 0.01,
-    maxAcceleration = 10,
+    chargeDamping = 0.08,
+    maxAcceleration = 0.85,
+    releaseMaxSpeed = 2.3,
     isReelingIn,
-    enableSteering,
-    steerAccel,
+    enableInputChargeControl,
   }: ElasticRopeParams,
 ): Vector3 | null {
   const { dir: normal, distance: r } = getDirectionAndDistance(
@@ -58,24 +81,28 @@ export function calculateElasticVelocity(
   const currentVel = player.getVelocity();
   const speed = Vector3Utils.magnitude(currentVel);
 
-  let vPred = predictTickPhysics({
+  const vPred = predictTickPhysics({
     velocity: currentVel,
     dragXZ: getAirDrag(speed),
   });
 
-  // 空中ジャンプ巻き取り中かつロープが伸びている場合、接線ステアリング推進力を加算
-  if (enableSteering && isReelingIn) {
-    const steer = calculateGazeSteeringAcceleration(player, anchor, steerAccel);
-    vPred = Vector3Utils.add(vPred, steer);
+  // --- チャージ中 / 解放時で復元力・減衰を切り替え ---
+  const isCharging = !!isReelingIn;
+  let activeStiffness = isCharging
+    ? chargeStiffness
+    : (stiffness ?? releaseStiffness);
+  if (isCharging && enableInputChargeControl) {
+    activeStiffness *= getChargeStiffnessMultiplier(player);
   }
+  const activeDamping = isCharging ? chargeDamping : damping;
 
   // --- ゴムの復元力（フックの法則） ---
   const stretch = r - naturalLength;
-  const springAccel = Math.min(stiffness * stretch, maxAcceleration);
+  const springAccel = Math.min(activeStiffness * stretch, maxAcceleration);
 
   // 法線方向の速度に比例した減衰（外向き・内向きどちらにも効かせる）
   const vn = getNormalComponent(vPred, normal);
-  const dampingAccel = vn * damping;
+  const dampingAccel = vn * activeDamping;
 
   // 内向き(-normal)に加速度を加えた目標速度
   let target = Vector3Utils.subtract(
@@ -96,10 +123,11 @@ export function calculateElasticVelocity(
     }
   }
 
-  // 最高速度上限クランプ (MAX_HOOKSHOT_SPEED = 1.65)
+  // 最高速度上限クランプ（解放時はパチンコ射出のため上限を引き上げる）
+  const speedLimit = isCharging ? MAX_HOOKSHOT_SPEED : releaseMaxSpeed;
   const targetSpeed = Vector3Utils.magnitude(target);
-  if (targetSpeed > MAX_HOOKSHOT_SPEED) {
-    target = Vector3Utils.scale(target, MAX_HOOKSHOT_SPEED / targetSpeed);
+  if (targetSpeed > speedLimit) {
+    target = Vector3Utils.scale(target, speedLimit / targetSpeed);
   }
 
   return target;

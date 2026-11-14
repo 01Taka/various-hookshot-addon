@@ -8,8 +8,9 @@ export const LEAD_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
 
 /**
  * リード（minecraft:lead）を使用した伸縮性（ゴム紐）フックショットの定義
- * 空中ジャンプ入力で短く（shorten）、シフト入力で長く（extend）
- * 空中ジャンプ短縮＋横向き視線でパスファインダー型スリングショット旋回軌道に対応
+ * 空中ジャンプ入力でゴムを巻き取り張力（stretch）をチャージし、
+ * 離した瞬間に溜まったエネルギーを一気に解放してパチンコのように射出します。
+ * エアロベスト装備時は前後入力（W/S）でチャージと巻き取り移動の配分を調整できます。
  */
 export const elasticHookshotDefinition: HookshotDefinition = {
   id: ELASTIC_HOOKSHOT_ID,
@@ -18,7 +19,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   reel: {
     mode: "continuous",
     speed: 1.5,
-    initialDelta: 3.0,
+    initialDelta: 0.0,
     soundId: "step.cloth",
     soundIntervalTicks: 4,
   },
@@ -28,14 +29,21 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   shotSoundId: "armor.equip_leather",
   hitSoundId: "leashknot.place",
   missSoundId: "leashknot.break",
+  releaseSoundId: "random.bow",
   wireStyle: ELASTIC_WIRE_STYLE,
-  enableGazeSteering: true,
+  enableGazeSteering: false,
+  formatDistanceUi: (_player, state, distance) => {
+    const stretch = Math.max(0, distance - state.currentLength);
+    const prefix = state.isReelingIn ? "[溜め] " : "";
+    const stretchSuffix = stretch > 0.1 ? ` (+${stretch.toFixed(1)}m)` : "";
+    return `${prefix}${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m${stretchSuffix}`;
+  },
   calculateImpulse: (player, state) => {
     return calculateElasticHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
       maxLength: Math.max(250, state.currentLength * 1.5),
       isReelingIn: state.isReelingIn,
-      enableSteering: canUseGazeSteering(player),
+      enableInputChargeControl: canUseGazeSteering(player),
     });
   },
 };

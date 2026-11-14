@@ -123,12 +123,20 @@ export interface HookshotDefinition {
   detachOnOutwardSpeed?: number;
   /** 自動解除時の効果音ID */
   detachSoundId?: string;
+  /** 巻き取り終了（チャージ解放）時の効果音ID */
+  releaseSoundId?: string;
   /** 発射時の効果音ID */
   shotSoundId?: string;
   /** 着弾（アンカー確定）時の効果音ID */
   hitSoundId?: string;
   /** 猶予探索（raycastGraceTicks）が着弾せず終了した時の効果音ID */
   missSoundId?: string;
+  /** 接続中アクションバーの表示文字列をカスタマイズするコールバック */
+  formatDistanceUi?: (
+    player: Player,
+    state: HookshotState,
+    distance: number,
+  ) => string;
   /** 毎Tickの物理インパルス計算 */
   calculateImpulse: (player: Player, state: HookshotState) => Vector3;
   /** フック接続時のコールバック (演出など任意) */

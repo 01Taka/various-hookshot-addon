@@ -891,7 +891,20 @@ export class HookshotSystem {
         if (!def) continue;
 
         // キー入力によるロープ長の変更（ジャンプ＝短縮、シフト＝伸長、押下時の瞬間変化対応）
+        const wasReelingIn = !!state.isReelingIn;
         const activeReelMode = this.handleReelInput(player, state, def);
+
+        if (
+          wasReelingIn &&
+          !state.isReelingIn &&
+          state.isAnchored !== false &&
+          def.releaseSoundId
+        ) {
+          const distance = Vector3Utils.distance(player.location, state.anchor);
+          if (distance > state.currentLength + 0.5) {
+            this.playSoundSafe(player, def.releaseSoundId);
+          }
+        }
 
         // 構え中（未着弾）の平行移動およびブロック接触判定
         if (state.isAnchored === false) {
@@ -1131,9 +1144,10 @@ export class HookshotSystem {
         );
       } else {
         const distance = Vector3Utils.distance(player.location, state.anchor);
-        player.onScreenDisplay.setActionBar(
-          `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`,
-        );
+        const text = def.formatDistanceUi
+          ? def.formatDistanceUi(player, state, distance)
+          : `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`;
+        player.onScreenDisplay.setActionBar(text);
       }
       PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
     } catch {
