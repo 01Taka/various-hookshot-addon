@@ -102,7 +102,16 @@ export function calculateElasticVelocity(
       z: toAnchor.z,
     };
     const launchDir = Vector3Utils.normalize(biasedDir);
-    const launchSpeed = Math.min(releaseMaxSpeed, 1.4 + stretch * 0.045);
+    // 伸び量に応じた非線形（1.6乗）カーブで初速を決定（5mで0.9、55m以上でreleaseMaxSpeed）
+    const minLaunchSpeed = 0.9;
+    const minStretch = 5.0;
+    const refStretch = 55.0;
+    const t = Math.min(
+      1,
+      Math.max(0, (stretch - minStretch) / (refStretch - minStretch)),
+    );
+    const launchSpeed =
+      minLaunchSpeed + (releaseMaxSpeed - minLaunchSpeed) * Math.pow(t, 1.6);
     return Vector3Utils.scale(launchDir, launchSpeed);
   }
 
