@@ -31,6 +31,8 @@ export interface HookshotState {
   releaseStartTick?: number;
   /** 放物線射出中の前Tickにおけるアンカーとの距離 */
   lastReleaseDistance?: number;
+  /** 放物線射出中に接近速度が閾値を下回った連続Tick数 */
+  releaseStallTicks?: number;
   /** ステップ伸縮の直近実行Tick */
   lastStepReelTick?: number;
   /** ステップ伸縮の現在の待機間隔（Tick） */

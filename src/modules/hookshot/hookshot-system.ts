@@ -928,12 +928,14 @@ export class HookshotSystem {
               state.isChargeReleasing ||
               state.releaseShotPending ||
               state.releaseStartTick !== undefined ||
-              state.lastReleaseDistance !== undefined
+              state.lastReleaseDistance !== undefined ||
+              state.releaseStallTicks !== undefined
             ) {
               state.isChargeReleasing = false;
               state.releaseShotPending = false;
               state.releaseStartTick = undefined;
               state.lastReleaseDistance = undefined;
+              state.releaseStallTicks = undefined;
               releaseStateDirty = true;
             }
           } else if (wasReelingIn && !state.isReelingIn) {
@@ -953,12 +955,14 @@ export class HookshotSystem {
               state.releaseShotPending = false;
               state.releaseStartTick = undefined;
               state.lastReleaseDistance = undefined;
+              state.releaseStallTicks = undefined;
               releaseStateDirty = true;
             } else if (stretch > 0.5) {
               state.isChargeReleasing = true;
               state.releaseShotPending = true;
               state.releaseStartTick = system.currentTick;
               state.lastReleaseDistance = distance;
+              state.releaseStallTicks = 0;
               releaseStateDirty = true;
               if (def.releaseSoundId) {
                 this.playSoundSafe(player, def.releaseSoundId);
@@ -972,11 +976,14 @@ export class HookshotSystem {
               state.releaseShotPending = false;
               state.releaseStartTick = undefined;
               state.lastReleaseDistance = undefined;
+              state.releaseStallTicks = undefined;
               releaseStateDirty = true;
             } else if (elapsedTicks >= 4) {
               const approachSpeed =
                 (state.lastReleaseDistance ?? distance) - distance;
-              const isStoppedOrPassed = approachSpeed <= 0.4;
+              state.releaseStallTicks =
+                approachSpeed <= 0.4 ? (state.releaseStallTicks ?? 0) + 1 : 0;
+              const isStoppedOrPassed = state.releaseStallTicks >= 5;
               const isGrounded =
                 player.isOnGround || player.isInWater || player.isClimbing;
               const isTimedOut = elapsedTicks >= 60;
@@ -993,6 +1000,7 @@ export class HookshotSystem {
                 state.releaseShotPending = false;
                 state.releaseStartTick = undefined;
                 state.lastReleaseDistance = undefined;
+                state.releaseStallTicks = undefined;
                 releaseStateDirty = true;
               } else {
                 state.lastReleaseDistance = distance;
