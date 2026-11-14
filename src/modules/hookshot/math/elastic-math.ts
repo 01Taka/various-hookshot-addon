@@ -32,6 +32,8 @@ export interface ElasticRopeParams {
   releaseMaxSpeed?: number;
   /** 空中ジャンプ入力によって現在チャージ（巻き取り）中かどうか */
   isReelingIn?: boolean;
+  /** チャージ解放による高速射出中かどうか */
+  isChargeReleasing?: boolean;
   /** エアロベスト装備時の前後移動入力によるチャージ/巻き取り配分を有効にするかどうか */
   enableInputChargeControl?: boolean;
 }
@@ -59,13 +61,14 @@ export function calculateElasticVelocity(
     naturalLength,
     maxLength,
     stiffness,
-    chargeStiffness = 0.008,
-    releaseStiffness = 0.11,
+    chargeStiffness = 0.003,
+    releaseStiffness = 0.14,
     damping = 0.01,
-    chargeDamping = 0.08,
-    maxAcceleration = 0.85,
-    releaseMaxSpeed = 2.3,
+    chargeDamping = 0.085,
+    maxAcceleration = 1.35,
+    releaseMaxSpeed = 3.3,
     isReelingIn,
+    isChargeReleasing,
     enableInputChargeControl,
   }: ElasticRopeParams,
 ): Vector3 | null {
@@ -80,14 +83,16 @@ export function calculateElasticVelocity(
 
   const currentVel = player.getVelocity();
   const speed = Vector3Utils.magnitude(currentVel);
+  const isCharging = !!isReelingIn;
+  const isLaunching = !isCharging && !!isChargeReleasing;
 
+  // チャージ解放による射出中のみ動的空気抵抗を解除し、0.99 固定にする
   const vPred = predictTickPhysics({
     velocity: currentVel,
-    dragXZ: getAirDrag(speed),
+    dragXZ: isLaunching ? 0.99 : getAirDrag(speed),
   });
 
   // --- チャージ中 / 解放時で復元力・減衰を切り替え ---
-  const isCharging = !!isReelingIn;
   let activeStiffness = isCharging
     ? chargeStiffness
     : (stiffness ?? releaseStiffness);
@@ -123,8 +128,8 @@ export function calculateElasticVelocity(
     }
   }
 
-  // 最高速度上限クランプ（解放時はパチンコ射出のため上限を引き上げる）
-  const speedLimit = isCharging ? MAX_HOOKSHOT_SPEED : releaseMaxSpeed;
+  // 最高速度上限クランプ（チャージ解放射出中のみ上限を引き上げる）
+  const speedLimit = isLaunching ? releaseMaxSpeed : MAX_HOOKSHOT_SPEED;
   const targetSpeed = Vector3Utils.magnitude(target);
   if (targetSpeed > speedLimit) {
     target = Vector3Utils.scale(target, speedLimit / targetSpeed);

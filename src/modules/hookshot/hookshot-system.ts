@@ -902,27 +902,45 @@ export class HookshotSystem {
         const wasReelingIn = !!state.isReelingIn;
         const activeReelMode = this.handleReelInput(player, state, def);
 
-        if (
-          wasReelingIn &&
-          !state.isReelingIn &&
-          state.isAnchored !== false
-        ) {
+        if (state.isAnchored !== false) {
           const distance = Vector3Utils.distance(player.location, state.anchor);
-          const stretch = distance - state.currentLength;
-          if (
-            def.minReleaseStretch !== undefined &&
-            stretch <= def.minReleaseStretch
+          let releaseStateDirty = false;
+
+          if (state.isReelingIn && state.isChargeReleasing) {
+            state.isChargeReleasing = false;
+            releaseStateDirty = true;
+          } else if (wasReelingIn && !state.isReelingIn) {
+            const stretch = distance - state.currentLength;
+            if (
+              def.minReleaseStretch !== undefined &&
+              stretch <= def.minReleaseStretch
+            ) {
+              const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
+              const maxLength =
+                def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+              state.currentLength = Math.max(
+                minLength,
+                Math.min(maxLength, distance),
+              );
+              state.isChargeReleasing = false;
+              releaseStateDirty = true;
+            } else if (stretch > 0.5) {
+              state.isChargeReleasing = true;
+              releaseStateDirty = true;
+              if (def.releaseSoundId) {
+                this.playSoundSafe(player, def.releaseSoundId);
+              }
+            }
+          } else if (
+            state.isChargeReleasing &&
+            distance <= state.currentLength
           ) {
-            const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
-            const maxLength =
-              def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
-            state.currentLength = Math.max(
-              minLength,
-              Math.min(maxLength, distance),
-            );
+            state.isChargeReleasing = false;
+            releaseStateDirty = true;
+          }
+
+          if (releaseStateDirty) {
             PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
-          } else if (def.releaseSoundId && stretch > 0.5) {
-            this.playSoundSafe(player, def.releaseSoundId);
           }
         }
 

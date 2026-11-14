@@ -44,6 +44,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
       naturalLength: state.currentLength,
       maxLength: Math.max(250, state.currentLength * 1.5),
       isReelingIn: state.isReelingIn,
+      isChargeReleasing: state.isChargeReleasing,
       enableInputChargeControl: canUseGazeSteering(player),
     });
   },
