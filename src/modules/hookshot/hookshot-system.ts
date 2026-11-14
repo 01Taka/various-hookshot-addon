@@ -19,7 +19,10 @@ import {
 } from "addon-utils";
 import { HookRenderManager } from "../render";
 import { PostFlightSystem } from "../post-flight";
-import { calculateReelSpeedMultiplier } from "./math/steering-math";
+import {
+  calculateReelSpeedMultiplier,
+  canUseGazeSteering,
+} from "./math/steering-math";
 import {
   AnchorPosition,
   HookshotDefinition,
@@ -712,9 +715,13 @@ export class HookshotSystem {
     const initialStep = isInitial ? (configuredInitial ?? 0) : 0;
     let delta = reelConfig.speed + initialStep;
 
-    // 視線ステアリング対応フックショットで短縮（巻き取り）中の場合、
+    // 視線ステアリング対応フックショットでエアロベスト装備中に短縮（巻き取り）する場合、
     // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）
-    if (mode === "shorten" && def.enableGazeSteering) {
+    if (
+      mode === "shorten" &&
+      def.enableGazeSteering &&
+      canUseGazeSteering(player)
+    ) {
       const multiplier = calculateReelSpeedMultiplier(
         player,
         state.anchor,

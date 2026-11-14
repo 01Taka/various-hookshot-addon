@@ -1,6 +1,15 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import { PlayerDirectionResolver } from "addon-utils";
+import { PostFlightSystem } from "../../post-flight";
+
+/**
+ * 視線・移動入力によるステアリングボーナスが利用可能かを判定します。
+ * エアロベスト系チェストプレートを有効な状態（残り耐久 > 1）で装備している場合のみ true を返します。
+ */
+export function canUseGazeSteering(player: Player): boolean {
+  return PostFlightSystem.getEquippedVestInfo(player) !== null;
+}
 
 /** 視線・ストレイフによる接線方向ステアリング加速度 (blocks/tick²) */
 export const DEFAULT_STEER_ACCEL = 0.085;

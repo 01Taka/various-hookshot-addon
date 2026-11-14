@@ -1,5 +1,6 @@
 import { RIGID_WIRE_STYLE } from "../../render";
 import { calculateRigidHookshot } from "../math/rigid-math";
+import { canUseGazeSteering } from "../math/steering-math";
 import { HookshotDefinition } from "../types";
 
 export const RIGID_HOOKSHOT_ID = "rigid";
@@ -32,7 +33,7 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   calculateImpulse: (player, state) => {
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
-      enableSteering: true,
+      enableSteering: canUseGazeSteering(player),
     });
   },
 };

@@ -1,5 +1,6 @@
 import { ELASTIC_WIRE_STYLE } from "../../render";
 import { calculateElasticHookshot } from "../math/elastic-math";
+import { canUseGazeSteering } from "../math/steering-math";
 import { HookshotDefinition } from "../types";
 
 export const ELASTIC_HOOKSHOT_ID = "elastic";
@@ -34,7 +35,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
       naturalLength: state.currentLength,
       maxLength: Math.max(250, state.currentLength * 1.5),
       isReelingIn: state.isReelingIn,
-      enableSteering: true,
+      enableSteering: canUseGazeSteering(player),
     });
   },
 };
