@@ -18,11 +18,17 @@ export interface ElasticRopeParams {
   extraCharge?: number;
   /** ロープの限界長。これを超えると硬い拘束に切り替わる */
   maxLength?: number;
-  /** バネ定数（解放時のフォールバック用） */
+  /** バネ定数（通常ぶら下がり時の固定値オーバーライド用） */
   stiffness?: number;
+  /** 通常ぶら下がり時の弾性係数 (ヤング率相当: 実効バネ定数 = hangElasticity / clampedLength) */
+  hangElasticity?: number;
+  /** 通常ぶら下がり時のヤング率分母の下限 (blocks) */
+  minHangDenominator?: number;
+  /** 通常ぶら下がり時のヤング率分母の上限 (blocks) */
+  maxHangDenominator?: number;
   /** チャージ中（isReelingIn=true）の基本バネ定数。小さいほど移動せず張力が溜まりやすい */
   chargeStiffness?: number;
-  /** 解放時（isReelingIn=false）のバネ定数。大きいほど一気に弾け飛ぶ */
+  /** 解放時（isReelingIn=false）のフォールバック用バネ定数 */
   releaseStiffness?: number;
   /** 解放時の法線方向減衰率 (0〜1) */
   damping?: number;
@@ -76,8 +82,11 @@ export function calculateElasticVelocity(
     extraCharge = 0,
     maxLength,
     stiffness,
+    hangElasticity = 1.0,
+    minHangDenominator = 15.0,
+    maxHangDenominator = 80.0,
     chargeStiffness = 0.003,
-    releaseStiffness = 0.03,
+    releaseStiffness,
     damping = 0.004,
     chargeDamping = 0.085,
     maxAcceleration = 1.35,
@@ -143,14 +152,23 @@ export function calculateElasticVelocity(
     dragXZ: getAirDrag(speed),
   });
 
-  let activeStiffness = isCharging
-    ? chargeStiffness
-    : (stiffness ?? releaseStiffness);
-  if (isCharging && enableInputChargeControl) {
-    activeStiffness *= getChargeStiffnessMultiplier(
-      player,
-      boostInputChargeControl,
+  let activeStiffness: number;
+  if (isCharging) {
+    activeStiffness = chargeStiffness;
+    if (enableInputChargeControl) {
+      activeStiffness *= getChargeStiffnessMultiplier(
+        player,
+        boostInputChargeControl,
+      );
+    }
+  } else if (stiffness !== undefined || releaseStiffness !== undefined) {
+    activeStiffness = stiffness ?? releaseStiffness!;
+  } else {
+    const denominator = Math.min(
+      maxHangDenominator,
+      Math.max(minHangDenominator, naturalLength),
     );
+    activeStiffness = hangElasticity / denominator;
   }
   const activeDamping = isCharging ? chargeDamping : damping;
 
