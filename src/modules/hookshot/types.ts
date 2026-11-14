@@ -23,8 +23,14 @@ export interface HookshotState {
   sneakConsumed?: boolean;
   /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
   isReelingIn?: boolean;
-  /** チャージ解放による高速射出中かどうか（自然長の内側に戻るまで維持） */
+  /** チャージ解放による放物線射出モード中かどうか */
   isChargeReleasing?: boolean;
+  /** リリース直後の初速インパルスを未適用かどうか */
+  releaseShotPending?: boolean;
+  /** リリース開始Tick */
+  releaseStartTick?: number;
+  /** 放物線射出中の前Tickにおけるアンカーとの距離 */
+  lastReleaseDistance?: number;
   /** ステップ伸縮の直近実行Tick */
   lastStepReelTick?: number;
   /** ステップ伸縮の現在の待機間隔（Tick） */

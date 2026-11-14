@@ -32,8 +32,12 @@ export interface ElasticRopeParams {
   releaseMaxSpeed?: number;
   /** 空中ジャンプ入力によって現在チャージ（巻き取り）中かどうか */
   isReelingIn?: boolean;
-  /** チャージ解放による高速射出中かどうか */
+  /** チャージ解放による放物線射出モード中かどうか */
   isChargeReleasing?: boolean;
+  /** リリース直後の初速インパルスを適用するTickかどうか */
+  releaseShotPending?: boolean;
+  /** 射出方向への上向きバイアス (Y成分加算量、山なり軌道用) */
+  upwardBias?: number;
   /** エアロベスト装備時の前後移動入力によるチャージ/巻き取り配分を有効にするかどうか */
   enableInputChargeControl?: boolean;
 }
@@ -69,6 +73,8 @@ export function calculateElasticVelocity(
     releaseMaxSpeed = 3.3,
     isReelingIn,
     isChargeReleasing,
+    releaseShotPending,
+    upwardBias = 0.22,
     enableInputChargeControl,
   }: ElasticRopeParams,
 ): Vector3 | null {
@@ -85,14 +91,35 @@ export function calculateElasticVelocity(
   const speed = Vector3Utils.magnitude(currentVel);
   const isCharging = !!isReelingIn;
   const isLaunching = !isCharging && !!isChargeReleasing;
+  const stretch = r - naturalLength;
 
-  // チャージ解放による射出中のみ動的空気抵抗を解除し、0.99 固定にする
+  // --- 1. リリース直後の1Tick目: 一撃のパチンコ初速（アンカー方向＋上向きバイアス）を射出 ---
+  if (isLaunching && releaseShotPending) {
+    const toAnchor = Vector3Utils.scale(normal, -1);
+    const biasedDir = {
+      x: toAnchor.x,
+      y: toAnchor.y + upwardBias,
+      z: toAnchor.z,
+    };
+    const launchDir = Vector3Utils.normalize(biasedDir);
+    const launchSpeed = Math.min(releaseMaxSpeed, 1.4 + stretch * 0.045);
+    return Vector3Utils.scale(launchDir, launchSpeed);
+  }
+
+  // --- 2. 放物線飛行中: 引き寄せを止め、0.99 空気抵抗＋重力のみの自由放物線 ---
+  if (isLaunching) {
+    return predictTickPhysics({
+      velocity: currentVel,
+      dragXZ: 0.99,
+    });
+  }
+
+  // --- 3. チャージ中 / 通常ぶら下がり中: ゴムの復元力計算 ---
   const vPred = predictTickPhysics({
     velocity: currentVel,
-    dragXZ: isLaunching ? 0.99 : getAirDrag(speed),
+    dragXZ: getAirDrag(speed),
   });
 
-  // --- チャージ中 / 解放時で復元力・減衰を切り替え ---
   let activeStiffness = isCharging
     ? chargeStiffness
     : (stiffness ?? releaseStiffness);
@@ -101,8 +128,7 @@ export function calculateElasticVelocity(
   }
   const activeDamping = isCharging ? chargeDamping : damping;
 
-  // --- ゴムの復元力（フックの法則） ---
-  const stretch = r - naturalLength;
+  // ゴムの復元力（フックの法則）
   const springAccel = Math.min(activeStiffness * stretch, maxAcceleration);
 
   // 法線方向の速度に比例した減衰（外向き・内向きどちらにも効かせる）
@@ -115,7 +141,7 @@ export function calculateElasticVelocity(
     Vector3Utils.scale(normal, springAccel + dampingAccel),
   );
 
-  // --- 限界長を超えたら硬い拘束 ---
+  // 限界長を超えたら硬い拘束
   if (maxLength) {
     const penetration = Math.max(0, r - maxLength);
     if (penetration > 0) {
@@ -128,11 +154,10 @@ export function calculateElasticVelocity(
     }
   }
 
-  // 最高速度上限クランプ（チャージ解放射出中のみ上限を引き上げる）
-  const speedLimit = isLaunching ? releaseMaxSpeed : MAX_HOOKSHOT_SPEED;
+  // 最高速度上限クランプ
   const targetSpeed = Vector3Utils.magnitude(target);
-  if (targetSpeed > speedLimit) {
-    target = Vector3Utils.scale(target, speedLimit / targetSpeed);
+  if (targetSpeed > MAX_HOOKSHOT_SPEED) {
+    target = Vector3Utils.scale(target, MAX_HOOKSHOT_SPEED / targetSpeed);
   }
 
   return target;

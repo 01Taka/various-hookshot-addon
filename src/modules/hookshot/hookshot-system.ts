@@ -529,8 +529,10 @@ export class HookshotSystem {
       stateDirty = true;
     }
 
+    const effectiveJumpPressed = jumpPressed && !state.isChargeReleasing;
+
     // 両方同時押しなら中立（何もしない）
-    if (jumpPressed && sneakPressed) {
+    if (effectiveJumpPressed && sneakPressed) {
       if (state.isReelingIn) {
         state.isReelingIn = false;
         stateDirty = true;
@@ -569,8 +571,8 @@ export class HookshotSystem {
       return reverseMode;
     }
 
-    // ジャンプは空中時のみ通常方向（短くする）に動作
-    if (jumpPressed && !onGround) {
+    // ジャンプは空中時のみ通常方向（短くする）に動作（放物線飛行中は無効）
+    if (effectiveJumpPressed && !onGround) {
       if (baseMode === "shorten" && !state.isReelingIn) {
         state.isReelingIn = true;
         stateDirty = true;
@@ -592,7 +594,7 @@ export class HookshotSystem {
     }
 
     // すでに巻き取り中（チャージ中）に着地した場合は、ジャンプキーを離すまでチャージ状態を維持する
-    if (jumpPressed && onGround && state.isReelingIn) {
+    if (effectiveJumpPressed && onGround && state.isReelingIn) {
       if (stateDirty) {
         PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
       }
@@ -921,9 +923,19 @@ export class HookshotSystem {
           const distance = Vector3Utils.distance(player.location, state.anchor);
           let releaseStateDirty = false;
 
-          if (state.isReelingIn && state.isChargeReleasing) {
-            state.isChargeReleasing = false;
-            releaseStateDirty = true;
+          if (state.isReelingIn) {
+            if (
+              state.isChargeReleasing ||
+              state.releaseShotPending ||
+              state.releaseStartTick !== undefined ||
+              state.lastReleaseDistance !== undefined
+            ) {
+              state.isChargeReleasing = false;
+              state.releaseShotPending = false;
+              state.releaseStartTick = undefined;
+              state.lastReleaseDistance = undefined;
+              releaseStateDirty = true;
+            }
           } else if (wasReelingIn && !state.isReelingIn) {
             const stretch = distance - state.currentLength;
             if (
@@ -938,20 +950,58 @@ export class HookshotSystem {
                 Math.min(maxLength, distance),
               );
               state.isChargeReleasing = false;
+              state.releaseShotPending = false;
+              state.releaseStartTick = undefined;
+              state.lastReleaseDistance = undefined;
               releaseStateDirty = true;
             } else if (stretch > 0.5) {
               state.isChargeReleasing = true;
+              state.releaseShotPending = true;
+              state.releaseStartTick = system.currentTick;
+              state.lastReleaseDistance = distance;
               releaseStateDirty = true;
               if (def.releaseSoundId) {
                 this.playSoundSafe(player, def.releaseSoundId);
               }
             }
-          } else if (
-            state.isChargeReleasing &&
-            distance <= state.currentLength
-          ) {
-            state.isChargeReleasing = false;
-            releaseStateDirty = true;
+          } else if (state.isChargeReleasing) {
+            const elapsedTicks =
+              system.currentTick - (state.releaseStartTick ?? system.currentTick);
+            if (distance <= state.currentLength) {
+              state.isChargeReleasing = false;
+              state.releaseShotPending = false;
+              state.releaseStartTick = undefined;
+              state.lastReleaseDistance = undefined;
+              releaseStateDirty = true;
+            } else if (elapsedTicks >= 4) {
+              const approachSpeed =
+                (state.lastReleaseDistance ?? distance) - distance;
+              const isStoppedOrPassed = approachSpeed <= 0.4;
+              const isGrounded =
+                player.isOnGround || player.isInWater || player.isClimbing;
+              const isTimedOut = elapsedTicks >= 60;
+
+              if (isStoppedOrPassed || isGrounded || isTimedOut) {
+                const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
+                const maxLength =
+                  def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
+                state.currentLength = Math.max(
+                  minLength,
+                  Math.min(maxLength, distance),
+                );
+                state.isChargeReleasing = false;
+                state.releaseShotPending = false;
+                state.releaseStartTick = undefined;
+                state.lastReleaseDistance = undefined;
+                releaseStateDirty = true;
+              } else {
+                state.lastReleaseDistance = distance;
+                releaseStateDirty = true;
+              }
+            } else {
+              state.lastReleaseDistance = distance;
+              releaseStateDirty = true;
+            }
           }
 
           if (releaseStateDirty) {
@@ -979,6 +1029,11 @@ export class HookshotSystem {
           const impulse = def.calculateImpulse(player, state);
           if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
             player.applyImpulse(impulse);
+          }
+
+          if (state.releaseShotPending) {
+            state.releaseShotPending = false;
+            PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
           }
 
           // ワイヤーの描画（定義側で getWireAxis が指定されている場合はその軸、無ければ state.normal）
