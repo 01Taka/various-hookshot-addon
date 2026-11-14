@@ -815,6 +815,21 @@ export class HookshotSystem {
     return outwardSpeed >= def.detachOnOutwardSpeed;
   }
 
+  private static shouldDetachOnOverstretch(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+  ): boolean {
+    if (
+      def.detachOnOverstretch === undefined ||
+      state.isAnchored === false
+    ) {
+      return false;
+    }
+    const distance = Vector3Utils.distance(player.location, state.anchor);
+    return distance - state.currentLength >= def.detachOnOverstretch;
+  }
+
   private static resetStepReelState(state: HookshotState): boolean {
     if (
       state.currentStepIntervalTicks === undefined &&
@@ -1219,7 +1234,8 @@ export class HookshotSystem {
           // 最高速度到達時（最大長到達＋自然長通過）または外向き高速突破時に自動解除
           if (
             this.shouldDetachOnMaxExtend(player, state, def, activeReelMode) ||
-            this.shouldDetachOnOutwardSpeed(player, state, def)
+            this.shouldDetachOnOutwardSpeed(player, state, def) ||
+            this.shouldDetachOnOverstretch(player, state, def)
           ) {
             this.playSoundSafe(player, def.detachSoundId);
             this.unhook(player);

@@ -97,6 +97,16 @@ export interface BambooHookshotConfig {
    * デフォルト: 1.5
    */
   upwardDecayExponent?: number;
+  /**
+   * 伸び切り時 (r >= naturalLength) の外向き速度保持率 (0.0〜1.0)
+   * デフォルト: 0.55
+   */
+  stretchOutwardRetention?: number;
+  /**
+   * 伸び切り時 (r >= naturalLength) の水平速度保持率 (0.0〜1.0)
+   * デフォルト: 0.88
+   */
+  stretchHorizontalRetention?: number;
 }
 
 /**
@@ -115,6 +125,8 @@ export const bambooHookshotConfig: BambooHookshotConfig = {
   upwardDecayThreshold: 0.5,
   upwardMinScale: 0.25,
   upwardDecayExponent: 1.5,
+  stretchOutwardRetention: 0.55,
+  stretchHorizontalRetention: 0.88,
 };
 
 let isTrackingInitialized = false;
@@ -182,7 +194,7 @@ export const bambooHookshotDefinition: HookshotDefinition = {
   },
   reelMode: "extend",
   minRopeLength: 2.0,
-  detachOnOutwardSpeed: 0.4,
+  detachOnOverstretch: 2.5,
   shotSoundId: "block.bamboo.step",
   detachSoundId: "block.bamboo.break",
   airProbing: {
@@ -210,6 +222,9 @@ export const bambooHookshotDefinition: HookshotDefinition = {
       upwardDecayThreshold: bambooHookshotConfig.upwardDecayThreshold,
       upwardMinScale: bambooHookshotConfig.upwardMinScale,
       upwardDecayExponent: bambooHookshotConfig.upwardDecayExponent,
+      stretchOutwardRetention: bambooHookshotConfig.stretchOutwardRetention,
+      stretchHorizontalRetention:
+        bambooHookshotConfig.stretchHorizontalRetention,
     });
   },
   onAttach: (player, state) => {

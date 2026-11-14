@@ -1,7 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import {
-  clampOutwardVelocity,
   convertTargetVelocityToImpulse,
   getAirDrag,
   getDirectionAndDistance,
@@ -51,6 +50,16 @@ export interface BambooPhysicsParams {
    * デフォルト: 1.5
    */
   upwardDecayExponent?: number;
+  /**
+   * 伸び切り時 (r >= naturalLength) の外向き速度保持率 (0.0〜1.0)
+   * 小さいほど外向きへの飛び出しを強く減衰させる。デフォルト: 0.55
+   */
+  stretchOutwardRetention?: number;
+  /**
+   * 伸び切り時 (r >= naturalLength) の水平速度 (X/Z) 保持率 (0.0〜1.0)
+   * 手動解除を逃した際の失速ペナルティ。デフォルト: 0.88
+   */
+  stretchHorizontalRetention?: number;
 }
 
 /**
@@ -123,7 +132,7 @@ export function calculateUpwardDecayFactor(
  * 弾性圧縮ロッドモデル（竹ポール）に基づき、目標速度を計算します。
  * - 圧縮時 (r < naturalLength): フックの法則による動径外向き弾性反発力（ダンピング付き）
  *   外側に伸びる瞬間（vn > 0）、しなり反発エネルギーの一部をパーティクルのしなり解消方向へ分配して打ち出します。
- * - 伸長・限界長 (r >= naturalLength): 剛体拘束（竹は伸びないため外向き超過速度をクランプ）
+ * - 伸長・限界長 (r >= naturalLength): 手動解除を逃した場合の失速ブレーキ（内向き引き戻し・下向き加速は行わない）
  */
 export function calculateBambooVelocity(
   player: Player,
@@ -136,11 +145,12 @@ export function calculateBambooVelocity(
     maxCompression,
     tangentTransferRatio = 0.35,
     damping = 0.02,
-    baumgarteFactor = 0.15,
     maxAcceleration = 12,
     upwardDecayThreshold = 0.5,
     upwardMinScale = 0.25,
     upwardDecayExponent = 1.5,
+    stretchOutwardRetention = 0.55,
+    stretchHorizontalRetention = 0.88,
   }: BambooPhysicsParams,
 ): Vector3 | null {
   const { dir: normal, distance: r } = getDirectionAndDistance(
@@ -230,10 +240,38 @@ export function calculateBambooVelocity(
     return Vector3Utils.add(vPred, reboundAccel);
   }
 
-  // 3. 伸長・限界長状態 (r >= naturalLength): 竹は伸びない剛体ロッド拘束
-  const penetration = stretch;
-  const maxOutwardSpeed = -penetration * baumgarteFactor;
-  return clampOutwardVelocity(vPred, normal, maxOutwardSpeed);
+  // 3. 伸長・限界長状態 (r >= naturalLength): 引き戻しのない失速ブレーキ（下向き加速禁止）
+  let target = vPred;
+  const outwardSpeed = getNormalComponent(target, normal);
+  if (outwardSpeed > 0) {
+    const clampedOutwardRetention = Math.max(
+      0,
+      Math.min(1, stretchOutwardRetention),
+    );
+    const reducedOutward = outwardSpeed * (1 - clampedOutwardRetention);
+    target = Vector3Utils.subtract(
+      target,
+      Vector3Utils.scale(normal, reducedOutward),
+    );
+  }
+
+  const clampedHorizRetention = Math.max(
+    0,
+    Math.min(1, stretchHorizontalRetention),
+  );
+  target = {
+    x: target.x * clampedHorizRetention,
+    y: target.y,
+    z: target.z * clampedHorizRetention,
+  };
+
+  // 竹のブレーキによって自由落下より下向きに叩きつけられないよう保護
+  const minSafeY = Math.min(0, vPred.y);
+  if (target.y < minSafeY) {
+    target.y = minSafeY;
+  }
+
+  return target;
 }
 
 export function calculateBambooHookshot(

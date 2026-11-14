@@ -158,6 +158,8 @@ export interface HookshotDefinition {
   detachOnMaxExtend?: boolean;
   /** 自然長以上へ到達した際、外側への動径速度 (blocks/tick) がこの値以上なら自動でアンカーを解除する */
   detachOnOutwardSpeed?: number;
+  /** 自然長を超えて指定距離 (blocks) 以上伸びた場合に自動でアンカーを解除する */
+  detachOnOverstretch?: number;
   /** 自動解除時の効果音ID */
   detachSoundId?: string;
   /** 巻き取り終了（チャージ解放）時の効果音ID */
