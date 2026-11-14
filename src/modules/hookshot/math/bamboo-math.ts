@@ -36,6 +36,21 @@ export interface BambooPhysicsParams {
   baumgarteFactor?: number;
   /** 1Tickあたりの最大反発加速度 (blocks/tick²) */
   maxAcceleration?: number;
+  /**
+   * 上方向反発の減衰を開始する上向き比率の閾値 (0.0〜1.0, sin(仰角))
+   * 例: 0.5 = 仰角30°より上向きの反発から減衰を開始。デフォルト: 0.5
+   */
+  upwardDecayThreshold?: number;
+  /**
+   * 真上方向 (上向き比率 1.0) の反発における最小倍率 (0.0〜1.0)
+   * デフォルト: 0.25
+   */
+  upwardMinScale?: number;
+  /**
+   * 上方向反発減衰カーブの指数 (1.0で線形、値が大きいほど真上付近で急激に減衰)
+   * デフォルト: 1.5
+   */
+  upwardDecayExponent?: number;
 }
 
 /**
@@ -79,6 +94,37 @@ export function calculateBambooBendDirection(
 }
 
 /**
+ * 反発ベクトルの上向き度合い（仰角）に応じた減衰倍率を計算します。
+ * 斜め前（閾値以下）は 1.0（無減衰）、真上に近づくにつれて upwardMinScale まで滑らかに減衰します。
+ */
+export function calculateUpwardDecayFactor(
+  reboundAccel: Vector3,
+  threshold = 0.5,
+  minScale = 0.25,
+  exponent = 1.5,
+): number {
+  if (reboundAccel.y <= 0 || threshold >= 1.0) {
+    return 1.0;
+  }
+
+  const mag = Vector3Utils.magnitude(reboundAccel);
+  if (mag <= 0.0001) {
+    return 1.0;
+  }
+
+  const clampedThreshold = Math.max(0, Math.min(0.99, threshold));
+  const upRatio = reboundAccel.y / mag;
+  if (upRatio <= clampedThreshold) {
+    return 1.0;
+  }
+
+  const t = Math.min(1, (upRatio - clampedThreshold) / (1 - clampedThreshold));
+  const clampedMinScale = Math.max(0, Math.min(1, minScale));
+  const safeExponent = Math.max(0.1, exponent);
+  return 1 - Math.pow(t, safeExponent) * (1 - clampedMinScale);
+}
+
+/**
  * 弾性圧縮ロッドモデル（竹ポール）に基づき、目標速度を計算します。
  * - 圧縮時 (r < naturalLength): フックの法則による動径外向き弾性反発力（ダンピング付き）
  *   外側に伸びる瞬間（vn > 0）、しなり反発エネルギーの一部をパーティクルのしなり解消方向へ分配して打ち出します。
@@ -97,6 +143,9 @@ export function calculateBambooVelocity(
     damping = 0.02,
     baumgarteFactor = 0.15,
     maxAcceleration = 12,
+    upwardDecayThreshold = 0.5,
+    upwardMinScale = 0.25,
+    upwardDecayExponent = 1.5,
   }: BambooPhysicsParams,
 ): Vector3 | null {
   const { dir: normal, distance: r } = getDirectionAndDistance(
@@ -159,10 +208,7 @@ export function calculateBambooVelocity(
       totalRadialAccel *= 1.0 - transferRatio;
     }
 
-    let target = Vector3Utils.add(
-      vPred,
-      Vector3Utils.scale(normal, totalRadialAccel),
-    );
+    let reboundAccel = Vector3Utils.scale(normal, totalRadialAccel);
 
     if (tangentialAccel > 0) {
       const bendDir = calculateBambooBendDirection(
@@ -170,13 +216,23 @@ export function calculateBambooVelocity(
         anchor,
         surfaceNormal,
       );
-      target = Vector3Utils.add(
-        target,
+      reboundAccel = Vector3Utils.add(
+        reboundAccel,
         Vector3Utils.scale(bendDir, tangentialAccel),
       );
     }
 
-    return target;
+    const upwardDecayFactor = calculateUpwardDecayFactor(
+      reboundAccel,
+      upwardDecayThreshold,
+      upwardMinScale,
+      upwardDecayExponent,
+    );
+    if (upwardDecayFactor < 1.0) {
+      reboundAccel = Vector3Utils.scale(reboundAccel, upwardDecayFactor);
+    }
+
+    return Vector3Utils.add(vPred, reboundAccel);
   }
 
   // 3. 伸長・限界長状態 (r >= naturalLength): 竹は伸びない剛体ロッド拘束

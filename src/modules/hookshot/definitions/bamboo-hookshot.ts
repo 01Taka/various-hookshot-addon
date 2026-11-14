@@ -82,6 +82,21 @@ export interface BambooHookshotConfig {
   damping?: number;
   /** 最大反発加速度 */
   maxAcceleration?: number;
+  /**
+   * 上方向反発の減衰を開始する上向き比率の閾値 (0.0〜1.0, sin(仰角))
+   * デフォルト: 0.5 (仰角30°より上向きの反発から減衰)
+   */
+  upwardDecayThreshold?: number;
+  /**
+   * 真上方向 (上向き比率 1.0) の反発における最小倍率 (0.0〜1.0)
+   * デフォルト: 0.25
+   */
+  upwardMinScale?: number;
+  /**
+   * 上方向反発減衰カーブの指数
+   * デフォルト: 1.5
+   */
+  upwardDecayExponent?: number;
 }
 
 /**
@@ -97,6 +112,9 @@ export const bambooHookshotConfig: BambooHookshotConfig = {
   speedFlexBonusFactorXZ: 16.0,
   speedFlexBonusFactorY: 1.0,
   consecutiveAirBonusDecayRate: 0.5,
+  upwardDecayThreshold: 0.5,
+  upwardMinScale: 0.25,
+  upwardDecayExponent: 1.5,
 };
 
 let isTrackingInitialized = false;
@@ -189,6 +207,9 @@ export const bambooHookshotDefinition: HookshotDefinition = {
       tangentTransferRatio: bambooHookshotConfig.tangentTransferRatio,
       damping: bambooHookshotConfig.damping,
       maxAcceleration: bambooHookshotConfig.maxAcceleration,
+      upwardDecayThreshold: bambooHookshotConfig.upwardDecayThreshold,
+      upwardMinScale: bambooHookshotConfig.upwardMinScale,
+      upwardDecayExponent: bambooHookshotConfig.upwardDecayExponent,
     });
   },
   onAttach: (player, state) => {
