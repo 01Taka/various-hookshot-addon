@@ -121,6 +121,11 @@ export interface BambooHookshotConfig {
    * デフォルト: 1.5
    */
   tautSoundPitch?: number;
+  /**
+   * 竹がピンと張ったときのSE音量
+   * デフォルト: 2.5
+   */
+  tautSoundVolume?: number;
 }
 
 /**
@@ -143,6 +148,7 @@ export const bambooHookshotConfig: BambooHookshotConfig = {
   stretchHorizontalRetention: 0.88,
   tautSoundId: "block.bamboo.hit",
   tautSoundPitch: 1.5,
+  tautSoundVolume: 2.5,
 };
 
 let isTrackingInitialized = false;
@@ -246,6 +252,7 @@ export const bambooHookshotDefinition: HookshotDefinition = {
         if (soundId) {
           try {
             player.playSound(soundId, {
+              volume: bambooHookshotConfig.tautSoundVolume ?? 2.5,
               pitch: bambooHookshotConfig.tautSoundPitch ?? 1.5,
             });
           } catch {}
