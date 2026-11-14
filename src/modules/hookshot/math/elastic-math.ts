@@ -70,7 +70,7 @@ export function calculateElasticVelocity(
     damping = 0.01,
     chargeDamping = 0.085,
     maxAcceleration = 1.35,
-    releaseMaxSpeed = 3.3,
+    releaseMaxSpeed = 4.0,
     isReelingIn,
     isChargeReleasing,
     releaseShotPending,
@@ -102,10 +102,10 @@ export function calculateElasticVelocity(
       z: toAnchor.z,
     };
     const launchDir = Vector3Utils.normalize(biasedDir);
-    // 伸び量に応じた非線形（1.6乗）カーブで初速を決定（5mで0.9、55m以上でreleaseMaxSpeed）
-    const minLaunchSpeed = 0.9;
+    // 伸び量に応じた非線形（1.6乗）カーブで初速を決定（5mで1.45、75m以上でreleaseMaxSpeed）
+    const minLaunchSpeed = 1.45;
     const minStretch = 5.0;
-    const refStretch = 55.0;
+    const refStretch = 75.0;
     const t = Math.min(
       1,
       Math.max(0, (stretch - minStretch) / (refStretch - minStretch)),
