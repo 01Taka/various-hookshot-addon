@@ -33,6 +33,12 @@ export interface HookshotState {
   lastReleaseDistance?: number;
   /** 放物線射出中に接近速度が閾値を下回った連続Tick数 */
   releaseStallTicks?: number;
+  /** 前Tickのチャージ伸び量（マイルストーン効果音判定用） */
+  prevChargeStretch?: number;
+  /** 直近に鳴らしたチャージマイルストーン距離 (m) */
+  lastChargeSoundThreshold?: number;
+  /** 直近のマイルストーンから±hysteresis以上離れて再鳴動可能になったか */
+  canRetriggerLastThreshold?: boolean;
   /** ステップ伸縮の直近実行Tick */
   lastStepReelTick?: number;
   /** ステップ伸縮の現在の待機間隔（Tick） */
@@ -104,6 +110,19 @@ export interface AirProbingConfig {
   hitSoundId?: string;
 }
 
+export interface ChargeMilestoneSoundConfig {
+  /** 鳴らす効果音ID */
+  soundId: string;
+  /** マイルストーン間隔 (blocks, 例: 15) */
+  step: number;
+  /** 鳴動対象となる最大の伸び量 (blocks, 例: 75) */
+  maxStretch: number;
+  /** 同じ地点を再鳴動するために必要な距離差 (blocks, 例: 5) */
+  hysteresis: number;
+  /** 段階ごとのピッチ配列 (1段階目=step, 2段階目=step*2 ...) */
+  pitches: number[];
+}
+
 export interface HookshotDefinition {
   /** 一意な識別子 (例: "elastic", "rigid", "rod", "spring") */
   id: string;
@@ -139,6 +158,8 @@ export interface HookshotDefinition {
   releaseSoundId?: string;
   /** 巻き取り終了時に発射を有効とする最小の伸び量 (blocks)。これ以下の場合は現在距離を自然長にリセットして発射を無効化する */
   minReleaseStretch?: number;
+  /** チャージ中の伸び量マイルストーン効果音設定 */
+  chargeMilestoneSound?: ChargeMilestoneSoundConfig;
   /** 発射時の効果音ID */
   shotSoundId?: string;
   /** 着弾（アンカー確定）時の効果音ID */

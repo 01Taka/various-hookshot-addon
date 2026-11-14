@@ -432,11 +432,98 @@ export class HookshotSystem {
     }
   }
 
-  private static playSoundSafe(player: Player, soundId?: string): void {
+  private static playSoundSafe(
+    player: Player,
+    soundId?: string,
+    pitch?: number,
+  ): void {
     if (!soundId) return;
     try {
-      player.playSound(soundId);
+      if (pitch !== undefined) {
+        player.playSound(soundId, { pitch });
+      } else {
+        player.playSound(soundId);
+      }
     } catch {}
+  }
+
+  /**
+   * チャージ中の伸び量（stretch）に応じたマイルストーン効果音を再生します。
+   */
+  private static updateChargeMilestoneSound(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    distance: number,
+  ): void {
+    const config = def.chargeMilestoneSound;
+    if (!config) return;
+
+    if (!state.isReelingIn) {
+      if (
+        state.prevChargeStretch !== undefined ||
+        state.lastChargeSoundThreshold !== undefined ||
+        state.canRetriggerLastThreshold !== undefined
+      ) {
+        state.prevChargeStretch = undefined;
+        state.lastChargeSoundThreshold = undefined;
+        state.canRetriggerLastThreshold = undefined;
+        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      }
+      return;
+    }
+
+    const stretch = distance - state.currentLength;
+    if (stretch <= 0) {
+      if (state.prevChargeStretch !== 0) {
+        state.prevChargeStretch = 0;
+        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      }
+      return;
+    }
+
+    const prev = state.prevChargeStretch ?? stretch;
+    let dirty = false;
+
+    if (
+      state.lastChargeSoundThreshold !== undefined &&
+      !state.canRetriggerLastThreshold &&
+      Math.abs(stretch - state.lastChargeSoundThreshold) >= config.hysteresis
+    ) {
+      state.canRetriggerLastThreshold = true;
+      dirty = true;
+    }
+
+    const maxSteps = Math.floor(config.maxStretch / config.step);
+    for (let i = 1; i <= maxSteps; i++) {
+      const threshold = config.step * i;
+      const crossedUp = prev < threshold && stretch >= threshold;
+      const crossedDown = prev >= threshold && stretch < threshold;
+      if (!crossedUp && !crossedDown) continue;
+
+      if (
+        state.lastChargeSoundThreshold === threshold &&
+        !state.canRetriggerLastThreshold
+      ) {
+        continue;
+      }
+
+      const pitch =
+        config.pitches[Math.min(i - 1, config.pitches.length - 1)] ?? 1.0;
+      this.playSoundSafe(player, config.soundId, pitch);
+      state.lastChargeSoundThreshold = threshold;
+      state.canRetriggerLastThreshold = false;
+      dirty = true;
+    }
+
+    if (state.prevChargeStretch !== stretch) {
+      state.prevChargeStretch = stretch;
+      dirty = true;
+    }
+
+    if (dirty) {
+      PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+    }
   }
 
   /**
@@ -1015,6 +1102,8 @@ export class HookshotSystem {
           if (releaseStateDirty) {
             PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
           }
+
+          this.updateChargeMilestoneSound(player, state, def, distance);
         }
 
         // 構え中（未着弾）の平行移動およびブロック接触判定

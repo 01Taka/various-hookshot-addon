@@ -32,6 +32,13 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   missSoundId: "leashknot.break",
   releaseSoundId: "random.bow",
   minReleaseStretch: 5.0,
+  chargeMilestoneSound: {
+    soundId: "note.guitar",
+    step: 15,
+    maxStretch: 75,
+    hysteresis: 5,
+    pitches: [0.65, 0.85, 1.1, 1.45, 1.9],
+  },
   wireStyle: ELASTIC_WIRE_STYLE,
   enableGazeSteering: false,
   formatDistanceUi: (_player, state, distance) => {
