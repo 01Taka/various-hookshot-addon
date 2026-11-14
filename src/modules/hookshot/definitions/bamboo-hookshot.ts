@@ -22,11 +22,14 @@ export interface BambooAirChainState {
   isHooked: boolean;
   /** 竹使用後に空中（非接地）にいたかどうか */
   hasBeenAirborne: boolean;
-  /** 現在のフック接続中に一度でも圧縮状態（しなり）に入ったかどうか */
-  hasCompressed?: boolean;
-  /** 伸び切り（ピンと張った状態）のSEを再生済みかどうか */
-  isTaut?: boolean;
 }
+
+interface BambooTautState {
+  hasCompressed: boolean;
+  isTaut: boolean;
+}
+
+const bambooTautStates = new Map<string, BambooTautState>();
 
 /**
  * 竹フックショットの設定インターフェース
@@ -52,18 +55,10 @@ export interface BambooHookshotConfig {
    */
   speedFlexBonusFactorXZ?: number;
   /**
-   * 水平方向（X 軸）のしなりボーナス係数エイリアス
-   */
-  speedFlexBonusFactorX?: number;
-  /**
    * 鉛直方向（Y 軸の落下・上昇速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick)。
    * デフォルト: 2.0
    */
   speedFlexBonusFactorY?: number;
-  /**
-   * 速度しなりボーナスの共通係数（未指定時のフォールバック用）
-   */
-  speedFlexBonusFactor?: number;
   /**
    * 速度しなりボーナスの最大追加長 (blocks)。
    * デフォルト: 3.5
@@ -78,10 +73,6 @@ export interface BambooHookshotConfig {
    * デフォルト: 0.5
    */
   consecutiveAirBonusDecayRate?: number;
-  /** consecutiveAirBonusDecayRate のエイリアス */
-  consecutiveAirDecayRate?: number;
-  /** consecutiveAirBonusDecayRate のエイリアス */
-  consecutiveAirBonusDecay?: number;
   /** 動径減衰係数 */
   damping?: number;
   /** 最大反発加速度 */
@@ -197,6 +188,38 @@ export function initBambooHookshotTracking(): void {
 initBambooHookshotTracking();
 
 /**
+ * 圧縮状態から伸び切り（ピンと張った状態）へ移行した瞬間にSEを再生します。
+ */
+function updateBambooTautSound(
+  player: { id: string; location: { x: number; y: number; z: number }; playSound: (id: string, opts?: { volume?: number; pitch?: number }) => void },
+  anchor: { x: number; y: number; z: number },
+  currentLength: number,
+): void {
+  const taut = bambooTautStates.get(player.id);
+  if (!taut) return;
+
+  const dist = Vector3Utils.distance(player.location, anchor);
+  if (dist < currentLength) {
+    taut.hasCompressed = true;
+    taut.isTaut = false;
+    return;
+  }
+
+  if (taut.hasCompressed && !taut.isTaut) {
+    taut.isTaut = true;
+    const soundId = bambooHookshotConfig.tautSoundId;
+    if (soundId) {
+      try {
+        player.playSound(soundId, {
+          volume: bambooHookshotConfig.tautSoundVolume ?? 2.5,
+          pitch: bambooHookshotConfig.tautSoundPitch ?? 1.5,
+        });
+      } catch {}
+    }
+  }
+}
+
+/**
  * 竹（minecraft:bamboo）を使用した弾性圧縮ポール（しなる棒）フックショットの定義
  * 圧縮時にはフックの法則による弾性反発力（しなり）が働き、
  * 伸ばす際にはその一部がパーティクルのしなり解消方向（接線方向）へ分配されて跳躍を加速します。
@@ -238,33 +261,7 @@ export const bambooHookshotDefinition: HookshotDefinition = {
   },
   wireStyle: BAMBOO_WIRE_STYLE,
   calculateImpulse: (player, state) => {
-    const chain = PlayerStateManager.get<BambooAirChainState | null>(
-      player.id,
-      BAMBOO_AIR_CHAIN_KEY,
-      null,
-    );
-    if (chain) {
-      const dist = Vector3Utils.distance(player.location, state.anchor);
-      if (dist < state.currentLength) {
-        if (!chain.hasCompressed || chain.isTaut) {
-          chain.hasCompressed = true;
-          chain.isTaut = false;
-          PlayerStateManager.set(player.id, BAMBOO_AIR_CHAIN_KEY, chain);
-        }
-      } else if (chain.hasCompressed && !chain.isTaut) {
-        chain.isTaut = true;
-        PlayerStateManager.set(player.id, BAMBOO_AIR_CHAIN_KEY, chain);
-        const soundId = bambooHookshotConfig.tautSoundId;
-        if (soundId) {
-          try {
-            player.playSound(soundId, {
-              volume: bambooHookshotConfig.tautSoundVolume ?? 2.5,
-              pitch: bambooHookshotConfig.tautSoundPitch ?? 1.5,
-            });
-          } catch {}
-        }
-      }
-    }
+    updateBambooTautSound(player, state.anchor, state.currentLength);
 
     return calculateBambooHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
@@ -306,15 +303,8 @@ export const bambooHookshotDefinition: HookshotDefinition = {
       );
       const inwardY = Math.max(0, vel.y * dirToAnchor.y);
 
-      const factorXZ =
-        bambooHookshotConfig.speedFlexBonusFactorXZ ??
-        bambooHookshotConfig.speedFlexBonusFactorX ??
-        bambooHookshotConfig.speedFlexBonusFactor ??
-        4.0;
-      const factorY =
-        bambooHookshotConfig.speedFlexBonusFactorY ??
-        bambooHookshotConfig.speedFlexBonusFactor ??
-        2.0;
+      const factorXZ = bambooHookshotConfig.speedFlexBonusFactorXZ ?? 4.0;
+      const factorY = bambooHookshotConfig.speedFlexBonusFactorY ?? 2.0;
 
       const rawBonus = inwardXZ * factorXZ + inwardY * factorY;
       if (rawBonus > 0) {
@@ -327,10 +317,7 @@ export const bambooHookshotDefinition: HookshotDefinition = {
             0,
             Math.min(
               1,
-              bambooHookshotConfig.consecutiveAirBonusDecayRate ??
-                bambooHookshotConfig.consecutiveAirDecayRate ??
-                bambooHookshotConfig.consecutiveAirBonusDecay ??
-                0.5,
+              bambooHookshotConfig.consecutiveAirBonusDecayRate ?? 0.5,
             ),
           );
           bonus *= decayRate;
@@ -343,15 +330,18 @@ export const bambooHookshotDefinition: HookshotDefinition = {
     }
 
     // 竹使用状態を記録（連続使用回数をインクリメント）
+    bambooTautStates.set(player.id, {
+      hasCompressed: false,
+      isTaut: false,
+    });
     PlayerStateManager.set(player.id, BAMBOO_AIR_CHAIN_KEY, {
       count: airUses + 1,
       isHooked: true,
       hasBeenAirborne: !player.isOnGround,
-      hasCompressed: false,
-      isTaut: false,
     });
   },
   onDetach: (player, _state) => {
+    bambooTautStates.delete(player.id);
     const chain = PlayerStateManager.get<BambooAirChainState | null>(
       player.id,
       BAMBOO_AIR_CHAIN_KEY,

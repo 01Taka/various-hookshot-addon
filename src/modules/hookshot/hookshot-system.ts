@@ -460,6 +460,56 @@ export class HookshotSystem {
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
   }
 
+  /**
+   * continuous / step 設定に基づいて長さを1Tick分進め（または縮め）、必要な効果音を再生します。
+   */
+  private static advanceTimedLength(
+    player: Player,
+    currentLength: number,
+    targetLimit: number,
+    direction: 1 | -1,
+    lastTick: number | undefined,
+    config: NonNullable<HookshotDefinition["retract"]>,
+  ): { nextLength: number; nextLastTick: number } {
+    const now = system.currentTick;
+    let nextLength = currentLength;
+    let nextLastTick = lastTick ?? now;
+
+    const clampLength = (val: number) =>
+      direction > 0 ? Math.min(val, targetLimit) : Math.max(val, targetLimit);
+
+    if (config.mode === "continuous") {
+      if (config.speed > 0) {
+        nextLength = clampLength(currentLength + direction * config.speed);
+        if (
+          nextLength !== currentLength &&
+          config.soundId &&
+          (direction > 0 || nextLength > 0)
+        ) {
+          const interval = config.soundIntervalTicks ?? 2;
+          if (now - nextLastTick >= interval) {
+            nextLastTick = now;
+            this.playSoundSafe(player, config.soundId);
+          }
+        }
+      } else if (direction < 0) {
+        nextLength = targetLimit;
+      }
+    } else if (now - nextLastTick >= config.intervalTicks) {
+      nextLastTick = now;
+      nextLength = clampLength(currentLength + direction * config.stepLength);
+      if (
+        nextLength !== currentLength &&
+        config.soundId &&
+        (direction > 0 || nextLength > 0)
+      ) {
+        this.playSoundSafe(player, config.soundId);
+      }
+    }
+
+    return { nextLength, nextLastTick };
+  }
+
   private static applyAutoExtend(
     player: Player,
     state: HookshotState,
@@ -469,40 +519,16 @@ export class HookshotSystem {
     const maxLength =
       def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
 
-    if (extend.mode === "continuous") {
-      if (extend.speed > 0) {
-        const nextLength = Math.min(
-          state.currentLength + extend.speed,
-          maxLength,
-        );
-        if (nextLength !== state.currentLength) {
-          state.currentLength = nextLength;
-          if (extend.soundId) {
-            const now = system.currentTick;
-            const interval = extend.soundIntervalTicks ?? 2;
-            const lastTick = state.lastAutoExtendTick ?? now;
-            if (now - lastTick >= interval) {
-              state.lastAutoExtendTick = now;
-              this.playSoundSafe(player, extend.soundId);
-            }
-          }
-        }
-      }
-    } else {
-      const now = system.currentTick;
-      const lastTick = state.lastAutoExtendTick ?? now;
-      if (now - lastTick >= extend.intervalTicks) {
-        state.lastAutoExtendTick = now;
-        const nextLength = Math.min(
-          state.currentLength + extend.stepLength,
-          maxLength,
-        );
-        if (nextLength !== state.currentLength) {
-          state.currentLength = nextLength;
-          this.playSoundSafe(player, extend.soundId);
-        }
-      }
-    }
+    const { nextLength, nextLastTick } = this.advanceTimedLength(
+      player,
+      state.currentLength,
+      maxLength,
+      1,
+      state.lastAutoExtendTick,
+      extend,
+    );
+    state.currentLength = nextLength;
+    state.lastAutoExtendTick = nextLastTick;
 
     if (state.currentLength >= maxLength) {
       state.isAutoExtending = false;
@@ -569,32 +595,16 @@ export class HookshotSystem {
       return;
     }
 
-    let currentLength = state.retractLength ?? 0;
-    const now = system.currentTick;
-    const lastTick = state.lastRetractTick ?? now;
-
-    if (retract.mode === "continuous") {
-      if (retract.speed > 0) {
-        currentLength = Math.max(0, currentLength - retract.speed);
-        if (retract.soundId && currentLength > 0) {
-          const interval = retract.soundIntervalTicks ?? 2;
-          if (now - lastTick >= interval) {
-            state.lastRetractTick = now;
-            this.playSoundSafe(player, retract.soundId);
-          }
-        }
-      } else {
-        currentLength = 0;
-      }
-    } else {
-      if (now - lastTick >= retract.intervalTicks) {
-        state.lastRetractTick = now;
-        currentLength = Math.max(0, currentLength - retract.stepLength);
-        if (retract.soundId && currentLength > 0) {
-          this.playSoundSafe(player, retract.soundId);
-        }
-      }
-    }
+    const { nextLength: currentLength, nextLastTick } =
+      this.advanceTimedLength(
+        player,
+        state.retractLength ?? 0,
+        0,
+        -1,
+        state.lastRetractTick,
+        retract,
+      );
+    state.lastRetractTick = nextLastTick;
 
     if (currentLength <= 0.05) {
       PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
@@ -916,27 +926,6 @@ export class HookshotSystem {
     }
     const distance = Vector3Utils.distance(player.location, state.anchor);
     return distance >= state.currentLength;
-  }
-
-  private static shouldDetachOnOutwardSpeed(
-    player: Player,
-    state: HookshotState,
-    def: HookshotDefinition,
-  ): boolean {
-    if (
-      def.detachOnOutwardSpeed === undefined ||
-      state.isAnchored === false
-    ) {
-      return false;
-    }
-    const toPlayer = Vector3Utils.subtract(player.location, state.anchor);
-    const distance = Vector3Utils.magnitude(toPlayer);
-    if (distance < state.currentLength || distance < 0.0001) {
-      return false;
-    }
-    const outwardDir = Vector3Utils.scale(toPlayer, 1 / distance);
-    const outwardSpeed = Vector3Utils.dot(player.getVelocity(), outwardDir);
-    return outwardSpeed >= def.detachOnOutwardSpeed;
   }
 
   private static shouldDetachOnOverstretch(
@@ -1364,7 +1353,6 @@ export class HookshotSystem {
           // 最高速度到達時（最大長到達＋自然長通過）または外向き高速突破時に自動解除
           if (
             this.shouldDetachOnMaxExtend(player, state, def, activeReelMode) ||
-            this.shouldDetachOnOutwardSpeed(player, state, def) ||
             this.shouldDetachOnOverstretch(player, state, def)
           ) {
             this.unhook(player);

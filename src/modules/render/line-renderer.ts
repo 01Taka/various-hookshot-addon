@@ -1,5 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Dimension, MolangVariableMap, Player, Vector3 } from "@minecraft/server";
+import { calculateBambooBendDirection } from "../hookshot/math/bamboo-math";
 import { WireRenderContext, WireStyle } from "./types";
 
 const MAX_PARTICLES_PER_WIRE = 500;
@@ -170,28 +171,9 @@ export class LineRenderer {
     }
 
     // しなり（弓なり曲げ）用の曲げ方向ベクトルの準備
-    let bendDir: Vector3 = { x: 0, y: 1, z: 0 };
-    if (isBent) {
-      const dir = Vector3Utils.scale(diff, 1 / dist);
-      // 側面は地面に刺さったときと同じ方向計算（globalRef基準）に統一
-      const refAxis =
-        normal && Math.abs(normal.y) >= 0.5 ? normal : globalRef;
-      const dot = Vector3Utils.dot(refAxis, dir);
-      const perp = Vector3Utils.subtract(refAxis, Vector3Utils.scale(dir, dot));
-      const perpLen = Vector3Utils.magnitude(perp);
-      if (perpLen > 0.05) {
-        bendDir = Vector3Utils.scale(perp, 1 / perpLen);
-      } else {
-        const dotUp = Vector3Utils.dot(globalRef, dir);
-        const perpUp = Vector3Utils.subtract(globalRef, Vector3Utils.scale(dir, dotUp));
-        const perpUpLen = Vector3Utils.magnitude(perpUp);
-        bendDir = perpUpLen > 0.05 ? Vector3Utils.scale(perpUp, 1 / perpUpLen) : { x: 0, y: 1, z: 0 };
-      }
-      // 壁・地面では水平より下（y < 0）にしならないよう上向き側へ揃える
-      if ((!normal || normal.y > -0.5) && bendDir.y < 0) {
-        bendDir = Vector3Utils.scale(bendDir, -1);
-      }
-    }
+    const bendDir: Vector3 = isBent
+      ? calculateBambooBendDirection(start, end, normal)
+      : { x: 0, y: 1, z: 0 };
 
     // 始点手前から終点（アンカー手前）まで補間配置
     for (let i = 1; i <= steps; i++) {

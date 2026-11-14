@@ -12,7 +12,6 @@ export * from "./types";
 export * from "./hookshot-system";
 export * from "./definitions";
 export * from "./math/bamboo-math";
-export * from "./math/bamboo-vault-math";
 export * from "./math/elastic-math";
 export * from "./math/rigid-math";
 export * from "./math/rod-math";

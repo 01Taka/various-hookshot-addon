@@ -31,8 +31,6 @@ export interface BambooPhysicsParams {
   tangentTransferRatio?: number;
   /** 動径方向の速度減衰率 (0〜1)。振動の収束 */
   damping?: number;
-  /** 自然長を超えた時の剛体拘束補正係数 (Baumgarte factor) */
-  baumgarteFactor?: number;
   /** 1Tickあたりの最大反発加速度 (blocks/tick²) */
   maxAcceleration?: number;
   /**
