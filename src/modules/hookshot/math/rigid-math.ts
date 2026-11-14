@@ -28,7 +28,9 @@ export interface RigidHookshotOptions {
 const VELOCITY_JITTER_RATIO = 0.85;
 const MAX_JITTER_GAP_TICKS = 3;
 const MAX_TANGENT_RESCALE = 1.5;
-const BAUMGARTE_FACTOR = 0.2;
+const OUTER_BAUMGARTE_FACTOR = 0.2;
+const INNER_BAUMGARTE_FACTOR = 0.08;
+const INNER_SWING_MARGIN = 2.0;
 const SLACK_HYSTERESIS = 0.5;
 
 interface EffectiveVelocityResult {
@@ -104,15 +106,17 @@ function resolveEffectiveVelocity(
 }
 
 /**
- * インパルス抜けや離散ステップによって外向き法線方向に漏れた速度成分を、
+ * インパルス抜けやバウンシングによって法線方向に漏れた速度成分を、
  * 重力加算前に接線方向へ回転復元し、スイングの運動エネルギー損失を防ぎます。
  */
-function redirectOutwardVelocityToTangent(
+function redirectRadialBounceToTangent(
   velocity: Vector3,
   normal: Vector3,
+  includeInward: boolean,
 ): Vector3 {
   const vn = Vector3Utils.dot(velocity, normal);
-  if (vn <= 0) {
+  const shouldRedirect = vn > 0 || (includeInward && vn > -0.5 && vn < 0);
+  if (!shouldRedirect) {
     return velocity;
   }
 
@@ -168,10 +172,14 @@ export function calculateRigidVelocity(
     currentTick,
   );
 
-  // スイング継続中かつ壁衝突がない場合、ラグ等で外向きに漏れた慣性速度を接線方向に復元
+  // スイング継続中かつ壁衝突がない場合、ラグや跳ねで法線方向に漏れた慣性速度を接線方向に復元
+  const allowInwardRedirect =
+    !options?.isReelingIn &&
+    r >= ropeLength - INNER_SWING_MARGIN &&
+    normal.y <= 0.15;
   const currentVel =
     wasTaut && isUnobstructed
-      ? redirectOutwardVelocityToTangent(rawVel, normal)
+      ? redirectRadialBounceToTangent(rawVel, normal, allowInwardRedirect)
       : rawVel;
   const speed = Vector3Utils.magnitude(currentVel);
 
@@ -208,18 +216,30 @@ export function calculateRigidVelocity(
   const vt = Vector3Utils.magnitude(vtVec);
 
   const penetration = Math.max(0, r - ropeLength);
-  const targetRadius =
-    penetration > 0 ? r - penetration * BAUMGARTE_FACTOR : ropeLength;
+  const inInnerSwingZone =
+    wasTaut &&
+    penetration === 0 &&
+    r >= ropeLength - INNER_SWING_MARGIN &&
+    normal.y <= 0.15 &&
+    vn > -0.5;
 
-  // 1Tick後に接線方向へ vt 進んでも半径 targetRadius の球面上に収まる法線速度上限
+  let targetRadius = ropeLength;
+  if (penetration > 0) {
+    targetRadius = r - penetration * OUTER_BAUMGARTE_FACTOR;
+  } else if (inInnerSwingZone) {
+    // 内側侵入時は自由落下に落とさず、なめらかに実際のロープ長へ戻す
+    targetRadius = r + (ropeLength - r) * INNER_BAUMGARTE_FACTOR;
+  }
+
+  // 1Tick後に接線方向へ vt 進んでも半径 targetRadius の球面上に収まる法線速度
   const maxRadialPos = Math.max(
     targetRadius * 0.5,
     Math.sqrt(Math.max(0, targetRadius * targetRadius - vt * vt)),
   );
-  const maxOutwardSpeed = maxRadialPos - r;
+  const targetRadialSpeed = maxRadialPos - r;
 
-  // 3. たるみ判定：現在はみ出ておらず、次Tickも球面拘束上限以内に収まる場合は自由落下
-  if (penetration === 0 && vn <= maxOutwardSpeed) {
+  // 3. たるみ判定：内側スイング継続ゾーン外で、現在はみ出ておらず次Tickも球面内に収まる場合は自由落下
+  if (!inInnerSwingZone && penetration === 0 && vn <= targetRadialSpeed) {
     const keepTaut = wasTaut && r >= ropeLength - SLACK_HYSTERESIS;
     updatePhysicsState(physicsState, vPred, currentLoc, currentTick, keepTaut);
     if (isSteeringActive) {
@@ -228,8 +248,10 @@ export function calculateRigidVelocity(
     return null;
   }
 
-  // 4. 拘束適用：球面軌道に乗るよう外向き法線成分をクランプ
-  let target = clampOutwardVelocity(vPred, normal, maxOutwardSpeed);
+  // 4. 拘束適用：内側スイング継続中は法線速度を目標径方向速度に揃えて跳ねを抑制、それ以外は外向き成分をクランプ
+  let target = inInnerSwingZone
+    ? Vector3Utils.add(vtVec, Vector3Utils.scale(normal, targetRadialSpeed))
+    : clampOutwardVelocity(vPred, normal, targetRadialSpeed);
 
   const targetSpeed = Vector3Utils.magnitude(target);
   if (targetSpeed > MAX_HOOKSHOT_SPEED) {
