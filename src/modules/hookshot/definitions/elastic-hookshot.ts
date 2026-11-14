@@ -26,6 +26,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
+  maxExtraCharge: 20.0,
   raycastGraceTicks: 10,
   shotSoundId: "armor.equip_leather",
   hitSoundId: "leashknot.place",
@@ -42,7 +43,8 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   wireStyle: ELASTIC_WIRE_STYLE,
   enableGazeSteering: false,
   formatDistanceUi: (_player, state, distance) => {
-    const stretch = Math.max(0, distance - state.currentLength);
+    const stretch =
+      Math.max(0, distance - state.currentLength) + (state.extraCharge ?? 0);
     const prefix = state.isReelingIn ? "[溜め] " : "";
     const stretchSuffix = stretch > 0.1 ? ` (+${stretch.toFixed(1)}m)` : "";
     return `${prefix}${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m${stretchSuffix}`;
@@ -50,6 +52,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   calculateImpulse: (player, state) => {
     return calculateElasticHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
+      extraCharge: state.extraCharge,
       maxLength: Math.max(250, state.currentLength * 1.5),
       isReelingIn: state.isReelingIn,
       isChargeReleasing: state.isChargeReleasing,

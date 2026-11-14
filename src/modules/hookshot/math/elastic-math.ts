@@ -14,6 +14,8 @@ import { MAX_HOOKSHOT_SPEED } from "./steering-math";
 export interface ElasticRopeParams {
   /** ロープの自然長。これ以下ではたるんで力が働かない */
   naturalLength: number;
+  /** 最小ロープ長到達後に追加で蓄積された仮想チャージ量 */
+  extraCharge?: number;
   /** ロープの限界長。これを超えると硬い拘束に切り替わる */
   maxLength?: number;
   /** バネ定数（解放時のフォールバック用） */
@@ -71,6 +73,7 @@ export function calculateElasticVelocity(
   anchor: Vector3,
   {
     naturalLength,
+    extraCharge = 0,
     maxLength,
     stiffness,
     chargeStiffness = 0.003,
@@ -93,14 +96,16 @@ export function calculateElasticVelocity(
   );
   if (r < 0.0001) return null;
 
+  const effectiveNaturalLength = naturalLength - extraCharge;
+
   // たるみ中は自由運動（テンション発生時のみ作動）
-  if (r <= naturalLength) return null;
+  if (r <= effectiveNaturalLength) return null;
 
   const currentVel = player.getVelocity();
   const speed = Vector3Utils.magnitude(currentVel);
   const isCharging = !!isReelingIn;
   const isLaunching = !isCharging && !!isChargeReleasing;
-  const stretch = r - naturalLength;
+  const stretch = r - effectiveNaturalLength;
 
   // --- 1. リリース直後の1Tick目: 一撃のパチンコ初速（アンカー方向＋上向きバイアス）を射出 ---
   if (isLaunching && releaseShotPending) {

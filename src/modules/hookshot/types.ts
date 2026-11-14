@@ -19,6 +19,8 @@ export interface HookshotState {
   /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
   initialDirection?: Vector3;
   currentLength: number;
+  /** 最小ロープ長到達後に蓄積された追加チャージ量 (blocks, 0〜maxExtraCharge) */
+  extraCharge?: number;
   jumpConsumed?: boolean;
   sneakConsumed?: boolean;
   /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
@@ -136,6 +138,8 @@ export interface HookshotDefinition {
   reelMode?: ReelMode;
   /** 最小ロープ長 (blocks, デフォルト: 1.5) */
   minRopeLength?: number;
+  /** 最小ロープ長到達後に追加で蓄積できる仮想チャージ上限 (blocks, デフォルト: 0) */
+  maxExtraCharge?: number;
   /** 最大ロープ長 (blocks, デフォルト: maxDistance または 1200) */
   maxRopeLength?: number;
   /** ワイヤーの描画スタイル（パーティクル、形状モードなど） */

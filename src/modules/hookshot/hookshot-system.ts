@@ -473,7 +473,8 @@ export class HookshotSystem {
       return;
     }
 
-    const stretch = distance - state.currentLength;
+    const stretch =
+      Math.max(0, distance - state.currentLength) + (state.extraCharge ?? 0);
     if (stretch <= 0) {
       if (state.prevChargeStretch !== 0) {
         state.prevChargeStretch = 0;
@@ -933,19 +934,44 @@ export class HookshotSystem {
     forceSave: boolean,
     soundId?: string,
   ): void {
-    let nextLength = state.currentLength;
+    const prevLength = state.currentLength;
+    const prevExtra = state.extraCharge ?? 0;
+    let nextLength = prevLength;
+    let nextExtra = prevExtra;
+
     if (mode === "extend") {
       const maxLength =
         def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
-      nextLength = Math.min(state.currentLength + delta, maxLength);
+      if (prevExtra > 0) {
+        const consumedExtra = Math.min(prevExtra, delta);
+        nextExtra = prevExtra - consumedExtra;
+        const remaining = delta - consumedExtra;
+        if (remaining > 0) {
+          nextLength = Math.min(prevLength + remaining, maxLength);
+        }
+      } else {
+        nextLength = Math.min(prevLength + delta, maxLength);
+      }
     } else {
       const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
-      nextLength = Math.max(state.currentLength - delta, minLength);
+      const maxExtra =
+        state.isAnchored !== false ? (def.maxExtraCharge ?? 0) : 0;
+      const shortenRoom = Math.max(0, prevLength - minLength);
+      if (delta <= shortenRoom) {
+        nextLength = Math.max(prevLength - delta, minLength);
+      } else {
+        nextLength = minLength;
+        if (maxExtra > 0) {
+          const remaining = delta - shortenRoom;
+          nextExtra = Math.min(maxExtra, prevExtra + remaining);
+        }
+      }
     }
 
-    const changed = state.currentLength !== nextLength;
+    const changed = prevLength !== nextLength || prevExtra !== nextExtra;
     if (changed) {
       state.currentLength = nextLength;
+      state.extraCharge = nextExtra;
       if (soundId) {
         state.lastContinuousReelSoundTick = system.currentTick;
         this.playSoundSafe(player, soundId);
@@ -1026,7 +1052,9 @@ export class HookshotSystem {
               releaseStateDirty = true;
             }
           } else if (wasReelingIn && !state.isReelingIn) {
-            const stretch = distance - state.currentLength;
+            const stretch =
+              Math.max(0, distance - state.currentLength) +
+              (state.extraCharge ?? 0);
             if (
               def.minReleaseStretch !== undefined &&
               stretch <= def.minReleaseStretch
@@ -1038,6 +1066,7 @@ export class HookshotSystem {
                 minLength,
                 Math.min(maxLength, distance),
               );
+              state.extraCharge = 0;
               state.isChargeReleasing = false;
               state.releaseShotPending = false;
               state.releaseStartTick = undefined;
@@ -1130,6 +1159,7 @@ export class HookshotSystem {
 
           if (state.releaseShotPending) {
             state.releaseShotPending = false;
+            state.extraCharge = 0;
             PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
           }
 
