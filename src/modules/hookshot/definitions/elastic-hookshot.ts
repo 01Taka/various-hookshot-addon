@@ -19,6 +19,7 @@ export const elasticHookshotDefinition: HookshotDefinition = {
   reel: {
     mode: "continuous",
     speed: 1.5,
+    slackSpeed: 4.5,
     initialDelta: 0.0,
     soundId: "step.cloth",
     soundIntervalTicks: 4,

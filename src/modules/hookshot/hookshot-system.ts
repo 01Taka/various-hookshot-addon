@@ -721,7 +721,22 @@ export class HookshotSystem {
         : reelConfig.initialDelta;
 
     const initialStep = isInitial ? (configuredInitial ?? 0) : 0;
-    let delta = reelConfig.speed + initialStep;
+    let baseSpeed = reelConfig.speed;
+    if (
+      mode === "shorten" &&
+      state.isAnchored !== false &&
+      reelConfig.slackSpeed !== undefined
+    ) {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      const slack = state.currentLength - distance;
+      if (slack >= 0) {
+        baseSpeed =
+          slack >= reelConfig.slackSpeed
+            ? reelConfig.slackSpeed
+            : slack + (1 - slack / reelConfig.slackSpeed) * reelConfig.speed;
+      }
+    }
+    let delta = baseSpeed + initialStep;
 
     // 視線ステアリング対応フックショットでエアロベスト装備中に短縮（巻き取り）する場合、
     // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）

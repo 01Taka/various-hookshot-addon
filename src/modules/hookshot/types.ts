@@ -42,6 +42,8 @@ export type ReelConfig =
       mode: "continuous";
       /** 継続的な長さ変更速度 (blocks/tick) */
       speed: number;
+      /** 距離が自然長以下（たるみ中）のときの短縮速度 (blocks/tick, 省略時は speed と同じ) */
+      slackSpeed?: number;
       /** ボタンを押した瞬間に追加で一気に変更する瞬間変化量 (blocks, 単一数値または { shorten?, extend? } で指定可能) */
       initialDelta?: number | { shorten?: number; extend?: number };
       /** 連続伸縮時の効果音ID */
