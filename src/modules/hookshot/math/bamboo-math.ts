@@ -55,19 +55,14 @@ export interface BambooPhysicsParams {
 
 /**
  * アンカーとプレイヤー位置、アンカー面法線から、パーティクル描画と完全に同期した竹のしなり方向（接線ベクトル）を計算します。
- * - 側面に刺さった時: 上方向に力が加わる方向（アンカーとプレイヤーを結んだ直線をy軸だけの範囲で曲げて凸にするため { x: 0, y: 1, z: 0 }）
- * - その他の面（床面等）: 面法線と直線に直交する凸方向
+ * - 地面・側面: 上方向基準（globalRef）と竹の直線に直交する凸方向（地面刺しと統一）
+ * - 天井面など: 面法線と直線に直交する凸方向
  */
 export function calculateBambooBendDirection(
   playerPos: Vector3,
   anchorPos: Vector3,
   surfaceNormal?: Vector3,
 ): Vector3 {
-  // 側面に刺さった時は、上方向に力が加わる方向（アンカーとプレイヤーを結んだ直線をy軸だけの範囲で曲げて凸にする）
-  if (surfaceNormal && Math.abs(surfaceNormal.y) < 0.5) {
-    return { x: 0, y: 1, z: 0 };
-  }
-
   const diff = Vector3Utils.subtract(anchorPos, playerPos);
   const dist = Vector3Utils.magnitude(diff);
   if (dist < 0.0001) return { x: 0, y: 1, z: 0 };
@@ -76,7 +71,7 @@ export function calculateBambooBendDirection(
   const globalRef: Vector3 =
     Math.abs(diff.y / dist) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
 
-  if (surfaceNormal) {
+  if (surfaceNormal && Math.abs(surfaceNormal.y) >= 0.5) {
     const dot = Vector3Utils.dot(surfaceNormal, dir);
     const perp = Vector3Utils.subtract(surfaceNormal, Vector3Utils.scale(dir, dot));
     const perpLen = Vector3Utils.magnitude(perp);
