@@ -98,10 +98,37 @@ export class HookshotSystem {
     const state = this.getActiveState(player);
     if (!state) return;
 
+    const def = this.definitionsById.get(state.hookshotId);
+    const hasChargeRelease =
+      def &&
+      (def.releaseSoundId !== undefined || def.minReleaseStretch !== undefined);
+
+    // チャージ中に解除された場合は、有効なチャージがあれば射出してから解除する
+    if (
+      hasChargeRelease &&
+      state.isAnchored !== false &&
+      state.isReelingIn &&
+      player.dimension.id === state.anchor.dimensionId
+    ) {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      const stretch =
+        Math.max(0, distance - state.currentLength) + (state.extraCharge ?? 0);
+      const minStretch = def.minReleaseStretch ?? 0.5;
+      if (stretch > minStretch) {
+        state.isReelingIn = false;
+        state.isChargeReleasing = true;
+        state.releaseShotPending = true;
+        const impulse = def.calculateImpulse(player, state);
+        if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
+          player.applyImpulse(impulse);
+        }
+        this.playSoundSafe(player, def.releaseSoundId);
+      }
+    }
+
     PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
     this.clearDistanceUiIfActive(player);
 
-    const def = this.definitionsById.get(state.hookshotId);
     if (def?.onDetach) {
       def.onDetach(player, state);
     }
@@ -618,10 +645,12 @@ export class HookshotSystem {
     }
 
     const effectiveJumpPressed = jumpPressed && !state.isChargeReleasing;
+    const hasChargeRelease =
+      def.releaseSoundId !== undefined || def.minReleaseStretch !== undefined;
 
-    // 両方同時押しなら中立（何もしない）
+    // 両方同時押しなら中立（何もしない。チャージ＆リリース型では発射せずチャージを維持）
     if (effectiveJumpPressed && sneakPressed) {
-      if (state.isReelingIn) {
+      if (!hasChargeRelease && state.isReelingIn) {
         state.isReelingIn = false;
         stateDirty = true;
       }
@@ -637,9 +666,9 @@ export class HookshotSystem {
     const baseMode = def.reelMode ?? "shorten";
     const reverseMode = baseMode === "extend" ? "shorten" : "extend";
 
-    // シフト（スニーク）は地上・空中のどちらでも逆方向（長くする）に動作
+    // シフト（スニーク）は地上・空中のどちらでも逆方向（長くする）に動作（チャージ＆リリース型では発射せず維持）
     if (sneakPressed) {
-      if (state.isReelingIn) {
+      if (!hasChargeRelease && state.isReelingIn) {
         state.isReelingIn = false;
         stateDirty = true;
       }
