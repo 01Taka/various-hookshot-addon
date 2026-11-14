@@ -72,7 +72,32 @@ export function calculateRigidVelocity(
   const vn = getNormalComponent(vPred, normal);
   const predDistance = r + vn;
 
-  // 3. たるみ判定：次Tickの予測距離がロープ長以内であれば、外力不要（完全な自由落下）
+  // 3. 内側スイング継続ゾーン：内側2m以内でアンカーより下〜横側にいる空中時は
+  //    自由落下に落とさず振り子運動を続け、なめらかに実際のロープ長へ戻す
+  const INNER_SWING_MARGIN = 2.0;
+  const INNER_BAUMGARTE_FACTOR = 0.08;
+  const inInnerSwingZone =
+    !player.isOnGround &&
+    !options?.isReelingIn &&
+    r < ropeLength &&
+    r >= ropeLength - INNER_SWING_MARGIN &&
+    normal.y <= 0.15;
+
+  if (inInnerSwingZone) {
+    const vtVec = Vector3Utils.subtract(vPred, Vector3Utils.scale(normal, vn));
+    const targetRadialSpeed = (ropeLength - r) * INNER_BAUMGARTE_FACTOR;
+    let target = Vector3Utils.add(
+      vtVec,
+      Vector3Utils.scale(normal, targetRadialSpeed),
+    );
+    const targetSpeed = Vector3Utils.magnitude(target);
+    if (targetSpeed > MAX_HOOKSHOT_SPEED) {
+      target = Vector3Utils.scale(target, MAX_HOOKSHOT_SPEED / targetSpeed);
+    }
+    return target;
+  }
+
+  // 4. たるみ判定：次Tickの予測距離がロープ長以内であれば、外力不要（完全な自由落下）
   // ※ステアリング推進力が加わっている場合は、接線速度を反映するため null ではなく目標速度を返す
   if (predDistance <= ropeLength) {
     if (isSteeringActive) {
@@ -81,7 +106,7 @@ export function calculateRigidVelocity(
     return null;
   }
 
-  // 4. 拘束適用：ロープ長を超える外向き成分をクランプ
+  // 5. 拘束適用：ロープ長を超える外向き成分をクランプ
   const penetration = Math.max(0, r - ropeLength);
   const BAUMGARTE_FACTOR = 0.15;
 
