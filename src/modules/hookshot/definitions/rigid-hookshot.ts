@@ -31,9 +31,18 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   wireStyle: RIGID_WIRE_STYLE,
   enableGazeSteering: true,
   calculateImpulse: (player, state) => {
+    if (!state.rigidPhysics) {
+      state.rigidPhysics = {
+        lastTargetVelocity: player.getVelocity(),
+        lastLocation: player.location,
+        lastTick: -1,
+        wasTaut: false,
+      };
+    }
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
       enableSteering: canUseGazeSteering(player),
+      physicsState: state.rigidPhysics,
     });
   },
 };

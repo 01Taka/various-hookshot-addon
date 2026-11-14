@@ -3,6 +3,17 @@ import { WireStyle } from "../render/types";
 
 export type AnchorPosition = Vector3 & { dimensionId: string };
 
+export interface RigidPhysicsState {
+  /** 前Tickで計算・目標とした速度ベクトル */
+  lastTargetVelocity: Vector3;
+  /** 前Tickのプレイヤー座標 */
+  lastLocation: Vector3;
+  /** 前TickのシステムTick */
+  lastTick: number;
+  /** 前Tickでロープが張っていたかどうか */
+  wasTaut: boolean;
+}
+
 export interface HookshotState {
   hookshotId: string;
   /** 発射時に選択していたホットバースロット番号 (0-8) */
@@ -59,6 +70,8 @@ export interface HookshotState {
   lastStepMode?: ReelMode;
   /** 連続伸縮時の効果音再生直近Tick */
   lastContinuousReelSoundTick?: number;
+  /** 剛体フックショットのラグ・ジッター耐性用トラッキング状態 */
+  rigidPhysics?: RigidPhysicsState;
 }
 
 export type ReelMode = "shorten" | "extend";
