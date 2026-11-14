@@ -7,8 +7,6 @@ export interface PostFlightOptions {
   minStartSpeed?: number;
   /** 慣性飛行を終了する最小水平速度 (blocks/tick, デフォルト: 0.25) */
   minMaintainSpeed?: number;
-  /** 空中ストレイフ（視線・移動入力による方向微調整）を有効にするか (デフォルト: true) */
-  enableAirStrafe?: boolean;
   /** 空中ストレイフの目標最大速度 (blocks/tick, デフォルト: 0.3) */
   airWishSpeed?: number;
   /** 空中ストレイフの加速度 (blocks/tick², デフォルト: 0.035) */

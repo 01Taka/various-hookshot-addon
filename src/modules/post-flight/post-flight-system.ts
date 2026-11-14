@@ -37,7 +37,6 @@ export const DEFAULT_POST_FLIGHT_OPTIONS: Required<PostFlightOptions> = {
   retentionXZ: 0.992,
   minStartSpeed: 0.2,
   minMaintainSpeed: 0.25,
-  enableAirStrafe: true,
   airWishSpeed: 0.3,
   airAccel: 0.035,
 };
@@ -48,7 +47,6 @@ export const INERTIA_CHESTPLATE_CONFIGS: Record<string, PostFlightOptions> = {
     retentionXZ: 0.95,
     minStartSpeed: 0.2,
     minMaintainSpeed: 0.25,
-    enableAirStrafe: true,
     airWishSpeed: 0.3,
     airAccel: 0.035,
   },
@@ -56,7 +54,6 @@ export const INERTIA_CHESTPLATE_CONFIGS: Record<string, PostFlightOptions> = {
     retentionXZ: 0.992,
     minStartSpeed: 0.2,
     minMaintainSpeed: 0.25,
-    enableAirStrafe: true,
     airWishSpeed: 0.3,
     airAccel: 0.035,
   },
@@ -288,8 +285,6 @@ export class PostFlightSystem {
       opts?.minMaintainSpeed ?? DEFAULT_POST_FLIGHT_OPTIONS.minMaintainSpeed;
     const retentionXZ =
       opts?.retentionXZ ?? DEFAULT_POST_FLIGHT_OPTIONS.retentionXZ;
-    const enableAirStrafe =
-      opts?.enableAirStrafe ?? DEFAULT_POST_FLIGHT_OPTIONS.enableAirStrafe;
 
     // 状態不整合・環境変化・スニーク・時間切れで終了
     if (
@@ -315,30 +310,28 @@ export class PostFlightSystem {
     let nextVz = currentVel.z * retentionXZ;
 
     // 空中ストレイフ（速度の絶対値を増大させずに進行軌道を曲げる）
-    if (enableAirStrafe) {
-      const worldInput = PlayerDirectionResolver.get(player).worldInput;
-      if (worldInput.horizontalLength > 0.1) {
-        const wishDir = worldInput.normalizedXZ;
-        const airWishSpeed =
-          opts?.airWishSpeed ?? DEFAULT_POST_FLIGHT_OPTIONS.airWishSpeed;
-        const airAccel =
-          opts?.airAccel ?? DEFAULT_POST_FLIGHT_OPTIONS.airAccel;
-        const currentProj = nextVx * wishDir.x + nextVz * wishDir.z;
-        const addSpeed = airWishSpeed - currentProj;
+    const worldInput = PlayerDirectionResolver.get(player).worldInput;
+    if (worldInput.horizontalLength > 0.1) {
+      const wishDir = worldInput.normalizedXZ;
+      const airWishSpeed =
+        opts?.airWishSpeed ?? DEFAULT_POST_FLIGHT_OPTIONS.airWishSpeed;
+      const airAccel =
+        opts?.airAccel ?? DEFAULT_POST_FLIGHT_OPTIONS.airAccel;
+      const currentProj = nextVx * wishDir.x + nextVz * wishDir.z;
+      const addSpeed = airWishSpeed - currentProj;
 
-        if (addSpeed > 0) {
-          const accelMag = Math.min(airAccel, addSpeed);
-          const baseSpeed = Math.hypot(nextVx, nextVz);
-          nextVx += wishDir.x * accelMag;
-          nextVz += wishDir.z * accelMag;
+      if (addSpeed > 0) {
+        const accelMag = Math.min(airAccel, addSpeed);
+        const baseSpeed = Math.hypot(nextVx, nextVz);
+        nextVx += wishDir.x * accelMag;
+        nextVz += wishDir.z * accelMag;
 
-          const newSpeed = Math.hypot(nextVx, nextVz);
-          const maxAllowed = Math.max(baseSpeed, airWishSpeed);
-          if (newSpeed > maxAllowed && newSpeed > 0.001) {
-            const scale = maxAllowed / newSpeed;
-            nextVx *= scale;
-            nextVz *= scale;
-          }
+        const newSpeed = Math.hypot(nextVx, nextVz);
+        const maxAllowed = Math.max(baseSpeed, airWishSpeed);
+        if (newSpeed > maxAllowed && newSpeed > 0.001) {
+          const scale = maxAllowed / newSpeed;
+          nextVx *= scale;
+          nextVz *= scale;
         }
       }
     }
