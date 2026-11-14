@@ -20,7 +20,10 @@
         "max_lifetime": 0.05
       },
       "minecraft:particle_appearance_billboard": {
-        "size": [0.2, 0.2],
+        "size": [
+          "variable.wire_size > 0 ? variable.wire_size : 0.2",
+          "variable.wire_size > 0 ? variable.wire_size : 0.2"
+        ],
         "facing_camera_mode": "lookat_xyz",
         "uv": {
           "texture_width": 128,

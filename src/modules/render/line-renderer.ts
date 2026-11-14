@@ -1,5 +1,5 @@
 import { Vector3Utils } from "@minecraft/math";
-import { Dimension, Player, Vector3 } from "@minecraft/server";
+import { Dimension, MolangVariableMap, Player, Vector3 } from "@minecraft/server";
 import { WireRenderContext, WireStyle } from "./types";
 
 const MAX_PARTICLES_PER_WIRE = 500;
@@ -83,27 +83,59 @@ export class LineRenderer {
     // 基本ステップ幅（着弾距離によらず一定の基準間隔）
     let step = style.stepDistance;
 
-    // ゴム紐の伸縮表現: 自然長 (currentLength) に対する現在長 (dist) の比率に応じて間隔を伸縮
-    // 縮んだ時 (<= 1.0) は等倍（線形）で詰め、伸びた時 (> 1.0) は感度指数により大きく間隔を開ける
+    // ゴム紐の伸縮表現:
+    // - elasticReferenceStretch 指定時は絶対差 (stretch = max(0, dist - currentLength) + extraCharge) を基準に 0〜refStretch で間隔を広げる
+    // - たるみ中 (dist < currentLength かつ extraCharge === 0) は比率で詰める
     const isElastic = !!style.elasticSpacing;
+    const extraCharge = context.extraCharge ?? 0;
+    const maxStep = style.maxStepDistance ?? 2.6;
+    const minStep = style.minStepDistance ?? 0.08;
+
     if (isElastic && currentLength !== undefined && currentLength > 0.001) {
-      const stretchRatio = dist / currentLength;
-      let scaledRatio: number;
-      if (stretchRatio <= 1.0) {
-        // 縮んだ時は等倍（感度指数導入前と同等の線形スケーリング）
-        scaledRatio = stretchRatio;
+      const stretch = Math.max(0, dist - currentLength) + extraCharge;
+      if (stretch > 0 && style.elasticReferenceStretch) {
+        const t = Math.min(1, stretch / style.elasticReferenceStretch);
+        const dynamicStep =
+          style.stepDistance + (maxStep - style.stepDistance) * t;
+        step = Math.min(Math.max(dynamicStep, minStep), maxStep);
       } else {
-        // 伸びた時はより大きく間隔が開くよう感度指数を適用 (デフォルト: 3.0)
-        const sensitivity = style.elasticSensitivity ?? 3.0;
-        scaledRatio = Math.pow(stretchRatio, sensitivity);
+        const stretchRatio = dist / currentLength;
+        let scaledRatio: number;
+        if (stretchRatio <= 1.0) {
+          scaledRatio = stretchRatio;
+        } else {
+          const sensitivity = style.elasticSensitivity ?? 3.0;
+          scaledRatio = Math.pow(stretchRatio, sensitivity);
+        }
+        const dynamicStep = style.stepDistance * scaledRatio;
+        step = Math.min(Math.max(dynamicStep, minStep), maxStep);
+      }
+    }
+
+    // 伸縮に応じたパーティクルサイズ (Molang: variable.wire_size)
+    let wireMolangVars: MolangVariableMap | undefined;
+    if (
+      style.elasticSizeScaling &&
+      currentLength !== undefined &&
+      currentLength > 0.001
+    ) {
+      const baseSize = style.baseParticleSize ?? 0.2;
+      const minSize = style.minParticleSize ?? 0.07;
+      const maxSize = style.maxParticleSize ?? 0.28;
+      const stretch = Math.max(0, dist - currentLength) + extraCharge;
+      let wireSize = baseSize;
+
+      if (stretch > 0) {
+        const ref = style.elasticReferenceStretch ?? 75.0;
+        const t = Math.min(1, stretch / ref);
+        wireSize = baseSize - (baseSize - minSize) * t;
+      } else if (dist < currentLength) {
+        const slackRatio = Math.min(1, (currentLength - dist) / currentLength);
+        wireSize = baseSize + (maxSize - baseSize) * slackRatio;
       }
 
-      // 間隔の上下限（間が空きすぎないように上限を適用、詰まりすぎ防止の下限）
-      const maxStep = style.maxStepDistance ?? 2.6;
-      const minStep = style.minStepDistance ?? 0.08;
-
-      const dynamicStep = style.stepDistance * scaledRatio;
-      step = Math.min(Math.max(dynamicStep, minStep), maxStep);
+      wireMolangVars = new MolangVariableMap();
+      wireMolangVars.setFloat("variable.wire_size", wireSize);
     }
 
     const steps = Math.min(
@@ -228,11 +260,16 @@ export class LineRenderer {
         pz += (u.z * cos + v.z * sin) * radius;
       }
 
-      this.spawnParticleSafe(dimension, style.particleId, {
-        x: px,
-        y: py,
-        z: pz,
-      });
+      this.spawnParticleSafe(
+        dimension,
+        style.particleId,
+        {
+          x: px,
+          y: py,
+          z: pz,
+        },
+        wireMolangVars,
+      );
     }
 
     // アンカー先端パーティクル（着弾点）
@@ -250,9 +287,14 @@ export class LineRenderer {
     dimension: Dimension,
     particleId: string,
     location: Vector3,
+    molangVariables?: MolangVariableMap,
   ): void {
     try {
-      dimension.spawnParticle(particleId, location);
+      if (molangVariables) {
+        dimension.spawnParticle(particleId, location, molangVariables);
+      } else {
+        dimension.spawnParticle(particleId, location);
+      }
     } catch (e) {
       if (!this.warnedParticleIds.has(particleId)) {
         this.warnedParticleIds.add(particleId);

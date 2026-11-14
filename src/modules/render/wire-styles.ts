@@ -11,9 +11,13 @@ export const ELASTIC_WIRE_STYLE: WireStyle = {
   anchorParticleId: "various_hookshot_addon:wire_elastic",
   amplitude: 0.5,
   elasticSpacing: true,
-  elasticSensitivity: 3.0,
-  maxStepDistance: 2.6,
+  elasticReferenceStretch: 75.0,
+  maxStepDistance: 3.2,
   minStepDistance: 0.08,
+  elasticSizeScaling: true,
+  baseParticleSize: 0.2,
+  minParticleSize: 0.07,
+  maxParticleSize: 0.28,
 };
 
 /**

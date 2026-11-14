@@ -1249,6 +1249,7 @@ export class HookshotSystem {
             def.wireStyle,
             state.currentLength,
             wireAxis,
+            state.extraCharge,
           );
         } else {
           // 構え中はしなり・たるみ無しの直線として描画
