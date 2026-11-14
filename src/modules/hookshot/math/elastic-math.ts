@@ -1,6 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
-import { PlayerDirectionResolver } from "addon-utils";
+import { MINECRAFT_GRAVITY, PlayerDirectionResolver } from "addon-utils";
 import {
   clampOutwardVelocity,
   convertTargetVelocityToImpulse,
@@ -128,8 +128,14 @@ export function calculateElasticVelocity(
   }
   const activeDamping = isCharging ? chargeDamping : damping;
 
-  // ゴムの復元力（フックの法則）
-  const springAccel = Math.min(activeStiffness * stretch, maxAcceleration);
+  // ゴムの復元力（フックの法則）＋ チャージ中は角度に応じた重力支え分を加算して落下を防ぐ
+  const gravitySupport = isCharging
+    ? Math.max(0, -normal.y * MINECRAFT_GRAVITY)
+    : 0;
+  const springAccel = Math.min(
+    activeStiffness * stretch + gravitySupport,
+    maxAcceleration,
+  );
 
   // 法線方向の速度に比例した減衰（外向き・内向きどちらにも効かせる）
   const vn = getNormalComponent(vPred, normal);
