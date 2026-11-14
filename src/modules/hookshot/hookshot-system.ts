@@ -818,6 +818,14 @@ export class HookshotSystem {
       stateDirty = true;
     }
 
+    // 初回自動伸長中はジャンプ・シフト入力で中断せず、接着または最大長到達まで伸ばし切る
+    if (state.isAutoExtending) {
+      if (stateDirty) {
+        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      }
+      return null;
+    }
+
     const effectiveJumpPressed = jumpPressed && !state.isChargeReleasing;
     const hasChargeRelease =
       def.releaseSoundId !== undefined || def.minReleaseStretch !== undefined;
@@ -964,16 +972,10 @@ export class HookshotSystem {
     forceSave: boolean,
   ): void {
     if (state.isAutoExtending) {
-      if (mode === "extend") {
-        // 自動伸長中は伸びるボタンによる二重加速を行わない
-        if (forceSave) {
-          PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
-        }
-        return;
+      if (forceSave) {
+        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
       }
-      // 縮めるボタンで自動伸長を停止し、以降は通常伸縮へ移行
-      state.isAutoExtending = false;
-      forceSave = true;
+      return;
     }
 
     this.reel(player, state, def, mode, isInitial, forceSave);
