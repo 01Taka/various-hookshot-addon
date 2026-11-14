@@ -92,9 +92,16 @@ export function calculateBambooBendDirection(
   const dotUp = Vector3Utils.dot(globalRef, dir);
   const perpUp = Vector3Utils.subtract(globalRef, Vector3Utils.scale(dir, dotUp));
   const perpUpLen = Vector3Utils.magnitude(perpUp);
-  return perpUpLen > 0.05
-    ? Vector3Utils.scale(perpUp, 1 / perpUpLen)
-    : { x: 0, y: 1, z: 0 };
+  if (perpUpLen <= 0.05) {
+    return { x: 0, y: 1, z: 0 };
+  }
+
+  let result = Vector3Utils.scale(perpUp, 1 / perpUpLen);
+  // 壁・地面では水平より下（y < 0）にしならないよう上向き側へ揃える
+  if ((!surfaceNormal || surfaceNormal.y > -0.5) && result.y < 0) {
+    result = Vector3Utils.scale(result, -1);
+  }
+  return result;
 }
 
 /**

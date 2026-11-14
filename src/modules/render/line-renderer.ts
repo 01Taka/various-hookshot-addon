@@ -187,6 +187,10 @@ export class LineRenderer {
         const perpUpLen = Vector3Utils.magnitude(perpUp);
         bendDir = perpUpLen > 0.05 ? Vector3Utils.scale(perpUp, 1 / perpUpLen) : { x: 0, y: 1, z: 0 };
       }
+      // 壁・地面では水平より下（y < 0）にしならないよう上向き側へ揃える
+      if ((!normal || normal.y > -0.5) && bendDir.y < 0) {
+        bendDir = Vector3Utils.scale(bendDir, -1);
+      }
     }
 
     // 始点手前から終点（アンカー手前）まで補間配置
