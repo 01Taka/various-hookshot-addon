@@ -230,6 +230,12 @@ export const bambooHookshotDefinition: HookshotDefinition = {
     minHitDistance: 1.5,
     hitSoundId: "block.bamboo.place",
   },
+  retract: {
+    mode: "step",
+    stepLength: 2.0,
+    intervalTicks: 1,
+    soundId: "block.bamboo.place",
+  },
   wireStyle: BAMBOO_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     const chain = PlayerStateManager.get<BambooAirChainState | null>(

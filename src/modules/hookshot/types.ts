@@ -16,6 +16,14 @@ export interface HookshotState {
   isAutoExtending?: boolean;
   /** 自動ステップ伸長の直近実行Tick */
   lastAutoExtendTick?: number;
+  /** 格納（縮める）アニメーション・クールダウン中かどうか */
+  isRetracting?: boolean;
+  /** 格納時に維持する方向ベクトル（単位ベクトル） */
+  retractDirection?: Vector3;
+  /** 格納中の現在の長さ (blocks) */
+  retractLength?: number;
+  /** 格納のステップ実行／効果音再生の直近Tick */
+  lastRetractTick?: number;
   /** 着弾面の法線ベクトル（外向き） */
   normal?: Vector3;
   /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
@@ -103,6 +111,8 @@ export type AirProbingExtendConfig =
       soundId?: string;
     };
 
+export type RetractConfig = AirProbingExtendConfig;
+
 export interface AirProbingConfig {
   /** 発射直後の初期長 (blocks) */
   initialLength: number;
@@ -152,6 +162,8 @@ export interface HookshotDefinition {
   enableGazeSteering?: boolean;
   /** 未着弾構え・自動伸長の設定 */
   airProbing?: AirProbingConfig;
+  /** 解除時の格納（縮める）アニメーション・クールダウン設定 */
+  retract?: RetractConfig;
   /** 発射時にブロックへ当たらなかった場合、指定Tick数の間だけ視線方向へのレイキャスト探索を継続する */
   raycastGraceTicks?: number;
   /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた（最高速度到達）時に自動解除するか */

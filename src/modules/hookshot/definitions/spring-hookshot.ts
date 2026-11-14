@@ -64,6 +64,12 @@ export const springHookshotDefinition: HookshotDefinition = {
     minHitDistance: 0.5,
     hitSoundId: "place.slime.big",
   },
+  retract: {
+    mode: "continuous",
+    speed: 4.0,
+    soundId: "step.slime",
+    soundIntervalTicks: 2,
+  },
   wireStyle: SPRING_WIRE_STYLE,
   getWireAxis: (state) => getSpringBendingAxis(state),
   calculateImpulse: (player, state) => {

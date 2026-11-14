@@ -35,6 +35,12 @@ export const rodHookshotDefinition: HookshotDefinition = {
     minHitDistance: 1.5,
     hitSoundId: "place.wood",
   },
+  retract: {
+    mode: "step",
+    stepLength: 2.0,
+    intervalTicks: 1,
+    soundId: "place.wood",
+  },
   wireStyle: ROD_WIRE_STYLE,
   calculateImpulse: (player, state) => {
     return calculateRodHookshot(player, state.anchor, state.currentLength);

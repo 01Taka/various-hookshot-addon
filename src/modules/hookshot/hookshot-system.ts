@@ -98,7 +98,7 @@ export class HookshotSystem {
     this.clearPendingRaycast(player);
 
     const state = this.getActiveState(player);
-    if (!state) return;
+    if (!state || state.isRetracting) return;
 
     const def = this.definitionsById.get(state.hookshotId);
     const hasChargeRelease =
@@ -128,7 +128,6 @@ export class HookshotSystem {
       }
     }
 
-    PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
     this.clearDistanceUiIfActive(player);
 
     if (def?.onDetach) {
@@ -139,6 +138,16 @@ export class HookshotSystem {
       this.playSoundSafe(player, def.detachSoundId);
       this.consumeHookshotDurability(player, def.itemTypeId, state.slotIndex);
     }
+
+    if (
+      def?.retract &&
+      player.dimension.id === state.anchor.dimensionId &&
+      this.startRetract(player, state, def.retract)
+    ) {
+      return;
+    }
+
+    PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
   }
 
   private static getPendingRaycast(player: Player): PendingRaycastState | null {
@@ -500,6 +509,113 @@ export class HookshotSystem {
     }
   }
 
+  /**
+   * 解除時の格納（縮める）アニメーション状態へ移行します。
+   */
+  private static startRetract(
+    player: Player,
+    state: HookshotState,
+    retract: NonNullable<HookshotDefinition["retract"]>,
+  ): boolean {
+    let retractDirection: Vector3;
+    let retractLength: number;
+
+    if (state.isAnchored !== false) {
+      const toAnchor = Vector3Utils.subtract(state.anchor, player.location);
+      const dist = Vector3Utils.magnitude(toAnchor);
+      if (dist <= 0.1) return false;
+      retractDirection = Vector3Utils.scale(toAnchor, 1 / dist);
+      retractLength = dist;
+    } else {
+      retractLength = state.currentLength;
+      if (retractLength <= 0.1) return false;
+      retractDirection = state.probingDirection ?? player.getViewDirection();
+    }
+
+    const retractState: HookshotState = {
+      ...state,
+      isAnchored: false,
+      isAutoExtending: false,
+      isReelingIn: false,
+      isChargeReleasing: false,
+      releaseShotPending: false,
+      isRetracting: true,
+      retractDirection,
+      retractLength,
+      lastRetractTick: system.currentTick,
+    };
+
+    // ステップモードの場合は開始直後のTickでも音・縮小を進めやすくする
+    if (retract.mode === "step") {
+      retractState.lastRetractTick = system.currentTick - retract.intervalTicks;
+    }
+
+    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, retractState);
+    return true;
+  }
+
+  /**
+   * 格納中（縮めるアニメーション・クールダウン）の毎Tick更新と描画を行います。
+   */
+  private static updateRetractingState(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+  ): void {
+    const retract = def.retract;
+    const dir = state.retractDirection;
+    if (!retract || !dir) {
+      PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
+      return;
+    }
+
+    let currentLength = state.retractLength ?? 0;
+    const now = system.currentTick;
+    const lastTick = state.lastRetractTick ?? now;
+
+    if (retract.mode === "continuous") {
+      if (retract.speed > 0) {
+        currentLength = Math.max(0, currentLength - retract.speed);
+        if (retract.soundId && currentLength > 0) {
+          const interval = retract.soundIntervalTicks ?? 2;
+          if (now - lastTick >= interval) {
+            state.lastRetractTick = now;
+            this.playSoundSafe(player, retract.soundId);
+          }
+        }
+      } else {
+        currentLength = 0;
+      }
+    } else {
+      if (now - lastTick >= retract.intervalTicks) {
+        state.lastRetractTick = now;
+        currentLength = Math.max(0, currentLength - retract.stepLength);
+        if (retract.soundId && currentLength > 0) {
+          this.playSoundSafe(player, retract.soundId);
+        }
+      }
+    }
+
+    if (currentLength <= 0.05) {
+      PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
+      return;
+    }
+
+    state.retractLength = currentLength;
+    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+
+    const head = player.getHeadLocation();
+    const tip = Vector3Utils.add(head, Vector3Utils.scale(dir, currentLength));
+    HookRenderManager.renderHookshot(
+      player,
+      tip,
+      state.hookshotId,
+      def.wireStyle,
+      undefined,
+      undefined,
+    );
+  }
+
   private static playSoundSafe(
     player: Player,
     soundId?: string,
@@ -611,6 +727,10 @@ export class HookshotSystem {
     const currentState = this.getActiveState(player);
 
     if (currentState) {
+      // 格納中はすべてのフックショットを使用不可にする
+      if (currentState.isRetracting) {
+        return;
+      }
       // 既に接続中のフックがある場合
       if (currentState.hookshotId === def.id) {
         // 同じフックショットなら解除（トグル動作）
@@ -619,6 +739,9 @@ export class HookshotSystem {
       } else {
         // 異なるフックショットなら、前のフックを解除して新しいフックを発射（排他切り替え）
         this.unhook(player);
+        if (this.getActiveState(player)?.isRetracting) {
+          return;
+        }
         this.shot(player, def);
         return;
       }
@@ -1112,6 +1235,12 @@ export class HookshotSystem {
 
         const def = this.definitionsById.get(state.hookshotId);
         if (!def) continue;
+
+        // 格納中（クールダウン中）は持ち替えに関わらず描画を維持したまま縮め続ける
+        if (state.isRetracting) {
+          this.updateRetractingState(player, state, def);
+          continue;
+        }
 
         // アイテムを持ち替えた場合（スロット変更またはメインハンドから別アイテムへ変化）は解除と同等の扱い
         if (this.hasSwitchedItem(player, def.itemTypeId, state.slotIndex)) {
