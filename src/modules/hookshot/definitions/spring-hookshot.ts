@@ -35,6 +35,13 @@ export interface SpringAutoExtendToMinConfig {
   speed: number;
 }
 
+export interface SpringShortenCompressionBrakeConfig {
+  /** 圧縮量（currentLength - distance）1ブロックあたりの短縮速度減衰係数 */
+  brakePerBlock: number;
+  /** 圧縮時の最低短縮速度倍率（0〜1） */
+  minSpeedMultiplier: number;
+}
+
 export interface SpringHookshotDefinition
   extends BaseHookshotDefinition<
       typeof SPRING_HOOKSHOT_ID,
@@ -46,6 +53,8 @@ export interface SpringHookshotDefinition
   matchOutwardExtend: boolean;
   /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす設定 */
   autoExtendToMin: SpringAutoExtendToMinConfig;
+  /** 圧縮状態（distance < currentLength）で短縮する際の速度ブレーキ設定 */
+  shortenCompressionBrake: SpringShortenCompressionBrakeConfig;
   /** 曲げ復元力の基準モード ("shot_angle" | "surface_normal") */
   bendingMode: SpringBendingMode;
   /** バネの物理パラメータ */
@@ -99,6 +108,10 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   matchOutwardExtend: true,
   autoExtendToMin: {
     speed: 2.0,
+  },
+  shortenCompressionBrake: {
+    brakePerBlock: 0.2,
+    minSpeedMultiplier: 0.25,
   },
   bendingMode: "shot_angle",
   physics: {

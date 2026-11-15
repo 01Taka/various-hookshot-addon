@@ -1154,6 +1154,23 @@ export class HookshotSystem {
             : slack + (1 - slack / reelConfig.slackSpeed) * configuredSpeed;
       }
     } else if (
+      mode === "shorten" &&
+      def.id === "spring" &&
+      state.hookshotId === "spring" &&
+      this.isStateAnchored(state)
+    ) {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      const compression = state.currentLength - distance;
+      if (compression > 0) {
+        const { brakePerBlock, minSpeedMultiplier } =
+          def.shortenCompressionBrake;
+        const multiplier = Math.max(
+          minSpeedMultiplier,
+          1 / (1 + Math.max(0, brakePerBlock) * compression),
+        );
+        baseSpeed *= multiplier;
+      }
+    } else if (
       mode === "extend" &&
       def.id === "spring" &&
       state.hookshotId === "spring" &&
