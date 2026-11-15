@@ -65,9 +65,9 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
-  baumgarteFactor: 0.15,
+  baumgarteFactor: 0.18,
   reelLengthDiffLimit: {
-    outward: 8.0,
+    outward: 10.0,
   },
   stallReelStop: {
     maxSpeed: 0.1,
