@@ -45,14 +45,26 @@ export const ROD_WIRE_STYLE: WireStyle = {
 
 /**
  * ばね（スライムボール）のワイヤースタイル
- * 螺旋（スプリングコイル）状に波打つ緑色のカスタムパーティクル（1tick寿命）
+ * カメラ正面を向く半透明スライム粒子を1スライス6個のリング状に並べてチューブを表現し、
+ * 自然長に対する伸縮比率に応じてリング半径・粒サイズ・スライス間隔を変化させる
  */
 export const SPRING_WIRE_STYLE: WireStyle = {
   particleId: "various_hookshot_addon:wire_spring",
-  stepDistance: 0.3,
+  stepDistance: 0.45,
   shapeMode: "spring",
   anchorParticleId: "various_hookshot_addon:wire_spring",
-  amplitude: 0.22,
+  ratioSpacing: true,
+  minStepDistance: 0.22,
+  maxStepDistance: 1.4,
+  ringSliceParticles: 6,
+  ringRadiusScaling: true,
+  baseRingRadius: 0.24,
+  minRingRadius: 0.06,
+  maxRingRadius: 0.45,
+  ringStagger: true,
+  baseParticleSize: 0.13,
+  minParticleSize: 0.08,
+  maxParticleSize: 0.18,
 };
 
 /**

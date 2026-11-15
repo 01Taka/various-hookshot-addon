@@ -31,6 +31,20 @@ export interface WireStyle {
   maxStepDistance?: number;
   /** パーティクル間隔の最小下限 (blocks, 詰まりすぎ防止) */
   minStepDistance?: number;
+  /** 自然長に対する距離比率 (dist / currentLength) に応じて間隔を変化させるか */
+  ratioSpacing?: boolean;
+  /** 1スライスあたりに円周配置するパーティクル数 (設定時はリング状チューブ描画) */
+  ringSliceParticles?: number;
+  /** 自然長に対する距離比率に応じてリング半径・粒サイズを変化させるか */
+  ringRadiusScaling?: boolean;
+  /** 自然長時のリング半径 (blocks) */
+  baseRingRadius?: number;
+  /** 最大伸長時の最小リング半径 (blocks) */
+  minRingRadius?: number;
+  /** 最大圧縮時の最大リング半径 (blocks) */
+  maxRingRadius?: number;
+  /** 隣接スライス間でリング角度を半ステップずらして網目状に配置するか */
+  ringStagger?: boolean;
 }
 
 export interface WireRenderContext {

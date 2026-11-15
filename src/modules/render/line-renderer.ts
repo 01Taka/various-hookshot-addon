@@ -84,15 +84,24 @@ export class LineRenderer {
     // 基本ステップ幅（着弾距離によらず一定の基準間隔）
     let step = style.stepDistance;
 
-    // ゴム紐の伸縮表現:
-    // - elasticReferenceStretch 指定時は絶対差 (stretch = max(0, dist - currentLength) + extraCharge) を基準に 0〜refStretch で間隔を広げる
-    // - たるみ中 (dist < currentLength かつ extraCharge === 0) は比率で詰める
+    // ゴム紐・バネの伸縮間隔表現:
     const isElastic = !!style.elasticSpacing;
+    const isRatioSpacing = !!style.ratioSpacing;
     const extraCharge = context.extraCharge ?? 0;
     const maxStep = style.maxStepDistance ?? 2.6;
     const minStep = style.minStepDistance ?? 0.08;
 
-    if (isElastic && currentLength !== undefined && currentLength > 0.001) {
+    if (isRatioSpacing && currentLength !== undefined && currentLength > 0.001) {
+      const ratio = dist / currentLength;
+      if (ratio < 1.0) {
+        const compressT = Math.min(1, (1.0 - ratio) / 0.75);
+        step = style.stepDistance - (style.stepDistance - minStep) * compressT;
+      } else {
+        const stretchT = Math.min(1, (ratio - 1.0) / 1.5);
+        step = style.stepDistance + (maxStep - style.stepDistance) * stretchT;
+      }
+      step = Math.min(Math.max(step, minStep), maxStep);
+    } else if (isElastic && currentLength !== undefined && currentLength > 0.001) {
       const stretch = Math.max(0, dist - currentLength) + extraCharge;
       if (stretch > 0 && style.elasticReferenceStretch) {
         const t = Math.min(1, stretch / style.elasticReferenceStretch);
@@ -113,9 +122,46 @@ export class LineRenderer {
       }
     }
 
-    // 伸縮に応じたパーティクルサイズ (Molang: variable.wire_size)
+    // 伸縮に応じたパーティクルサイズ・リング半径 (Molang: variable.wire_size)
     let wireMolangVars: MolangVariableMap | undefined;
-    if (
+    const isRingMode = (style.ringSliceParticles ?? 0) > 1;
+    let ringRadius = style.baseRingRadius ?? 0.24;
+    let ringCount = style.ringSliceParticles ?? 1;
+
+    if (style.ringRadiusScaling) {
+      const baseRadius = style.baseRingRadius ?? 0.24;
+      const minRadius = style.minRingRadius ?? 0.06;
+      const maxRadius = style.maxRingRadius ?? 0.45;
+      const baseSize = style.baseParticleSize ?? 0.13;
+      const minSize = style.minParticleSize ?? 0.08;
+      const maxSize = style.maxParticleSize ?? 0.18;
+      const ratio =
+        currentLength !== undefined && currentLength > 0.001
+          ? dist / currentLength
+          : 1.0;
+
+      let wireSize: number;
+      if (ratio < 1.0) {
+        const compressT = Math.min(1, (1.0 - ratio) / 0.75);
+        ringRadius = baseRadius + (maxRadius - baseRadius) * compressT;
+        wireSize = baseSize + (maxSize - baseSize) * compressT;
+      } else {
+        const stretchT = Math.min(1, (ratio - 1.0) / 1.5);
+        ringRadius = baseRadius - (baseRadius - minRadius) * stretchT;
+        wireSize = baseSize - (baseSize - minSize) * stretchT;
+      }
+
+      if (isRingMode) {
+        if (ringRadius < 0.08) {
+          ringCount = 1;
+        } else if (ringRadius < 0.14) {
+          ringCount = Math.max(3, Math.floor(ringCount / 2));
+        }
+      }
+
+      wireMolangVars = new MolangVariableMap();
+      wireMolangVars.setFloat("variable.wire_size", wireSize);
+    } else if (
       style.elasticSizeScaling &&
       currentLength !== undefined &&
       currentLength > 0.001
@@ -139,12 +185,17 @@ export class LineRenderer {
       wireMolangVars.setFloat("variable.wire_size", wireSize);
     }
 
+    const particlesPerSlice = isRingMode ? Math.max(1, ringCount) : 1;
+    const maxSlices = Math.max(
+      2,
+      Math.floor(MAX_PARTICLES_PER_WIRE / particlesPerSlice),
+    );
     const steps = Math.min(
       Math.max(2, Math.floor(pathLength / Math.max(0.05, step))),
-      MAX_PARTICLES_PER_WIRE,
+      maxSlices,
     );
 
-    // ばね（コイル）用の直交基底ベクトルの準備
+    // ばね・リング用の直交基底ベクトルの準備
     const isSpring = style.shapeMode === "spring";
     const normal = context.normal;
     const isBendingSpring = isSpring && !!normal;
@@ -162,12 +213,12 @@ export class LineRenderer {
     const globalRef: Vector3 =
       Math.abs(diff.y / dist) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
 
+    const straightDir = Vector3Utils.scale(diff, 1 / dist);
     let uFixed: Vector3 = { x: 0, y: 0, z: 0 };
     let vFixed: Vector3 = { x: 0, y: 0, z: 0 };
-    if (isSpring && !isBendingSpring) {
-      const dir = Vector3Utils.scale(diff, 1 / dist);
-      uFixed = Vector3Utils.normalize(Vector3Utils.cross(dir, globalRef));
-      vFixed = Vector3Utils.cross(dir, uFixed);
+    if (!isBendingSpring && (isSpring || particlesPerSlice > 1)) {
+      uFixed = Vector3Utils.normalize(Vector3Utils.cross(straightDir, globalRef));
+      vFixed = Vector3Utils.cross(straightDir, uFixed);
     }
 
     // しなり（弓なり曲げ）用の曲げ方向ベクトルの準備
@@ -226,7 +277,7 @@ export class LineRenderer {
         px += bendDir.x * arc;
         py += bendDir.y * arc;
         pz += bendDir.z * arc;
-      } else if (isSpring) {
+      } else if (isSpring && !isRingMode) {
         const radius = style.amplitude ?? 0.2;
         // 1ブロックあたり約1.2回転
         const theta = dist * t * 1.2 * Math.PI * 2;
@@ -237,21 +288,47 @@ export class LineRenderer {
         pz += (u.z * cos + v.z * sin) * radius;
       }
 
-      this.spawnParticleSafe(
-        dimension,
-        style.particleId,
-        {
-          x: px,
-          y: py,
-          z: pz,
-        },
-        wireMolangVars,
-      );
+      if (particlesPerSlice > 1) {
+        const angleOffset =
+          style.ringStagger && i % 2 === 1 ? Math.PI / particlesPerSlice : 0;
+        const angleStep = (Math.PI * 2) / particlesPerSlice;
+        for (let k = 0; k < particlesPerSlice; k++) {
+          const theta = angleOffset + k * angleStep;
+          const cos = Math.cos(theta);
+          const sin = Math.sin(theta);
+          this.spawnParticleSafe(
+            dimension,
+            style.particleId,
+            {
+              x: px + (u.x * cos + v.x * sin) * ringRadius,
+              y: py + (u.y * cos + v.y * sin) * ringRadius,
+              z: pz + (u.z * cos + v.z * sin) * ringRadius,
+            },
+            wireMolangVars,
+          );
+        }
+      } else {
+        this.spawnParticleSafe(
+          dimension,
+          style.particleId,
+          {
+            x: px,
+            y: py,
+            z: pz,
+          },
+          wireMolangVars,
+        );
+      }
     }
 
     // アンカー先端パーティクル（着弾点）
     if (style.anchorParticleId) {
-      this.spawnParticleSafe(dimension, style.anchorParticleId, end);
+      this.spawnParticleSafe(
+        dimension,
+        style.anchorParticleId,
+        end,
+        wireMolangVars,
+      );
     }
   }
 

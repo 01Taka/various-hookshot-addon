@@ -4,7 +4,7 @@
     "description": {
       "identifier": "various_hookshot_addon:wire_spring",
       "basic_render_parameters": {
-        "material": "particles_alpha",
+        "material": "particles_blend",
         "texture": "textures/particle/particles"
       }
     },
@@ -20,14 +20,20 @@
         "max_lifetime": 0.05
       },
       "minecraft:particle_appearance_billboard": {
-        "size": [0.16, 0.16],
+        "size": [
+          "variable.wire_size > 0 ? variable.wire_size : 0.13",
+          "variable.wire_size > 0 ? variable.wire_size : 0.13"
+        ],
         "facing_camera_mode": "lookat_xyz",
         "uv": {
           "texture_width": 128,
           "texture_height": 128,
-          "uv": [16, 40],
+          "uv": [56, 0],
           "uv_size": [8, 8]
         }
+      },
+      "minecraft:particle_appearance_tinting": {
+        "color": [0.42, 0.92, 0.32, 0.85]
       }
     }
   }
