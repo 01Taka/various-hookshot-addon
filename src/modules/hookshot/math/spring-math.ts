@@ -37,6 +37,8 @@ export interface SpringPhysicsConfig {
   bendingDamping: number;
   /** 基準軸へ戻る向き (tangentVel > 0) の減衰倍率 (デフォルト 4.0) */
   bendingReturnDampingMultiplier?: number;
+  /** 横方向付近（θ ≧ 90°）での曲げ復元加速度の上限 (blocks/tick², 未指定時は制限なし) */
+  horizontalBendingMaxAccel?: number;
   /** 着弾面の裏側へめり込んだ際の反発倍率（effectiveStiffness に対する倍率） */
   surfacePenetrationMultiplier: number;
 }
@@ -81,6 +83,7 @@ export function calculateSpringVelocity(
     bendingPower,
     bendingDamping,
     bendingReturnDampingMultiplier = 4.0,
+    horizontalBendingMaxAccel,
     surfacePenetrationMultiplier,
   }: SpringRopeParams,
 ): Vector3 | null {
@@ -168,9 +171,17 @@ export function calculateSpringVelocity(
       }
 
       const bendingStrain = (r * theta) / bendingDenominator;
+      let effectiveBendingCap = maxAcceleration;
+      if (horizontalBendingMaxAccel !== undefined) {
+        const horizontalFactor = cosTheta >= 0 ? Math.sin(theta) : 1.0;
+        const uprightWeight = Math.pow(1 - horizontalFactor, 2);
+        effectiveBendingCap =
+          horizontalBendingMaxAccel +
+          (maxAcceleration - horizontalBendingMaxAccel) * uprightWeight;
+      }
       const clampedBendingAccel = Math.min(
         bendingStiffness * Math.pow(bendingStrain, bendingPower),
-        maxAcceleration,
+        effectiveBendingCap,
       );
       const tangentVel = Vector3Utils.dot(vPred, restoreTangent);
       const effectiveBendingDamping = Math.min(

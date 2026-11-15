@@ -146,6 +146,7 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
     bendingPower: 2,
     bendingDamping: 0.02,
     bendingReturnDampingMultiplier: 4.0,
+    horizontalBendingMaxAccel: 0.24,
     surfacePenetrationMultiplier: 1.5,
   },
   shotSoundId: "mob.slime.jump",
