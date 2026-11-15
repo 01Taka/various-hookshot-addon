@@ -1,7 +1,7 @@
 export interface PostFlightOptions {
   /** 慣性飛行の最大維持時間 (ticks, 未指定または Infinity で無制限) */
   maxTicks?: number;
-  /** 慣性飛行における水平速度保持率 (デフォルト: 0.992) */
+  /** 慣性飛行における水平速度保持率 (デフォルト: 0.988) */
   retentionXZ?: number;
   /** 慣性飛行を開始する最小水平速度 (blocks/tick, デフォルト: 0.20) */
   minStartSpeed?: number;

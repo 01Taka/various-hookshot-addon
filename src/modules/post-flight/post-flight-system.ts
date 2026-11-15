@@ -34,7 +34,7 @@ export const POST_FLIGHT_DURABILITY_INTERVAL_TICKS = 20;
 
 export const DEFAULT_POST_FLIGHT_OPTIONS: Required<PostFlightOptions> = {
   maxTicks: Infinity,
-  retentionXZ: 0.992,
+  retentionXZ: 0.988,
   minStartSpeed: 0.2,
   minMaintainSpeed: 0.25,
   airWishSpeed: 0.3,
@@ -51,7 +51,7 @@ export const INERTIA_CHESTPLATE_CONFIGS: Record<string, PostFlightOptions> = {
     airAccel: 0.035,
   },
   [PHANTOM_AERO_VEST_ITEM_ID]: {
-    retentionXZ: 0.992,
+    retentionXZ: 0.988,
     minStartSpeed: 0.2,
     minMaintainSpeed: 0.25,
     airWishSpeed: 0.3,
