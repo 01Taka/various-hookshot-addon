@@ -35,6 +35,8 @@ export interface SpringPhysicsConfig {
   bendingPower: number;
   /** 曲げ方向の減衰率 (0〜1)。大きいほど横揺れが早く収まる */
   bendingDamping: number;
+  /** 基準軸へ戻る向き (tangentVel > 0) の減衰倍率 (デフォルト 4.0) */
+  bendingReturnDampingMultiplier?: number;
   /** 着弾面の裏側へめり込んだ際の反発倍率（effectiveStiffness に対する倍率） */
   surfacePenetrationMultiplier: number;
 }
@@ -78,6 +80,7 @@ export function calculateSpringVelocity(
     bendingStiffness,
     bendingPower,
     bendingDamping,
+    bendingReturnDampingMultiplier = 4.0,
     surfacePenetrationMultiplier,
   }: SpringRopeParams,
 ): Vector3 | null {
@@ -127,39 +130,65 @@ export function calculateSpringVelocity(
     Vector3Utils.scale(normal, totalRadialAccel),
   );
 
-  // --- 基準軸へ戻そうとする曲げバネ復元力 ---
-  // 根本が固定されたバネが横に曲げられた時、基準軸（アンカー + s * axis）へ引き戻す力を加えます
+  // --- 基準軸へ戻そうとする接線方向の曲げバネ復元力 ---
+  // 動径に直交する接線方向へ角度 θ に応じた回転復元力を加え、90°超〜180°付近でも戻れるようにする
   if (referenceAxis && bendingStiffness > 0) {
-    const rVec = Vector3Utils.subtract(player.location, anchor);
-    // 基準軸方向への射影長 s = r · referenceAxis
-    const s = Vector3Utils.dot(rVec, referenceAxis);
-    // 基準軸からの横ズレ（撓み）ベクトル r_perp = r - s * referenceAxis
-    const rPerp = Vector3Utils.subtract(
-      rVec,
-      Vector3Utils.scale(referenceAxis, s),
+    const cosTheta = Math.min(
+      Math.max(Vector3Utils.dot(normal, referenceAxis), -1),
+      1,
     );
-    const lateralOffset = Vector3Utils.magnitude(rPerp);
+    const theta = Math.acos(cosTheta);
 
-    if (lateralOffset > EPSILON) {
-      const lateralDir = Vector3Utils.scale(rPerp, 1 / lateralOffset);
-      const bendingStrain = lateralOffset / bendingDenominator;
-      // 横ズレを戻す復元加速度（-lateralDir 方向）
+    if (theta > EPSILON) {
+      const tanVec = Vector3Utils.subtract(
+        referenceAxis,
+        Vector3Utils.scale(normal, cosTheta),
+      );
+      const tanLen = Vector3Utils.magnitude(tanVec);
+
+      let restoreTangent: Vector3;
+      if (tanLen > EPSILON) {
+        restoreTangent = Vector3Utils.scale(tanVec, 1 / tanLen);
+      } else {
+        // 180°真反対の特異点では、横速度方向または直交軸へ逃がす
+        const vPerp = Vector3Utils.subtract(
+          vPred,
+          Vector3Utils.scale(normal, Vector3Utils.dot(vPred, normal)),
+        );
+        const vPerpLen = Vector3Utils.magnitude(vPerp);
+        if (vPerpLen > EPSILON) {
+          restoreTangent = Vector3Utils.scale(vPerp, 1 / vPerpLen);
+        } else {
+          const fallbackRef =
+            Math.abs(normal.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 0, z: 1 };
+          restoreTangent = Vector3Utils.normalize(
+            Vector3Utils.cross(normal, fallbackRef),
+          );
+        }
+      }
+
+      const bendingStrain = (r * theta) / bendingDenominator;
       const clampedBendingAccel = Math.min(
         bendingStiffness * Math.pow(bendingStrain, bendingPower),
         maxAcceleration,
       );
-      // 横ズレ方向の速度成分に対するダンピング（横揺れの収束）
-      const lateralVel = Vector3Utils.dot(vPred, lateralDir);
-      const lateralDampingAccel = lateralVel * bendingDamping;
+      const tangentVel = Vector3Utils.dot(vPred, restoreTangent);
+      const effectiveBendingDamping = Math.min(
+        bendingDamping * (tangentVel > 0 ? bendingReturnDampingMultiplier : 1.0),
+        0.95,
+      );
+      const totalTangentAccel =
+        clampedBendingAccel - tangentVel * effectiveBendingDamping;
 
-      const totalLateralAccel = clampedBendingAccel + lateralDampingAccel;
-      target = Vector3Utils.subtract(
+      target = Vector3Utils.add(
         target,
-        Vector3Utils.scale(lateralDir, totalLateralAccel),
+        Vector3Utils.scale(restoreTangent, totalTangentAccel),
       );
     }
 
     // 着弾面（surfaceNormal）の裏側、または基準軸の後ろ側にめり込んだ場合の反発力
+    const rVec = Vector3Utils.subtract(player.location, anchor);
+    const s = Vector3Utils.dot(rVec, referenceAxis);
     const pushNormal =
       surfaceNormal ?? (s < 0 ? referenceAxis : undefined);
     if (pushNormal) {
