@@ -125,6 +125,7 @@ export class LineRenderer {
 
     // 伸縮に応じたパーティクルサイズ・リング半径 (Molang: variable.wire_size)
     let wireMolangVars: MolangVariableMap | undefined;
+    let capMolangVars: MolangVariableMap | undefined;
     const isRingMode = (style.ringSliceParticles ?? 0) > 1;
     let ringRadius = style.baseRingRadius ?? 0.24;
     let ringCount = style.ringSliceParticles ?? 1;
@@ -148,6 +149,14 @@ export class LineRenderer {
 
       wireMolangVars = new MolangVariableMap();
       wireMolangVars.setFloat("variable.wire_size", wireSize);
+
+      if (isRingMode && ringCount > 1) {
+        capMolangVars = new MolangVariableMap();
+        capMolangVars.setFloat(
+          "variable.wire_size",
+          Math.max(wireSize, ringRadius * 0.85),
+        );
+      }
     } else if (
       style.elasticSizeScaling &&
       currentLength !== undefined &&
@@ -173,12 +182,12 @@ export class LineRenderer {
     }
 
     const particlesPerSlice = isRingMode ? Math.max(1, ringCount) : 1;
-    const hasCenterParticle =
-      isRingMode && particlesPerSlice > 1 && ringRadius > 0.4;
-    const totalPerSlice = particlesPerSlice + (hasCenterParticle ? 1 : 0);
+    const endpointCenterCount = isRingMode && particlesPerSlice > 1 ? 2 : 0;
     const maxSlices = Math.max(
       2,
-      Math.floor(MAX_PARTICLES_PER_WIRE / totalPerSlice),
+      Math.floor(
+        (MAX_PARTICLES_PER_WIRE - endpointCenterCount) / particlesPerSlice,
+      ),
     );
     const steps = Math.min(
       Math.max(2, Math.floor(pathLength / Math.max(0.05, step))),
@@ -279,12 +288,12 @@ export class LineRenderer {
       }
 
       if (particlesPerSlice > 1) {
-        if (hasCenterParticle) {
+        if (i === 1 || i === steps) {
           this.spawnParticleSafe(
             dimension,
             style.particleId,
             { x: px, y: py, z: pz },
-            wireMolangVars,
+            capMolangVars ?? wireMolangVars,
           );
           spawnedCount++;
         }
