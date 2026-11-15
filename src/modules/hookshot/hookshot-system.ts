@@ -968,12 +968,10 @@ export class HookshotSystem {
 
     let jumpPressed = false;
     let sneakPressed = false;
-    let onGround = false;
     try {
       jumpPressed =
         isInputButtonPressed(player, "Jump") || player.isJumping;
       sneakPressed = isSneakButtonPressed(player);
-      onGround = player.isOnGround;
     } catch {
       return null;
     }
@@ -1045,8 +1043,8 @@ export class HookshotSystem {
       return reverseMode;
     }
 
-    // ジャンプは空中時のみ通常方向（短くする）に動作（放物線飛行中は無効）
-    if (effectiveJumpPressed && !onGround) {
+    // ジャンプは地上・空中のどちらでも通常方向（短くする／ロッドは伸ばす）に動作
+    if (effectiveJumpPressed) {
       if (
         baseMode === "shorten" &&
         this.isReelBlockedByLengthDiff(player, state, def, baseMode)
@@ -1081,14 +1079,6 @@ export class HookshotSystem {
         stateDirty,
       );
       return baseMode;
-    }
-
-    // すでに巻き取り中（チャージ中）に着地した場合は、ジャンプキーを離すまでチャージ状態を維持する
-    if (effectiveJumpPressed && onGround && state.isReelingIn) {
-      if (stateDirty) {
-        PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
-      }
-      return null;
     }
 
     if (state.isReelingIn) {

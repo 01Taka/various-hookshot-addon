@@ -58,7 +58,7 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
   maxDistance: 200,
   reel: {
     mode: "continuous",
-    speed: 0.8,
+    speed: 2.0,
     slackSpeed: 4.0,
     initialDelta: 0.0,
     soundId: "step.chain",
