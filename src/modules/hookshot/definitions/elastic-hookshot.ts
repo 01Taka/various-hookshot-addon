@@ -89,7 +89,7 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   maxDistance: 250,
   reel: {
     mode: "continuous",
-    speed: 1.5,
+    speed: 1.8,
     slackSpeed: 4.5,
     initialDelta: 0.0,
     soundId: "step.cloth",
@@ -98,10 +98,10 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   reelMode: "shorten",
   minRopeLength: 1.5,
   maxOverstretchDistance: 105.0,
-  overstretchSoundId: "random.bowhit",
+  overstretchSoundId: "various_hookshot_addon.elastic_break",
   distanceReelSpeed: {
     minDistance: 20.0,
-    maxDistance: 180.0,
+    maxDistance: 120.0,
     maxSpeed: 4.0,
   },
   raycastGraceTicks: 10,
