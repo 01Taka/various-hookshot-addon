@@ -28,6 +28,7 @@ import {
   DEFAULT_CONTINUOUS_SOUND_INTERVAL_TICKS,
   DEFAULT_PROBING_MIN_HIT_DISTANCE,
   DEFAULT_TIMED_SOUND_INTERVAL_TICKS,
+  EPSILON,
   PREVIEW_MIN_RAYCAST_DISTANCE,
   PROJECTION_FALLBACK_DISTANCE,
   RETRACT_END_MIN_DISTANCE,
@@ -173,7 +174,10 @@ export class HookshotSystem {
   /**
    * フックを解除します。
    */
-  public static unhook(player: Player): void {
+  public static unhook(
+    player: Player,
+    options?: { skipReleaseShot?: boolean; overrideSoundId?: string },
+  ): void {
     this.clearPendingRaycast(player);
 
     const state = this.getActiveState(player);
@@ -183,6 +187,7 @@ export class HookshotSystem {
 
     // チャージ中に解除された場合は、有効なチャージがあれば射出してから解除する
     if (
+      !options?.skipReleaseShot &&
       def?.id === "elastic" &&
       state.hookshotId === "elastic" &&
       state.isReelingIn &&
@@ -211,7 +216,9 @@ export class HookshotSystem {
 
     const isAnchored = this.isStateAnchored(state);
     if (def && isAnchored) {
-      if ("detachSoundId" in def) {
+      if (options?.overrideSoundId) {
+        this.playSoundSafe(player, options.overrideSoundId);
+      } else if ("detachSoundId" in def) {
         this.playSoundSafe(player, def.detachSoundId);
       }
       this.consumeHookshotDurability(player, def.itemTypeId, state.slotIndex);
@@ -1085,11 +1092,19 @@ export class HookshotSystem {
     state: HookshotState,
     def: HookshotDefinition,
   ): boolean {
-    if (def.id !== "bamboo" || !this.isStateAnchored(state)) {
+    if (!this.isStateAnchored(state)) {
       return false;
     }
     const distance = Vector3Utils.distance(player.location, state.anchor);
-    return distance - state.currentLength >= def.maxOverstretchDistance;
+    if (def.id === "bamboo") {
+      return distance - state.currentLength >= def.maxOverstretchDistance;
+    }
+    if (def.id === "elastic" && state.hookshotId === "elastic") {
+      const stretch =
+        Math.max(0, distance - state.currentLength) + (state.extraCharge ?? 0);
+      return stretch > def.maxOverstretchDistance;
+    }
+    return false;
   }
 
   private static resetStepReelState(state: HookshotState): boolean {
@@ -1151,12 +1166,25 @@ export class HookshotSystem {
         : reelConfig.initialDelta;
 
     const initialStep = isInitial ? (configuredInitial ?? 0) : 0;
-    const configuredSpeed =
+    let configuredSpeed =
       typeof reelConfig.speed === "object"
         ? mode === "extend"
           ? reelConfig.speed.extend
           : reelConfig.speed.shorten
         : reelConfig.speed;
+
+    if (
+      mode === "shorten" &&
+      def.id === "elastic" &&
+      this.isStateAnchored(state)
+    ) {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      const { minDistance, maxDistance, maxSpeed } = def.distanceReelSpeed;
+      const span = Math.max(EPSILON, maxDistance - minDistance);
+      const t = Math.min(1, Math.max(0, (distance - minDistance) / span));
+      configuredSpeed = configuredSpeed + t * (maxSpeed - configuredSpeed);
+    }
+
     let baseSpeed = configuredSpeed;
     if (
       mode === "shorten" &&
@@ -1348,7 +1376,7 @@ export class HookshotSystem {
       const minLength = def.minRopeLength;
       const maxExtra =
         def.id === "elastic" && this.isStateAnchored(state)
-          ? def.maxExtraCharge
+          ? (def.maxExtraCharge ?? Infinity)
           : 0;
       const shortenRoom = Math.max(0, prevLength - minLength);
       if (delta <= shortenRoom) {
@@ -1357,7 +1385,9 @@ export class HookshotSystem {
         nextLength = minLength;
         if (maxExtra > 0) {
           const remaining = delta - shortenRoom;
-          nextExtra = Math.min(maxExtra, prevExtra + remaining);
+          nextExtra = Number.isFinite(maxExtra)
+            ? Math.min(maxExtra, prevExtra + remaining)
+            : prevExtra + remaining;
         }
       }
     }
@@ -1566,7 +1596,15 @@ export class HookshotSystem {
         if (this.isStateAnchored(state)) {
           // 外向き高速突破時に自動解除
           if (this.shouldDetachOnOverstretch(player, state, def)) {
-            this.unhook(player);
+            this.unhook(
+              player,
+              def.id === "elastic"
+                ? {
+                    skipReleaseShot: true,
+                    overrideSoundId: def.overstretchSoundId,
+                  }
+                : undefined,
+            );
             continue;
           }
 

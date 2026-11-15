@@ -20,7 +20,7 @@ export const ELASTIC_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
 export interface ElasticHookshotState
   extends BaseHookshotState<typeof ELASTIC_HOOKSHOT_ID>,
     ContinuousReelState {
-  /** 最小ロープ長到達後に蓄積された追加チャージ量 (blocks, 0〜maxExtraCharge) */
+  /** 最小ロープ長到達後に蓄積された追加チャージ量 (blocks) */
   extraCharge?: number;
   /** チャージ解放による放物線射出モード中かどうか */
   isChargeReleasing?: boolean;
@@ -40,14 +40,29 @@ export interface ElasticHookshotState
   canRetriggerLastThreshold?: boolean;
 }
 
+export interface ElasticDistanceReelSpeedConfig {
+  /** 加速が開始されるアンカー距離の下限 (blocks) */
+  minDistance: number;
+  /** 最大巻き取り速度に到達するアンカー距離の上限 (blocks) */
+  maxDistance: number;
+  /** 遠距離到達時の最大巻き取り速度 (blocks/tick) */
+  maxSpeed: number;
+}
+
 export interface ElasticHookshotDefinition
   extends BaseHookshotDefinition<
       typeof ELASTIC_HOOKSHOT_ID,
       ElasticHookshotState
     >,
     RaycastGraceCapable {
-  /** 最小ロープ長到達後に追加で蓄積できる仮想チャージ上限 (blocks) */
-  maxExtraCharge: number;
+  /** 最小ロープ長到達後に追加で蓄積できる仮想チャージ上限 (blocks, 未指定時は無制限) */
+  maxExtraCharge?: number;
+  /** 自然長との差（stretch）がこの距離 (blocks) を超えるとゴムが切れて自動解除される */
+  maxOverstretchDistance: number;
+  /** 伸び切り破断時の効果音ID */
+  overstretchSoundId: string;
+  /** アンカーとの距離に応じた巻き取り速度ブースト設定 */
+  distanceReelSpeed: ElasticDistanceReelSpeedConfig;
   /** 伸縮ゴム紐の弾性・チャージ物理パラメータ */
   physics: ElasticPhysicsConfig;
   /** チャージ解放（パチンコ射出）パラメータ */
@@ -82,7 +97,13 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
-  maxExtraCharge: 20.0,
+  maxOverstretchDistance: 100.0,
+  overstretchSoundId: "leashknot.break",
+  distanceReelSpeed: {
+    minDistance: 20.0,
+    maxDistance: 180.0,
+    maxSpeed: 4.0,
+  },
   raycastGraceTicks: 10,
   shotSoundId: "armor.equip_leather",
   hitSoundId: "leashknot.place",
@@ -108,7 +129,7 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   release: {
     soundId: "random.bow",
     minStretch: 5.0,
-    referenceStretch: 75.0,
+    referenceStretch: 90.0,
     minLaunchSpeed: 1.45,
     maxLaunchSpeed: 4.0,
     launchSpeedExponent: 1.6,
@@ -121,9 +142,9 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   chargeMilestoneSound: {
     soundId: "note.guitar",
     step: 15,
-    maxStretch: 75,
+    maxStretch: 90,
     hysteresis: 5,
-    pitches: [0.65, 0.85, 1.1, 1.45, 1.9],
+    pitches: [0.65, 0.85, 1.1, 1.35, 1.65, 1.95],
   },
   wireStyle: ELASTIC_WIRE_STYLE,
   formatDistanceUi: (_player, state, distance) => {
