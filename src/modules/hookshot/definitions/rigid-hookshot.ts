@@ -65,6 +65,7 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
+  baumgarteFactor: 0.15,
   reelLengthDiffLimit: {
     outward: 8.0,
   },
@@ -102,10 +103,11 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
   },
   calculateImpulse: (player, state) => {
     const hasVest = canUseGazeSteering(player);
-    const { physics, steering } = rigidHookshotDefinition;
+    const { physics, steering, baumgarteFactor } = rigidHookshotDefinition;
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
       enableSteering: hasVest,
+      baumgarteFactor: baumgarteFactor ?? 0.15,
       physics,
       steering,
       swingPumpAccel: hasVest

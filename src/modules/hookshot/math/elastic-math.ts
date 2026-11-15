@@ -3,7 +3,6 @@ import { Player, Vector3 } from "@minecraft/server";
 import { MINECRAFT_GRAVITY, PlayerDirectionResolver } from "addon-utils";
 import {
   AIR_DRAG_BASE,
-  BAUMGARTE_FACTOR,
   EPSILON,
   INPUT_DEADZONE,
 } from "../constants";
@@ -94,6 +93,8 @@ export interface ElasticRopeParams
   extraCharge?: number;
   /** ロープの限界長。これを超えると硬い拘束に切り替わる */
   maxLength?: number;
+  /** Baumgarte 位置誤差安定化係数 */
+  baumgarteFactor: number;
   /** 空中ジャンプ入力によって現在チャージ（巻き取り）中かどうか */
   isReelingIn?: boolean;
   /** チャージ解放による放物線射出モード中かどうか */
@@ -140,6 +141,7 @@ export function calculateElasticVelocity(
     naturalLength,
     extraCharge = 0,
     maxLength,
+    baumgarteFactor,
     stiffness,
     hangElasticity,
     minHangDenominator,
@@ -263,7 +265,7 @@ export function calculateElasticVelocity(
       target = clampOutwardVelocity(
         target,
         normal,
-        -penetration * BAUMGARTE_FACTOR,
+        -penetration * baumgarteFactor,
       );
     }
   }

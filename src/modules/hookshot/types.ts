@@ -187,6 +187,8 @@ export interface BaseHookshotDefinition<
   reelMode: ReelMode;
   /** 最小ロープ長 (blocks) */
   minRopeLength: number;
+  /** 剛体・限界長拘束における Baumgarte 位置誤差安定化係数 */
+  baumgarteFactor?: number;
   /** 着弾中の実距離とロープ長の差による伸縮制限 (blocks) */
   reelLengthDiffLimit?: {
     /** 実距離がロープ長よりこの値以上長いとき、短縮（巻き取り）を停止する */

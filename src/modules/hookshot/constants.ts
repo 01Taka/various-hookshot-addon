@@ -19,9 +19,6 @@ export const PLAYER_CHEST_HEIGHT_OFFSET = 1.0;
 /** アンカーとプレイヤー位置がほぼ重なった場合に法線へフォールバックする閾値距離 (blocks) */
 export const PROJECTION_FALLBACK_DISTANCE = 0.25;
 
-/** 剛体・限界長拘束における Baumgarte 位置誤差安定化係数 */
-export const BAUMGARTE_FACTOR = 0.15;
-
 /** 限界圧縮底打ち拘束における Baumgarte 位置誤差安定化係数 */
 export const BAUMGARTE_BOTTOM_OUT_FACTOR = 0.2;
 

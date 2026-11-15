@@ -120,6 +120,7 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   },
   reelMode: "extend",
   minRopeLength: 5.0,
+  baumgarteFactor: 0.15,
   matchOutwardExtend: true,
   autoExtendToMin: {
     speed: 2.0,
@@ -204,6 +205,7 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
         minConstraintLength,
         state.currentLength * constraintLengthMultiplier,
       ),
+      baumgarteFactor: springHookshotDefinition.baumgarteFactor ?? 0.15,
       surfaceNormal: state.normal,
       bendingAxis,
       ...springParams,

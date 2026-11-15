@@ -181,6 +181,7 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
+  baumgarteFactor: 0.15,
   maxOverstretchDistance: 105.0,
   overstretchSoundId: "various_hookshot_addon.elastic_break",
   distanceReelSpeed: {
@@ -256,6 +257,7 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
         minConstraintLength,
         state.currentLength * constraintLengthMultiplier,
       ),
+      baumgarteFactor: elasticHookshotDefinition.baumgarteFactor ?? 0.15,
       isReelingIn: state.isReelingIn,
       isChargeReleasing: state.isChargeReleasing,
       releaseShotPending: state.releaseShotPending,

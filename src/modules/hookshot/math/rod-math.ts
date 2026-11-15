@@ -1,6 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
-import { BAUMGARTE_FACTOR, EPSILON } from "../constants";
+import { EPSILON } from "../constants";
 import {
   convertTargetVelocityToImpulse,
   getAirDrag,
@@ -17,6 +17,7 @@ export function calculateRodVelocity(
   player: Player,
   anchor: Vector3,
   rodLength: number,
+  baumgarteFactor: number,
 ): Vector3 | null {
   const { dir: normal, distance: r } = getDirectionAndDistance(
     anchor,
@@ -41,7 +42,7 @@ export function calculateRodVelocity(
   // 外側にはみ出ている (r > rodLength) 場合は内側へ引き戻し、
   // 内側に入り込んでいる (r < rodLength) 場合は外側へ押し戻す
   const error = r - rodLength;
-  const targetRadialSpeed = -error * BAUMGARTE_FACTOR;
+  const targetRadialSpeed = -error * baumgarteFactor;
 
   // 4. 接線速度（スイング運動）に、位置誤差補正の法線速度を合成して目標速度とする
   const targetVelocity = Vector3Utils.add(
@@ -56,7 +57,13 @@ export function calculateRodHookshot(
   player: Player,
   anchor: Vector3,
   rodLength: number,
+  baumgarteFactor: number,
 ): Vector3 {
-  const velocity = calculateRodVelocity(player, anchor, rodLength);
+  const velocity = calculateRodVelocity(
+    player,
+    anchor,
+    rodLength,
+    baumgarteFactor,
+  );
   return convertTargetVelocityToImpulse(player, velocity);
 }

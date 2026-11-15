@@ -1,7 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import {
-  BAUMGARTE_FACTOR,
   EPSILON,
   PROJECTION_FALLBACK_DISTANCE,
 } from "../constants";
@@ -52,6 +51,8 @@ export interface SpringRopeParams
   naturalLength: number;
   /** 限界長。これを超えると硬い拘束に切り替わる */
   maxLength?: number;
+  /** Baumgarte 位置誤差安定化係数 */
+  baumgarteFactor: number;
   /** 着弾面の法線ベクトル（面の裏側へのめり込み防止に使用。また bendingAxis 未指定時の基準軸としてもフォールバック利用される） */
   surfaceNormal?: Vector3;
   /**
@@ -72,6 +73,7 @@ export function calculateSpringVelocity(
   {
     naturalLength,
     maxLength,
+    baumgarteFactor,
     stiffness,
     damping,
     maxAcceleration,
@@ -224,7 +226,7 @@ export function calculateSpringVelocity(
       target = clampOutwardVelocity(
         target,
         normal,
-        -penetration * BAUMGARTE_FACTOR,
+        -penetration * baumgarteFactor,
       );
     }
   }

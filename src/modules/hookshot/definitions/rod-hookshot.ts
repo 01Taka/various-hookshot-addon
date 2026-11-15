@@ -42,6 +42,7 @@ export const rodHookshotDefinition: RodHookshotDefinition = {
   },
   reelMode: "extend",
   minRopeLength: 2.0,
+  baumgarteFactor: 0.15,
   reelLengthDiffLimit: {
     outward: 4.0,
     inward: 4.0,
@@ -66,6 +67,11 @@ export const rodHookshotDefinition: RodHookshotDefinition = {
   },
   wireStyle: ROD_WIRE_STYLE,
   calculateImpulse: (player, state) => {
-    return calculateRodHookshot(player, state.anchor, state.currentLength);
+    return calculateRodHookshot(
+      player,
+      state.anchor,
+      state.currentLength,
+      rodHookshotDefinition.baumgarteFactor ?? 0.15,
+    );
   },
 };

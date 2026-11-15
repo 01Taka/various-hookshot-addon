@@ -1,10 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
-import {
-  BAUMGARTE_FACTOR,
-  EPSILON,
-  RADIAL_CORRECTION_GAIN,
-} from "../constants";
+import { EPSILON, RADIAL_CORRECTION_GAIN } from "../constants";
 import {
   convertTargetVelocityToImpulse,
   getAirDrag,
@@ -40,6 +36,8 @@ export interface RigidHookshotOptions {
   isReelingIn?: boolean;
   /** 視線ステアリング推進力を有効にするかどうか */
   enableSteering?: boolean;
+  /** Baumgarte 位置誤差安定化係数 */
+  baumgarteFactor: number;
   /** 剛体ロープ物理パラメータ */
   physics: RigidPhysicsConfig;
   /** 視線ステアリングパラメータ */
@@ -161,7 +159,7 @@ export function calculateRigidVelocity(
   // すでにはみ出ている場合のみマイルドに内側へ引き戻す (-penetration * BAUMGARTE_FACTOR)
   const maxOutwardSpeed =
     penetration > 0
-      ? -penetration * BAUMGARTE_FACTOR
+      ? -penetration * options.baumgarteFactor
       : Math.max(0, ropeLength - r);
 
   // 接線方向（スイングの勢い）を100%維持したまま、法線方向のみをゲイン付きで制限して返す
