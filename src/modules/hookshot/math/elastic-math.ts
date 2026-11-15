@@ -69,6 +69,8 @@ export interface ElasticReleaseConfig {
   maxLaunchSpeed: number;
   /** 伸び量に応じた初速カーブのべき乗指数 */
   launchSpeedExponent: number;
+  /** エアロベスト装備時に射出計算へ適用する実効チャージ倍率 */
+  boostedStretchMultiplier?: number;
   /** 射出方向への上向きバイアス (Y成分加算量、山なり軌道用) */
   upwardBias: number;
   /** 放物線射出中の失速判定を開始するまでの最低飛行猶予Tick数 */
@@ -185,9 +187,13 @@ export function calculateElasticVelocity(
       EPSILON,
       release.referenceStretch - release.minStretch,
     );
+    const effectiveStretch =
+      boostInputChargeControl && release.boostedStretchMultiplier
+        ? stretch * release.boostedStretchMultiplier
+        : stretch;
     const t = Math.min(
       1,
-      Math.max(0, (stretch - release.minStretch) / stretchSpan),
+      Math.max(0, (effectiveStretch - release.minStretch) / stretchSpan),
     );
     const launchSpeed =
       release.minLaunchSpeed +

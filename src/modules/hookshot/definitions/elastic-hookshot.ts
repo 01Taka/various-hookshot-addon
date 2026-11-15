@@ -1,4 +1,5 @@
-import { Player } from "@minecraft/server";
+import { Player, system, world } from "@minecraft/server";
+import { PlayerStateManager } from "addon-utils";
 import { ELASTIC_WIRE_STYLE } from "../../render";
 import {
   calculateElasticHookshot,
@@ -16,6 +17,80 @@ import {
 
 export const ELASTIC_HOOKSHOT_ID = "elastic";
 export const ELASTIC_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
+export const ELASTIC_AIR_CHAIN_KEY = "elasticAirChainState";
+
+/**
+ * 伸縮ロープフックの空中連続発動（発射後〜着地まで）追跡状態
+ */
+export interface ElasticAirChainState {
+  /** 射出後に一度でも空中（非接地）に出たかどうか */
+  hasBeenAirborne: boolean;
+  /** 射出された Tick */
+  launchTick: number;
+}
+
+let isElasticTrackingInitialized = false;
+
+/**
+ * 伸縮ロープフックの空中連続発動状態追跡（着地監視ループ）を初期化します。
+ */
+export function initElasticHookshotTracking(): void {
+  if (isElasticTrackingInitialized) return;
+  isElasticTrackingInitialized = true;
+
+  system.runInterval(() => {
+    for (const player of world.getAllPlayers()) {
+      if (!player.isValid) continue;
+
+      const chain = PlayerStateManager.get<ElasticAirChainState | null>(
+        player.id,
+        ELASTIC_AIR_CHAIN_KEY,
+        null,
+      );
+      if (!chain) continue;
+
+      const isGrounded =
+        player.isOnGround || player.isInWater || player.isClimbing;
+
+      if (!isGrounded) {
+        if (!chain.hasBeenAirborne) {
+          chain.hasBeenAirborne = true;
+          PlayerStateManager.set(player.id, ELASTIC_AIR_CHAIN_KEY, chain);
+        }
+      } else if (chain.hasBeenAirborne || system.currentTick - chain.launchTick >= 10) {
+        PlayerStateManager.delete(player.id, ELASTIC_AIR_CHAIN_KEY);
+      }
+    }
+  }, 1);
+}
+
+// モジュールロード時に自動で初期化
+initElasticHookshotTracking();
+
+/**
+ * 伸縮ロープフックによるパチンコ射出をマークし、着地までチャージ速度バフを有効化します。
+ */
+export function markElasticAirLaunch(player: Player): void {
+  const isGrounded =
+    player.isOnGround || player.isInWater || player.isClimbing;
+  PlayerStateManager.set<ElasticAirChainState>(player.id, ELASTIC_AIR_CHAIN_KEY, {
+    hasBeenAirborne: !isGrounded,
+    launchTick: system.currentTick,
+  });
+}
+
+/**
+ * プレイヤーが現在、射出後〜着地までの空中チャージ速度バフ状態にあるかを返します。
+ */
+export function isElasticAirChainActive(player: Player): boolean {
+  return (
+    PlayerStateManager.get<ElasticAirChainState | null>(
+      player.id,
+      ELASTIC_AIR_CHAIN_KEY,
+      null,
+    ) !== null
+  );
+}
 
 export interface ElasticHookshotState
   extends BaseHookshotState<typeof ELASTIC_HOOKSHOT_ID>,
@@ -49,6 +124,13 @@ export interface ElasticDistanceReelSpeedConfig {
   maxSpeed: number;
 }
 
+export interface ElasticChargeSpeedBoostConfig {
+  /** フックショット射出後〜着地までの空中チェイン時の巻き取り速度倍率 */
+  airChainMultiplier: number;
+  /** バフ適用時の巻き取り速度上限 (blocks/tick) */
+  maxBoostedSpeed: number;
+}
+
 export interface ElasticHookshotDefinition
   extends BaseHookshotDefinition<
       typeof ELASTIC_HOOKSHOT_ID,
@@ -63,6 +145,8 @@ export interface ElasticHookshotDefinition
   overstretchSoundId: string;
   /** アンカーとの距離に応じた巻き取り速度ブースト設定 */
   distanceReelSpeed: ElasticDistanceReelSpeedConfig;
+  /** 空中チェイン・エアロベスト後ろ入力によるチャージ速度バフ設定 */
+  chargeSpeedBoost: ElasticChargeSpeedBoostConfig;
   /** 伸縮ゴム紐の弾性・チャージ物理パラメータ */
   physics: ElasticPhysicsConfig;
   /** チャージ解放（パチンコ射出）パラメータ */
@@ -104,6 +188,10 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
     maxDistance: 120.0,
     maxSpeed: 4.0,
   },
+  chargeSpeedBoost: {
+    airChainMultiplier: 1.4,
+    maxBoostedSpeed: 6.0,
+  },
   raycastGraceTicks: 10,
   shotSoundId: "armor.equip_leather",
   hitSoundId: "leashknot.place",
@@ -133,6 +221,7 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
     minLaunchSpeed: 1.45,
     maxLaunchSpeed: 4.0,
     launchSpeedExponent: 1.6,
+    boostedStretchMultiplier: 1.3,
     upwardBias: 0.22,
     minFlightTicks: 4,
     stallApproachSpeed: 0.4,

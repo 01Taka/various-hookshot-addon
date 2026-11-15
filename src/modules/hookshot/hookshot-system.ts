@@ -20,6 +20,7 @@ import {
 } from "addon-utils";
 import { HookRenderManager, LineRenderer, WireStyle } from "../render";
 import { PostFlightSystem } from "../post-flight";
+import { isElasticAirChainActive, markElasticAirLaunch } from "./definitions";
 import {
   calculateReelSpeedMultiplier,
   canUseGazeSteering,
@@ -204,6 +205,7 @@ export class HookshotSystem {
         if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
           player.applyImpulse(impulse);
         }
+        markElasticAirLaunch(player);
         this.playSoundSafe(player, def.release.soundId);
       }
     }
@@ -1183,6 +1185,14 @@ export class HookshotSystem {
       const span = Math.max(EPSILON, maxDistance - minDistance);
       const t = Math.min(1, Math.max(0, (distance - minDistance) / span));
       configuredSpeed = configuredSpeed + t * (maxSpeed - configuredSpeed);
+
+      const { airChainMultiplier, maxBoostedSpeed } = def.chargeSpeedBoost;
+      if (isElasticAirChainActive(player)) {
+        configuredSpeed = Math.min(
+          maxBoostedSpeed,
+          configuredSpeed * airChainMultiplier,
+        );
+      }
     }
 
     let baseSpeed = configuredSpeed;
@@ -1531,6 +1541,7 @@ export class HookshotSystem {
                 state.lastReleaseDistance = distance;
                 state.releaseStallTicks = 0;
                 releaseStateDirty = true;
+                markElasticAirLaunch(player);
                 this.playSoundSafe(player, def.release.soundId);
               }
             } else if (state.isChargeReleasing) {
