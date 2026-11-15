@@ -31,8 +31,8 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   wireStyle: RIGID_WIRE_STYLE,
   enableGazeSteering: true,
   autoTakeUp: {
-    ticks: 10,
-    speed: 4.0,
+    ticks: 15,
+    speed: 5.0,
   },
   calculateImpulse: (player, state) => {
     const hasVest = canUseGazeSteering(player);

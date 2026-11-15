@@ -1581,7 +1581,7 @@ export class HookshotSystem {
   }
 
   /**
-   * 着弾直後の一定Tick間、ワイヤー長より現在距離が短い状態が続いている間だけ高速自動巻き取りを行います。
+   * 着弾直後の一定Tick間、ワイヤー長より現在距離が短い場合に高速自動巻き取りを行います。
    */
   private static updateAutoTakeUp(
     player: Player,
@@ -1594,22 +1594,21 @@ export class HookshotSystem {
     if (remaining <= 0) return;
 
     const autoTakeUp = def.autoTakeUp;
-    if (
-      !autoTakeUp ||
-      activeReelMode !== null ||
-      distance >= state.currentLength
-    ) {
+    if (!autoTakeUp || activeReelMode !== null) {
       state.autoTakeUpRemainingTicks = 0;
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
       return;
     }
 
     const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
-    state.currentLength = Math.max(
-      minLength,
-      distance,
-      state.currentLength - autoTakeUp.speed,
-    );
+    if (distance < state.currentLength) {
+      state.currentLength = Math.max(
+        minLength,
+        distance,
+        state.currentLength - autoTakeUp.speed,
+      );
+    }
+
     state.autoTakeUpRemainingTicks =
       state.currentLength <= minLength ? 0 : remaining - 1;
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
