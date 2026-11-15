@@ -24,6 +24,13 @@ export interface SpringHookshotState
     ContinuousReelState {
   /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
   initialDirection?: Vector3;
+  /** minRopeLength 未満で着弾した際、minRopeLength まで自動伸長中かどうか */
+  isAutoExtendingToMin?: boolean;
+}
+
+export interface SpringAutoExtendToMinConfig {
+  /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす速度 (blocks/s) */
+  speed: number;
 }
 
 export interface SpringHookshotDefinition
@@ -35,6 +42,8 @@ export interface SpringHookshotDefinition
     RetractCapable {
   /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた時に自動解除するか */
   detachOnMaxExtend: boolean;
+  /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす設定 */
+  autoExtendToMin: SpringAutoExtendToMinConfig;
   /** 曲げ復元力の基準モード ("shot_angle" | "surface_normal") */
   bendingMode: SpringBendingMode;
   /** バネの物理パラメータ */
@@ -71,12 +80,15 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   maxDistance: 48,
   reel: {
     mode: "continuous",
-    speed: 1.0,
-    initialDelta: 3.0,
+    speed: 2.0,
+    initialDelta: 0.0,
   },
   reelMode: "extend",
-  minRopeLength: 0.5,
+  minRopeLength: 5.0,
   detachOnMaxExtend: true,
+  autoExtendToMin: {
+    speed: 4.0,
+  },
   bendingMode: "shot_angle",
   physics: {
     minConstraintLength: 200,

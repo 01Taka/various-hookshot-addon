@@ -418,6 +418,8 @@ export class HookshotSystem {
     }
     if (state.hookshotId === "spring") {
       state.initialDirection = initialDirection;
+      const targetMinLength = Math.min(def.minRopeLength, def.maxDistance);
+      state.isAutoExtendingToMin = distance < targetMinLength;
     }
     if (def.id === "rigid" && state.hookshotId === "rigid") {
       state.autoTakeUpRemainingTicks =
@@ -691,6 +693,7 @@ export class HookshotSystem {
       ...state,
       isAnchored: false,
       isAutoExtending: false,
+      ...(state.hookshotId === "spring" ? { isAutoExtendingToMin: false } : {}),
       isReelingIn: false,
       isRetracting: true,
       retractDirection,
@@ -954,8 +957,11 @@ export class HookshotSystem {
       stateDirty = true;
     }
 
-    // 初回自動伸長中はジャンプ・シフト入力で中断せず、接着または最大長到達まで伸ばし切る
-    if (this.isStateAutoExtending(state)) {
+    // 自動伸長中（未着弾構え中またはバネの最小長までの自動伸長中）はジャンプ・シフト入力で中断しない
+    if (
+      this.isStateAutoExtending(state) ||
+      (state.hookshotId === "spring" && !!state.isAutoExtendingToMin)
+    ) {
       if (stateDirty) {
         PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
       }
@@ -1396,6 +1402,7 @@ export class HookshotSystem {
         if (this.isStateAnchored(state)) {
           const distance = Vector3Utils.distance(player.location, state.anchor);
           this.updateAutoTakeUp(player, state, def, distance, activeReelMode);
+          this.updateAutoExtendToMin(player, state, def);
 
           if (def.id === "elastic" && state.hookshotId === "elastic") {
             let releaseStateDirty = false;
@@ -1762,6 +1769,39 @@ export class HookshotSystem {
 
     state.autoTakeUpRemainingTicks =
       state.currentLength <= minLength ? 0 : remaining - 1;
+    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+  }
+
+  /**
+   * バネフックショットが minRopeLength 未満で着弾した際、minRopeLength まで自動で伸ばします。
+   */
+  private static updateAutoExtendToMin(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+  ): void {
+    if (def.id !== "spring" || state.hookshotId !== "spring") return;
+    if (!state.isAutoExtendingToMin) return;
+
+    const targetMinLength = Math.min(def.minRopeLength, def.maxDistance);
+    if (state.currentLength >= targetMinLength) {
+      state.isAutoExtendingToMin = false;
+      PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      return;
+    }
+
+    const stepPerTick = Math.max(
+      0,
+      def.autoExtendToMin.speed / TICKS_PER_SECOND,
+    );
+    const nextLength = Math.min(
+      state.currentLength + stepPerTick,
+      targetMinLength,
+    );
+    state.currentLength = nextLength;
+    if (nextLength >= targetMinLength) {
+      state.isAutoExtendingToMin = false;
+    }
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
   }
 
