@@ -98,8 +98,8 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   reel: {
     mode: "continuous",
     speed: {
-      shorten: 2.0,
-      extend: 1.0,
+      shorten: 1.0,
+      extend: 0.5,
     },
     initialDelta: 0.0,
   },
