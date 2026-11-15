@@ -1,10 +1,62 @@
+import { Player } from "@minecraft/server";
 import { ELASTIC_WIRE_STYLE } from "../../render";
 import { calculateElasticHookshot } from "../math/elastic-math";
 import { canUseGazeSteering } from "../math/steering-math";
-import { HookshotDefinition } from "../types";
+import {
+  BaseHookshotDefinition,
+  BaseHookshotState,
+  ChargeMilestoneSoundConfig,
+  ContinuousReelState,
+  RaycastGraceCapable,
+} from "../types";
 
 export const ELASTIC_HOOKSHOT_ID = "elastic";
 export const LEAD_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
+
+export interface ElasticHookshotState
+  extends BaseHookshotState<typeof ELASTIC_HOOKSHOT_ID>,
+    ContinuousReelState {
+  /** 最小ロープ長到達後に蓄積された追加チャージ量 (blocks, 0〜maxExtraCharge) */
+  extraCharge?: number;
+  /** チャージ解放による放物線射出モード中かどうか */
+  isChargeReleasing?: boolean;
+  /** リリース直後の初速インパルスを未適用かどうか */
+  releaseShotPending?: boolean;
+  /** リリース開始Tick */
+  releaseStartTick?: number;
+  /** 放物線射出中の前Tickにおけるアンカーとの距離 */
+  lastReleaseDistance?: number;
+  /** 放物線射出中に接近速度が閾値を下回った連続Tick数 */
+  releaseStallTicks?: number;
+  /** 前Tickのチャージ伸び量（マイルストーン効果音判定用） */
+  prevChargeStretch?: number;
+  /** 直近に鳴らしたチャージマイルストーン距離 (m) */
+  lastChargeSoundThreshold?: number;
+  /** 直近のマイルストーンから±hysteresis以上離れて再鳴動可能になったか */
+  canRetriggerLastThreshold?: boolean;
+}
+
+export interface ElasticHookshotDefinition
+  extends BaseHookshotDefinition<
+      typeof ELASTIC_HOOKSHOT_ID,
+      ElasticHookshotState
+    >,
+    RaycastGraceCapable {
+  /** 最小ロープ長到達後に追加で蓄積できる仮想チャージ上限 (blocks) */
+  maxExtraCharge: number;
+  /** 巻き取り終了（チャージ解放）時の効果音ID */
+  releaseSoundId: string;
+  /** 巻き取り終了時に発射を有効とする最小の伸び量 (blocks) */
+  minReleaseStretch: number;
+  /** チャージ中の伸び量マイルストーン効果音設定 */
+  chargeMilestoneSound: ChargeMilestoneSoundConfig;
+  /** 接続中アクションバーの表示文字列をカスタマイズするコールバック */
+  formatDistanceUi: (
+    player: Player,
+    state: ElasticHookshotState,
+    distance: number,
+  ) => string;
+}
 
 /**
  * リード（minecraft:lead）を使用した伸縮性（ゴム紐）フックショットの定義
@@ -12,7 +64,7 @@ export const LEAD_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
  * 離した瞬間に溜まったエネルギーを一気に解放してパチンコのように射出します。
  * エアロベスト装備時は前後入力（W/S）でチャージと巻き取り移動の配分を調整できます。
  */
-export const elasticHookshotDefinition: HookshotDefinition = {
+export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   id: ELASTIC_HOOKSHOT_ID,
   itemTypeId: LEAD_ITEM_ID,
   maxDistance: 250,
@@ -41,7 +93,6 @@ export const elasticHookshotDefinition: HookshotDefinition = {
     pitches: [0.65, 0.85, 1.1, 1.45, 1.9],
   },
   wireStyle: ELASTIC_WIRE_STYLE,
-  enableGazeSteering: false,
   formatDistanceUi: (_player, state, distance) => {
     const stretch =
       Math.max(0, distance - state.currentLength) + (state.extraCharge ?? 0);

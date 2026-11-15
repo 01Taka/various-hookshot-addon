@@ -1,15 +1,34 @@
 import { ROD_WIRE_STYLE } from "../../render";
 import { calculateRodHookshot } from "../math/rod-math";
-import { HookshotDefinition } from "../types";
+import {
+  AirProbingCapable,
+  AirProbingState,
+  BaseHookshotDefinition,
+  BaseHookshotState,
+  RetractCapable,
+  RetractState,
+  StepReelState,
+} from "../types";
 
 export const ROD_HOOKSHOT_ID = "rod";
 export const STICK_ITEM_ID = "various_hookshot_addon:rod_hookshot";
+
+export interface RodHookshotState
+  extends BaseHookshotState<typeof ROD_HOOKSHOT_ID>,
+    AirProbingState,
+    RetractState,
+    StepReelState {}
+
+export interface RodHookshotDefinition
+  extends BaseHookshotDefinition<typeof ROD_HOOKSHOT_ID, RodHookshotState>,
+    AirProbingCapable,
+    RetractCapable {}
 
 /**
  * 棒（minecraft:stick）を使用した内側にも縮まない剛体棒フックショットの定義
  * 空中ジャンプ入力で短く（shorten）、シフト入力で長く（extend）
  */
-export const rodHookshotDefinition: HookshotDefinition = {
+export const rodHookshotDefinition: RodHookshotDefinition = {
   id: ROD_HOOKSHOT_ID,
   itemTypeId: STICK_ITEM_ID,
   maxDistance: 42,

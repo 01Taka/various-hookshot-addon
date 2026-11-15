@@ -1,12 +1,17 @@
 import { Vector3Utils } from "@minecraft/math";
-import { system, world } from "@minecraft/server";
+import { Player, system, world } from "@minecraft/server";
 import { PlayerStateManager } from "addon-utils";
 import { BAMBOO_WIRE_STYLE } from "../../render";
+import { calculateBambooHookshot } from "../math/bamboo-math";
 import {
-  BambooPhysicsParams,
-  calculateBambooHookshot,
-} from "../math/bamboo-math";
-import { HookshotDefinition } from "../types";
+  AirProbingCapable,
+  AirProbingState,
+  BaseHookshotDefinition,
+  BaseHookshotState,
+  RetractCapable,
+  RetractState,
+  StepReelState,
+} from "../types";
 
 export const BAMBOO_HOOKSHOT_ID = "bamboo";
 export const BAMBOO_ITEM_ID = "various_hookshot_addon:bamboo_hookshot";
@@ -219,13 +224,36 @@ function updateBambooTautSound(
   }
 }
 
+export interface BambooHookshotState
+  extends BaseHookshotState<typeof BAMBOO_HOOKSHOT_ID>,
+    AirProbingState,
+    RetractState,
+    StepReelState {}
+
+export interface BambooHookshotDefinition
+  extends BaseHookshotDefinition<
+      typeof BAMBOO_HOOKSHOT_ID,
+      BambooHookshotState
+    >,
+    AirProbingCapable,
+    RetractCapable {
+  /** 自然長を超えて指定距離 (blocks) 以上伸びた場合に自動でアンカーを解除する */
+  detachOnOverstretch: number;
+  /** 自動解除時の効果音ID */
+  detachSoundId: string;
+  /** フック接続時のコールバック */
+  onAttach: (player: Player, state: BambooHookshotState) => void;
+  /** フック解除時のコールバック */
+  onDetach: (player: Player, state: BambooHookshotState) => void;
+}
+
 /**
  * 竹（minecraft:bamboo）を使用した弾性圧縮ポール（しなる棒）フックショットの定義
  * 圧縮時にはフックの法則による弾性反発力（しなり）が働き、
  * 伸ばす際にはその一部がパーティクルのしなり解消方向（接線方向）へ分配されて跳躍を加速します。
  * 空中ジャンプ入力で短く（shorten）、シフト入力で長く（extend）
  */
-export const bambooHookshotDefinition: HookshotDefinition = {
+export const bambooHookshotDefinition: BambooHookshotDefinition = {
   id: BAMBOO_HOOKSHOT_ID,
   itemTypeId: BAMBOO_ITEM_ID,
   maxDistance: 40,

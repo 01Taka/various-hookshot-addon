@@ -1,17 +1,43 @@
 import { RIGID_WIRE_STYLE } from "../../render";
 import { calculateRigidHookshot } from "../math/rigid-math";
 import { canUseGazeSteering } from "../math/steering-math";
-import { HookshotDefinition } from "../types";
+import {
+  BaseHookshotDefinition,
+  BaseHookshotState,
+  ContinuousReelState,
+  GazeSteeringCapable,
+  RaycastGraceCapable,
+} from "../types";
 
 export const RIGID_HOOKSHOT_ID = "rigid";
 export const STRING_ITEM_ID = "various_hookshot_addon:rigid_hookshot";
+
+export interface RigidHookshotState
+  extends BaseHookshotState<typeof RIGID_HOOKSHOT_ID>,
+    ContinuousReelState {
+  /** 着弾直後の自動巻き取り残りTick数 */
+  autoTakeUpRemainingTicks?: number;
+}
+
+export interface RigidHookshotDefinition
+  extends BaseHookshotDefinition<typeof RIGID_HOOKSHOT_ID, RigidHookshotState>,
+    RaycastGraceCapable,
+    GazeSteeringCapable {
+  /** 着弾直後にワイヤーが短い間だけ行う高速自動巻き取り設定 */
+  autoTakeUp: {
+    /** 自動巻き取りを行う最大Tick数 */
+    ticks: number;
+    /** 1Tickあたりの最大短縮速度 (blocks/tick) */
+    speed: number;
+  };
+}
 
 /**
  * 糸（minecraft:string）を使用した伸びがない（剛体ロープ）フックショットの定義
  * 空中ジャンプ入力で短く（shorten）、シフト入力で長く（extend）
  * 空中ジャンプ短縮＋横向き視線でパスファインダー型スリングショット旋回軌道に対応
  */
-export const rigidHookshotDefinition: HookshotDefinition = {
+export const rigidHookshotDefinition: RigidHookshotDefinition = {
   id: RIGID_HOOKSHOT_ID,
   itemTypeId: STRING_ITEM_ID,
   maxDistance: 200,

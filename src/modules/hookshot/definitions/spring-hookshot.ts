@@ -1,9 +1,40 @@
+import { Vector3 } from "@minecraft/server";
 import { SPRING_WIRE_STYLE } from "../../render";
 import { calculateSpringHookshot } from "../math/spring-math";
-import { HookshotDefinition } from "../types";
+import {
+  AirProbingCapable,
+  AirProbingState,
+  BaseHookshotDefinition,
+  BaseHookshotState,
+  ContinuousReelState,
+  RetractCapable,
+  RetractState,
+} from "../types";
 
 export const SPRING_HOOKSHOT_ID = "spring";
 export const SLIME_BALL_ITEM_ID = "various_hookshot_addon:spring_hookshot";
+
+export interface SpringHookshotState
+  extends BaseHookshotState<typeof SPRING_HOOKSHOT_ID>,
+    AirProbingState,
+    RetractState,
+    ContinuousReelState {
+  /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
+  initialDirection?: Vector3;
+}
+
+export interface SpringHookshotDefinition
+  extends BaseHookshotDefinition<
+      typeof SPRING_HOOKSHOT_ID,
+      SpringHookshotState
+    >,
+    AirProbingCapable,
+    RetractCapable {
+  /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた時に自動解除するか */
+  detachOnMaxExtend: boolean;
+  /** ワイヤー描画時の基準軸（法線または曲げ軸）を解決するコールバック */
+  getWireAxis: (state: SpringHookshotState) => Vector3 | undefined;
+}
 
 /**
  * バネの曲げ復元力（角度維持）の基準モード
@@ -28,9 +59,7 @@ export const springHookshotConfig: SpringHookshotConfig = {
 /**
  * 現在の設定に応じた曲げ基準軸（角度維持ベクトル）を取得します
  */
-export function getSpringBendingAxis(
-  state: Parameters<HookshotDefinition["calculateImpulse"]>[1],
-) {
+export function getSpringBendingAxis(state: SpringHookshotState): Vector3 | undefined {
   return springHookshotConfig.bendingMode === "shot_angle"
     ? (state.initialDirection ?? state.normal)
     : state.normal;
@@ -40,7 +69,7 @@ export function getSpringBendingAxis(
  * スライムボール（minecraft:slime_ball）を使用した双方向バネフックショットの定義
  * 空中ジャンプ入力で短く（shorten）、シフト入力で長く（extend）
  */
-export const springHookshotDefinition: HookshotDefinition = {
+export const springHookshotDefinition: SpringHookshotDefinition = {
   id: SPRING_HOOKSHOT_ID,
   itemTypeId: SLIME_BALL_ITEM_ID,
   maxDistance: 48,

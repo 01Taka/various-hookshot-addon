@@ -1,67 +1,29 @@
 import { Player, Vector3 } from "@minecraft/server";
 import { WireStyle } from "../render/types";
+import type {
+  BambooHookshotDefinition,
+  BambooHookshotState,
+} from "./definitions/bamboo-hookshot";
+import type {
+  ElasticHookshotDefinition,
+  ElasticHookshotState,
+} from "./definitions/elastic-hookshot";
+import type {
+  RigidHookshotDefinition,
+  RigidHookshotState,
+} from "./definitions/rigid-hookshot";
+import type {
+  RodHookshotDefinition,
+  RodHookshotState,
+} from "./definitions/rod-hookshot";
+import type {
+  SpringHookshotDefinition,
+  SpringHookshotState,
+} from "./definitions/spring-hookshot";
+
+export type HookshotId = "bamboo" | "elastic" | "rigid" | "rod" | "spring";
 
 export type AnchorPosition = Vector3 & { dimensionId: string };
-
-export interface HookshotState {
-  hookshotId: string;
-  /** 発射時に選択していたホットバースロット番号 (0-8) */
-  slotIndex?: number;
-  anchor: AnchorPosition;
-  /** アンカー確定済みかどうか（省略時は true 扱い、false は未着弾の構え状態） */
-  isAnchored?: boolean;
-  /** 構え中の固定方向ベクトル（単位ベクトル） */
-  probingDirection?: Vector3;
-  /** 構え中の自動伸長が有効かどうか */
-  isAutoExtending?: boolean;
-  /** 自動ステップ伸長の直近実行Tick */
-  lastAutoExtendTick?: number;
-  /** 格納（縮める）アニメーション・クールダウン中かどうか */
-  isRetracting?: boolean;
-  /** 格納時に維持する方向ベクトル（単位ベクトル） */
-  retractDirection?: Vector3;
-  /** 格納中の現在の長さ (blocks) */
-  retractLength?: number;
-  /** 格納のステップ実行／効果音再生の直近Tick */
-  lastRetractTick?: number;
-  /** 着弾面の法線ベクトル（外向き） */
-  normal?: Vector3;
-  /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
-  initialDirection?: Vector3;
-  currentLength: number;
-  /** 最小ロープ長到達後に蓄積された追加チャージ量 (blocks, 0〜maxExtraCharge) */
-  extraCharge?: number;
-  jumpConsumed?: boolean;
-  sneakConsumed?: boolean;
-  /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
-  isReelingIn?: boolean;
-  /** チャージ解放による放物線射出モード中かどうか */
-  isChargeReleasing?: boolean;
-  /** リリース直後の初速インパルスを未適用かどうか */
-  releaseShotPending?: boolean;
-  /** リリース開始Tick */
-  releaseStartTick?: number;
-  /** 放物線射出中の前Tickにおけるアンカーとの距離 */
-  lastReleaseDistance?: number;
-  /** 放物線射出中に接近速度が閾値を下回った連続Tick数 */
-  releaseStallTicks?: number;
-  /** 前Tickのチャージ伸び量（マイルストーン効果音判定用） */
-  prevChargeStretch?: number;
-  /** 直近に鳴らしたチャージマイルストーン距離 (m) */
-  lastChargeSoundThreshold?: number;
-  /** 直近のマイルストーンから±hysteresis以上離れて再鳴動可能になったか */
-  canRetriggerLastThreshold?: boolean;
-  /** ステップ伸縮の直近実行Tick */
-  lastStepReelTick?: number;
-  /** ステップ伸縮の現在の待機間隔（Tick） */
-  currentStepIntervalTicks?: number;
-  /** 直近のステップ伸縮方向（方向転換時のリセット判定用） */
-  lastStepMode?: ReelMode;
-  /** 連続伸縮時の効果音再生直近Tick */
-  lastContinuousReelSoundTick?: number;
-  /** 着弾直後の自動巻き取り残りTick数 */
-  autoTakeUpRemainingTicks?: number;
-}
 
 export type ReelMode = "shorten" | "extend";
 
@@ -139,71 +101,144 @@ export interface ChargeMilestoneSoundConfig {
   pitches: number[];
 }
 
-export interface HookshotDefinition {
-  /** 一意な識別子 (例: "elastic", "rigid", "rod", "spring") */
-  id: string;
-  /** 使用するアイテムの typeId (例: "minecraft:lead", "minecraft:string") */
-  itemTypeId: string;
-  /** Raycast の最大射程距離 (blocks, デフォルト: 1200) */
-  maxDistance?: number;
-  /** ロープ長の変更挙動設定（連続またはステップ） */
-  reel?: ReelConfig;
-  /** 長さ変更の挙動モード ("shorten": 縮む, "extend": 伸びる, デフォルト: "shorten") */
-  reelMode?: ReelMode;
-  /** 最小ロープ長 (blocks, デフォルト: 1.5) */
-  minRopeLength?: number;
-  /** 最小ロープ長到達後に追加で蓄積できる仮想チャージ上限 (blocks, デフォルト: 0) */
-  maxExtraCharge?: number;
-  /** 最大ロープ長 (blocks, デフォルト: maxDistance または 1200) */
-  maxRopeLength?: number;
-  /** ワイヤーの描画スタイル（パーティクル、形状モードなど） */
-  wireStyle?: WireStyle;
-  /** ワイヤー描画時の基準軸（法線または曲げ軸）を解決するコールバック（省略時は state.normal が使用されます） */
-  getWireAxis?: (state: HookshotState) => Vector3 | undefined;
-  /** 視線ステアリング推進力を有効にするかどうか */
-  enableGazeSteering?: boolean;
-  /** 着弾直後にワイヤーが短い間だけ行う高速自動巻き取り設定 */
-  autoTakeUp?: {
-    /** 自動巻き取りを行う最大Tick数 */
-    ticks: number;
-    /** 1Tickあたりの最大短縮速度 (blocks/tick) */
-    speed: number;
-  };
-  /** 未着弾構え・自動伸長の設定 */
-  airProbing?: AirProbingConfig;
-  /** 解除時の格納（縮める）アニメーション・クールダウン設定 */
-  retract?: RetractConfig;
-  /** 発射時にブロックへ当たらなかった場合、指定Tick数の間だけ視線方向へのレイキャスト探索を継続する */
-  raycastGraceTicks?: number;
-  /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた（最高速度到達）時に自動解除するか */
-  detachOnMaxExtend?: boolean;
-  /** 自然長を超えて指定距離 (blocks) 以上伸びた場合に自動でアンカーを解除する */
-  detachOnOverstretch?: number;
-  /** 自動解除時の効果音ID */
-  detachSoundId?: string;
-  /** 巻き取り終了（チャージ解放）時の効果音ID */
-  releaseSoundId?: string;
-  /** 巻き取り終了時に発射を有効とする最小の伸び量 (blocks)。これ以下の場合は現在距離を自然長にリセットして発射を無効化する */
-  minReleaseStretch?: number;
-  /** チャージ中の伸び量マイルストーン効果音設定 */
-  chargeMilestoneSound?: ChargeMilestoneSoundConfig;
-  /** 発射時の効果音ID */
-  shotSoundId?: string;
-  /** 着弾（アンカー確定）時の効果音ID */
-  hitSoundId?: string;
-  /** 猶予探索（raycastGraceTicks）が着弾せず終了した時の効果音ID */
-  missSoundId?: string;
-  /** 接続中アクションバーの表示文字列をカスタマイズするコールバック */
-  formatDistanceUi?: (
-    player: Player,
-    state: HookshotState,
-    distance: number,
-  ) => string;
-  /** 毎Tickの物理インパルス計算 */
-  calculateImpulse: (player: Player, state: HookshotState) => Vector3;
-  /** フック接続時のコールバック (演出など任意) */
-  onAttach?: (player: Player, state: HookshotState) => void;
-  /** フック解除時のコールバック (演出など任意) */
-  onDetach?: (player: Player, state: HookshotState) => void;
+/**
+ * 全フックショットで共通のランタイム状態
+ */
+export interface BaseHookshotState<TId extends HookshotId = HookshotId> {
+  hookshotId: TId;
+  /** 発射時に選択していたホットバースロット番号 (0-8) */
+  slotIndex?: number;
+  anchor: AnchorPosition;
+  /** 着弾面の法線ベクトル（外向き） */
+  normal?: Vector3;
+  currentLength: number;
+  jumpConsumed?: boolean;
+  sneakConsumed?: boolean;
+  /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
+  isReelingIn?: boolean;
 }
 
+/**
+ * 構え（未着弾・自動伸長）機能を持つフックショットの状態
+ */
+export interface AirProbingState {
+  /** アンカー確定済みかどうか（省略時は true 扱い、false は未着弾の構え状態） */
+  isAnchored?: boolean;
+  /** 構え中の固定方向ベクトル（単位ベクトル） */
+  probingDirection?: Vector3;
+  /** 構え中の自動伸長が有効かどうか */
+  isAutoExtending?: boolean;
+  /** 自動ステップ伸長の直近実行Tick */
+  lastAutoExtendTick?: number;
+}
+
+/**
+ * 格納（縮める）アニメーション・クールダウン機能を持つフックショットの状態
+ */
+export interface RetractState {
+  /** 格納（縮める）アニメーション・クールダウン中かどうか */
+  isRetracting?: boolean;
+  /** 格納時に維持する方向ベクトル（単位ベクトル） */
+  retractDirection?: Vector3;
+  /** 格納中の現在の長さ (blocks) */
+  retractLength?: number;
+  /** 格納のステップ実行／効果音再生の直近Tick */
+  lastRetractTick?: number;
+}
+
+/**
+ * ステップ伸縮機能を持つフックショットの状態
+ */
+export interface StepReelState {
+  /** ステップ伸縮の直近実行Tick */
+  lastStepReelTick?: number;
+  /** ステップ伸縮の現在の待機間隔（Tick） */
+  currentStepIntervalTicks?: number;
+  /** 直近のステップ伸縮方向（方向転換時のリセット判定用） */
+  lastStepMode?: ReelMode;
+}
+
+/**
+ * 連続伸縮時の効果音間隔管理を持つフックショットの状態
+ */
+export interface ContinuousReelState {
+  /** 連続伸縮時の効果音再生直近Tick */
+  lastContinuousReelSoundTick?: number;
+}
+
+/**
+ * 全フックショットで共通の定義プロパティ
+ */
+export interface BaseHookshotDefinition<
+  TId extends HookshotId = HookshotId,
+  TState extends BaseHookshotState<TId> = BaseHookshotState<TId>,
+> {
+  /** 一意な識別子 */
+  id: TId;
+  /** 使用するアイテムの typeId */
+  itemTypeId: string;
+  /** Raycast の最大射程距離 (blocks) */
+  maxDistance: number;
+  /** ロープ長の変更挙動設定（連続またはステップ） */
+  reel: ReelConfig;
+  /** 長さ変更の挙動モード ("shorten": 縮む, "extend": 伸びる) */
+  reelMode: ReelMode;
+  /** 最小ロープ長 (blocks) */
+  minRopeLength: number;
+  /** ワイヤーの描画スタイル（パーティクル、形状モードなど） */
+  wireStyle: WireStyle;
+  /** 発射時の効果音ID */
+  shotSoundId: string;
+  /** 毎Tickの物理インパルス計算 */
+  calculateImpulse: (player: Player, state: TState) => Vector3;
+}
+
+/**
+ * 未着弾構え・自動伸長機能の定義
+ */
+export interface AirProbingCapable {
+  /** 未着弾構え・自動伸長の設定 */
+  airProbing: AirProbingConfig;
+}
+
+/**
+ * 解除時の格納アニメーション・クールダウン機能の定義
+ */
+export interface RetractCapable {
+  /** 解除時の格納（縮める）アニメーション・クールダウン設定 */
+  retract: RetractConfig;
+}
+
+/**
+ * 発射時レイキャスト猶予・着弾/不発サウンド機能の定義
+ */
+export interface RaycastGraceCapable {
+  /** 発射時にブロックへ当たらなかった場合、指定Tick数の間だけ視線方向へのレイキャスト探索を継続する */
+  raycastGraceTicks: number;
+  /** 着弾（アンカー確定）時の効果音ID */
+  hitSoundId: string;
+  /** 猶予探索（raycastGraceTicks）が着弾せず終了した時の効果音ID */
+  missSoundId: string;
+}
+
+/**
+ * 視線ステアリング推進力機能の定義
+ */
+export interface GazeSteeringCapable {
+  /** 視線ステアリング推進力を有効にするかどうか */
+  enableGazeSteering: boolean;
+}
+
+export type HookshotState =
+  | BambooHookshotState
+  | ElasticHookshotState
+  | RigidHookshotState
+  | RodHookshotState
+  | SpringHookshotState;
+
+export type HookshotDefinition =
+  | BambooHookshotDefinition
+  | ElasticHookshotDefinition
+  | RigidHookshotDefinition
+  | RodHookshotDefinition
+  | SpringHookshotDefinition;
