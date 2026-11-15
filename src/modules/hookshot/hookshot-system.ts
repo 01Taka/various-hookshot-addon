@@ -1365,6 +1365,9 @@ export class HookshotSystem {
     const changed = prevLength !== nextLength || prevExtra !== nextExtra;
     if (changed) {
       state.currentLength = nextLength;
+      if (mode === "shorten" && state.hookshotId === "spring") {
+        state.lastShortenTick = system.currentTick;
+      }
       if (state.hookshotId === "elastic") {
         state.extraCharge = nextExtra;
       }

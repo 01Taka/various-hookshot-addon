@@ -1,4 +1,4 @@
-import { Player, Vector3 } from "@minecraft/server";
+import { Player, system, Vector3 } from "@minecraft/server";
 import { SPRING_WIRE_STYLE } from "../../render";
 import {
   calculateSpringHookshot,
@@ -28,6 +28,10 @@ export interface SpringHookshotState
   isAutoExtendingToMin?: boolean;
   /** 手動伸長中の前Tickにおけるアンカーからの距離 (blocks) */
   lastExtendDistance?: number;
+  /** 最後に縮め操作を行ったTick (縮め中の曲げ減衰ブースト用) */
+  lastShortenTick?: number;
+  /** 縮め中の曲げ減衰ブーストの現在ブレンド率 (0.0〜1.0) */
+  shortenDampingBlend?: number;
 }
 
 export interface SpringAutoExtendToMinConfig {
@@ -40,6 +44,15 @@ export interface SpringShortenCompressionBrakeConfig {
   brakePerBlock: number;
   /** 圧縮時の最低短縮速度倍率（0〜1） */
   minSpeedMultiplier: number;
+}
+
+export interface SpringShortenBendingDampingConfig {
+  /** 縮めている間に適用する強い曲げ減衰率 (0〜1) */
+  boostedDamping: number;
+  /** ブーストの立ち上がりにかかる時間 (ticks) */
+  rampUpTicks: number;
+  /** ブーストの立ち下がり（元の値へ戻るまで）にかかる時間 (ticks) */
+  rampDownTicks: number;
 }
 
 export interface SpringHookshotDefinition
@@ -55,6 +68,8 @@ export interface SpringHookshotDefinition
   autoExtendToMin: SpringAutoExtendToMinConfig;
   /** 圧縮状態（distance < currentLength）で短縮する際の速度ブレーキ設定 */
   shortenCompressionBrake: SpringShortenCompressionBrakeConfig;
+  /** 縮め操作中および直後の曲げ減衰ブースト設定 */
+  shortenBendingDamping: SpringShortenBendingDampingConfig;
   /** 曲げ復元力の基準モード ("shot_angle" | "surface_normal") */
   bendingMode: SpringBendingMode;
   /** バネの物理パラメータ */
@@ -113,6 +128,11 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
     brakePerBlock: 0.2,
     minSpeedMultiplier: 0.25,
   },
+  shortenBendingDamping: {
+    boostedDamping: 0.25,
+    rampUpTicks: 8,
+    rampDownTicks: 16,
+  },
   bendingMode: "shot_angle",
   physics: {
     minConstraintLength: 200,
@@ -124,7 +144,7 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
     minBendingDenominator: 3.0,
     bendingStiffness: 1.8,
     bendingPower: 2,
-    bendingDamping: 0.05,
+    bendingDamping: 0.02,
     bendingReturnDampingMultiplier: 4.0,
     surfacePenetrationMultiplier: 1.5,
   },
@@ -164,6 +184,19 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
       ...springParams
     } = springHookshotDefinition.physics;
 
+    const { boostedDamping, rampUpTicks, rampDownTicks } =
+      springHookshotDefinition.shortenBendingDamping;
+    const isShortening = state.lastShortenTick === system.currentTick;
+    const prevBlend = state.shortenDampingBlend ?? 0;
+    const nextBlend = isShortening
+      ? Math.min(1, prevBlend + 1 / Math.max(1, rampUpTicks))
+      : Math.max(0, prevBlend - 1 / Math.max(1, rampDownTicks));
+    state.shortenDampingBlend = nextBlend;
+
+    const effectiveBendingDamping =
+      springParams.bendingDamping +
+      (boostedDamping - springParams.bendingDamping) * nextBlend;
+
     return calculateSpringHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
       maxLength: Math.max(
@@ -173,6 +206,7 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
       surfaceNormal: state.normal,
       bendingAxis,
       ...springParams,
+      bendingDamping: effectiveBendingDamping,
     });
   },
 };
