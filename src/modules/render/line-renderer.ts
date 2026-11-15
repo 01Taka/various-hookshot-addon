@@ -95,9 +95,10 @@ export class LineRenderer {
 
     // 全体長と自然長比率の2軸スコア (1.0=最短・最大圧縮 / 0.0=最長・最大伸長)
     const thicknessScore =
-      isRatioSpacing || style.ringRadiusScaling
+      context.fixedThicknessScore ??
+      (isRatioSpacing || style.ringRadiusScaling
         ? this.calculateThicknessScore(style, dist, currentLength)
-        : 0.5;
+        : 0.5);
 
     if (isRatioSpacing) {
       step = maxStep - (maxStep - minStep) * thicknessScore;
@@ -348,7 +349,7 @@ export class LineRenderer {
   /**
    * 全体の距離と自然長比率の2軸から太さ・密度スコア (0.0〜1.0) を算出します。
    */
-  private static calculateThicknessScore(
+  public static calculateThicknessScore(
     style: WireStyle,
     dist: number,
     currentLength?: number,

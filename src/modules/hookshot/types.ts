@@ -144,6 +144,8 @@ export interface RetractState {
   retractLength?: number;
   /** 格納のステップ実行／効果音再生の直近Tick */
   lastRetractTick?: number;
+  /** 格納開始時点の太さ・密度スコア (0.0〜1.0, 格納中に太さが変化しないように保持) */
+  retractThicknessScore?: number;
 }
 
 /**

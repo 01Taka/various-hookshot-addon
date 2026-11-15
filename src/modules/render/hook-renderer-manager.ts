@@ -26,6 +26,7 @@ export class HookRenderManager {
     currentLength?: number,
     normal?: Vector3,
     extraCharge?: number,
+    fixedThicknessScore?: number,
   ): number {
     if (!player.isValid) return 0;
 
@@ -37,6 +38,7 @@ export class HookRenderManager {
       normal,
       currentLength,
       extraCharge,
+      fixedThicknessScore,
       style,
     });
   }
@@ -52,9 +54,18 @@ export class HookRenderManager {
     currentLength?: number,
     normal?: Vector3,
     extraCharge?: number,
+    fixedThicknessScore?: number,
   ): number {
     const style =
       customStyle ?? DEFAULT_STYLES_BY_ID[hookshotId] ?? RIGID_WIRE_STYLE;
-    return this.render(player, anchor, style, currentLength, normal, extraCharge);
+    return this.render(
+      player,
+      anchor,
+      style,
+      currentLength,
+      normal,
+      extraCharge,
+      fixedThicknessScore,
+    );
   }
 }

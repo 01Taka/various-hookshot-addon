@@ -18,7 +18,7 @@ import {
   isSneakButtonPressed,
   PlayerStateManager,
 } from "addon-utils";
-import { HookRenderManager } from "../render";
+import { HookRenderManager, LineRenderer, WireStyle } from "../render";
 import { PostFlightSystem } from "../post-flight";
 import {
   calculateReelSpeedMultiplier,
@@ -221,7 +221,7 @@ export class HookshotSystem {
       def &&
       "retract" in def &&
       player.dimension.id === state.anchor.dimensionId &&
-      this.startRetract(player, state, def.retract)
+      this.startRetract(player, state, def.retract, def.wireStyle)
     ) {
       return;
     }
@@ -668,6 +668,7 @@ export class HookshotSystem {
     player: Player,
     state: HookshotState,
     retract: RetractConfig,
+    wireStyle?: WireStyle,
   ): boolean {
     if (
       state.hookshotId !== "bamboo" &&
@@ -679,6 +680,7 @@ export class HookshotSystem {
 
     let retractDirection: Vector3;
     let retractLength: number;
+    let initialRenderDist: number;
 
     if (state.isAnchored !== false) {
       const toAnchor = Vector3Utils.subtract(state.anchor, player.location);
@@ -686,11 +688,24 @@ export class HookshotSystem {
       if (dist <= RETRACT_START_MIN_DISTANCE) return false;
       retractDirection = Vector3Utils.scale(toAnchor, 1 / dist);
       retractLength = dist;
+      initialRenderDist = Vector3Utils.magnitude(
+        Vector3Utils.subtract(state.anchor, LineRenderer.getHandPosition(player)),
+      );
     } else {
       retractLength = state.currentLength;
       if (retractLength <= RETRACT_START_MIN_DISTANCE) return false;
       retractDirection = state.probingDirection ?? player.getViewDirection();
+      initialRenderDist = retractLength;
     }
+
+    const retractThicknessScore =
+      wireStyle && (wireStyle.ratioSpacing || wireStyle.ringRadiusScaling)
+        ? LineRenderer.calculateThicknessScore(
+            wireStyle,
+            initialRenderDist,
+            state.currentLength,
+          )
+        : undefined;
 
     const retractState: HookshotState = {
       ...state,
@@ -703,6 +718,7 @@ export class HookshotSystem {
       isRetracting: true,
       retractDirection,
       retractLength,
+      retractThicknessScore,
       lastRetractTick:
         retract.mode === "step"
           ? system.currentTick - retract.intervalTicks
@@ -766,6 +782,8 @@ export class HookshotSystem {
       def.wireStyle,
       undefined,
       undefined,
+      undefined,
+      state.retractThicknessScore,
     );
   }
 

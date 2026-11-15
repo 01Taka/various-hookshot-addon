@@ -73,5 +73,7 @@ export interface WireRenderContext {
   currentLength?: number;
   /** 最小ロープ長到達後に蓄積された追加チャージ量 */
   extraCharge?: number;
+  /** 太さ・密度スコアを固定する場合の値 (0.0〜1.0, 回収アニメーション用) */
+  fixedThicknessScore?: number;
   style: WireStyle;
 }
