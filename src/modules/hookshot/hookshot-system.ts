@@ -1284,22 +1284,42 @@ export class HookshotSystem {
       }
     }
     let delta = baseSpeed + initialStep;
+    let isRigidTautShorten = false;
 
-    // 視線ステアリング対応フックショットでエアロベスト装備中に短縮（巻き取り）する場合、
-    // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）
     if (
       mode === "shorten" &&
       def.id === "rigid" &&
-      def.enableGazeSteering &&
-      canUseGazeSteering(player)
+      state.hookshotId === "rigid" &&
+      this.isStateAnchored(state)
     ) {
-      const multiplier = calculateReelSpeedMultiplier(
-        player,
-        state.anchor,
-        state.currentLength,
-        def.steering,
-      );
-      delta *= multiplier;
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      isRigidTautShorten =
+        distance >= state.currentLength - def.physics.tautMargin;
+      if (isRigidTautShorten) {
+        const currentRampTicks = state.tautReelTicks ?? 0;
+        const { initialRatio, durationTicks } = def.reelRampUp;
+        const progress =
+          durationTicks > 0 ? Math.min(1, currentRampTicks / durationTicks) : 1;
+        const rampMultiplier = initialRatio + (1 - initialRatio) * progress;
+        delta *= rampMultiplier;
+        state.tautReelTicks = currentRampTicks + 1;
+      } else {
+        state.tautReelTicks = 0;
+        state.lastTautReelSpeed = 0;
+      }
+      forceSave = true;
+
+      // 視線ステアリング対応フックショットでエアロベスト装備中に短縮（巻き取り）する場合、
+      // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）
+      if (def.enableGazeSteering && canUseGazeSteering(player)) {
+        const multiplier = calculateReelSpeedMultiplier(
+          player,
+          state.anchor,
+          state.currentLength,
+          def.steering,
+        );
+        delta *= multiplier;
+      }
     }
 
     let continuousSoundId: string | undefined;
@@ -1327,6 +1347,7 @@ export class HookshotSystem {
       delta,
       forceSave,
       continuousSoundId,
+      isRigidTautShorten,
     );
   }
 
@@ -1400,6 +1421,7 @@ export class HookshotSystem {
     delta: number,
     forceSave: boolean,
     soundId?: string,
+    isRigidTautShorten = false,
   ): void {
     const prevLength = state.currentLength;
     const prevExtra =
@@ -1462,6 +1484,16 @@ export class HookshotSystem {
           state.isReelingIn = false;
           forceSave = true;
         }
+      }
+    }
+
+    if (state.hookshotId === "rigid") {
+      const nextRigidReelSpeed = isRigidTautShorten
+        ? Math.max(0, prevLength - nextLength)
+        : 0;
+      if (state.lastTautReelSpeed !== nextRigidReelSpeed) {
+        state.lastTautReelSpeed = nextRigidReelSpeed;
+        forceSave = true;
       }
     }
 
@@ -1547,6 +1579,16 @@ export class HookshotSystem {
         // キー入力によるロープ長の変更（ジャンプ＝短縮、シフト＝伸長、押下時の瞬間変化対応）
         const wasReelingIn = !!state.isReelingIn;
         const activeReelMode = this.handleReelInput(player, state, def);
+
+        if (
+          state.hookshotId === "rigid" &&
+          activeReelMode !== "shorten" &&
+          (state.tautReelTicks || state.lastTautReelSpeed)
+        ) {
+          state.tautReelTicks = 0;
+          state.lastTautReelSpeed = 0;
+          PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+        }
 
         if (this.isStateAnchored(state)) {
           if (
