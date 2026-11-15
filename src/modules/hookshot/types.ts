@@ -59,6 +59,8 @@ export interface HookshotState {
   lastStepMode?: ReelMode;
   /** 連続伸縮時の効果音再生直近Tick */
   lastContinuousReelSoundTick?: number;
+  /** 着弾直後の自動巻き取り残りTick数 */
+  autoTakeUpRemainingTicks?: number;
 }
 
 export type ReelMode = "shorten" | "extend";
@@ -160,6 +162,13 @@ export interface HookshotDefinition {
   getWireAxis?: (state: HookshotState) => Vector3 | undefined;
   /** 視線ステアリング推進力を有効にするかどうか */
   enableGazeSteering?: boolean;
+  /** 着弾直後にワイヤーが短い間だけ行う高速自動巻き取り設定 */
+  autoTakeUp?: {
+    /** 自動巻き取りを行う最大Tick数 */
+    ticks: number;
+    /** 1Tickあたりの最大短縮速度 (blocks/tick) */
+    speed: number;
+  };
   /** 未着弾構え・自動伸長の設定 */
   airProbing?: AirProbingConfig;
   /** 解除時の格納（縮める）アニメーション・クールダウン設定 */

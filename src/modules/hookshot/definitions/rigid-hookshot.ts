@@ -30,6 +30,10 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   missSoundId: "dig.chain",
   wireStyle: RIGID_WIRE_STYLE,
   enableGazeSteering: true,
+  autoTakeUp: {
+    ticks: 10,
+    speed: 4.0,
+  },
   calculateImpulse: (player, state) => {
     const hasVest = canUseGazeSteering(player);
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {

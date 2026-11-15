@@ -319,6 +319,8 @@ export class HookshotSystem {
     state.normal = normal;
     state.initialDirection = initialDirection;
     state.currentLength = distance;
+    state.autoTakeUpRemainingTicks =
+      def.autoTakeUp && def.autoTakeUp.ticks > 0 ? def.autoTakeUp.ticks : 0;
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
 
@@ -1245,6 +1247,7 @@ export class HookshotSystem {
 
         if (state.isAnchored !== false) {
           const distance = Vector3Utils.distance(player.location, state.anchor);
+          this.updateAutoTakeUp(player, state, def, distance, activeReelMode);
           let releaseStateDirty = false;
 
           if (state.isReelingIn) {
@@ -1575,6 +1578,41 @@ export class HookshotSystem {
     try {
       player.onScreenDisplay.setActionBar("");
     } catch {}
+  }
+
+  /**
+   * 着弾直後の一定Tick間、ワイヤー長より現在距離が短い状態が続いている間だけ高速自動巻き取りを行います。
+   */
+  private static updateAutoTakeUp(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    distance: number,
+    activeReelMode: ReelMode | null,
+  ): void {
+    const remaining = state.autoTakeUpRemainingTicks ?? 0;
+    if (remaining <= 0) return;
+
+    const autoTakeUp = def.autoTakeUp;
+    if (
+      !autoTakeUp ||
+      activeReelMode !== null ||
+      distance >= state.currentLength
+    ) {
+      state.autoTakeUpRemainingTicks = 0;
+      PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+      return;
+    }
+
+    const minLength = def.minRopeLength ?? DEFAULT_MIN_ROPE_LENGTH;
+    state.currentLength = Math.max(
+      minLength,
+      distance,
+      state.currentLength - autoTakeUp.speed,
+    );
+    state.autoTakeUpRemainingTicks =
+      state.currentLength <= minLength ? 0 : remaining - 1;
+    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
   }
 
   /**
