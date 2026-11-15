@@ -97,8 +97,8 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
-  maxOverstretchDistance: 100.0,
-  overstretchSoundId: "leashknot.break",
+  maxOverstretchDistance: 105.0,
+  overstretchSoundId: "random.bowhit",
   distanceReelSpeed: {
     minDistance: 20.0,
     maxDistance: 180.0,
