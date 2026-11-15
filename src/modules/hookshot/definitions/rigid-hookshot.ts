@@ -10,7 +10,7 @@ import {
 } from "../types";
 
 export const RIGID_HOOKSHOT_ID = "rigid";
-export const STRING_ITEM_ID = "various_hookshot_addon:rigid_hookshot";
+export const RIGID_ITEM_ID = "various_hookshot_addon:rigid_hookshot";
 
 export interface RigidHookshotState
   extends BaseHookshotState<typeof RIGID_HOOKSHOT_ID>,
@@ -43,7 +43,7 @@ export interface RigidHookshotDefinition
  */
 export const rigidHookshotDefinition: RigidHookshotDefinition = {
   id: RIGID_HOOKSHOT_ID,
-  itemTypeId: STRING_ITEM_ID,
+  itemTypeId: RIGID_ITEM_ID,
   maxDistance: 200,
   reel: {
     mode: "continuous",

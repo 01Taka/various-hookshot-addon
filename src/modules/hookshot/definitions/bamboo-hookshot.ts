@@ -148,7 +148,7 @@ export interface BambooHookshotDefinition
     AirProbingCapable,
     RetractCapable {
   /** 自然長を超えて指定距離 (blocks) 以上伸びた場合に自動でアンカーを解除する */
-  detachOnOverstretch: number;
+  maxOverstretchDistance: number;
   /** 自動解除時の効果音ID */
   detachSoundId: string;
   /** 竹ポールの弾性・反発・しなり物理パラメータ */
@@ -183,7 +183,7 @@ export const bambooHookshotDefinition: BambooHookshotDefinition = {
   },
   reelMode: "extend",
   minRopeLength: 2.0,
-  detachOnOverstretch: 2.5,
+  maxOverstretchDistance: 2.5,
   shotSoundId: "block.bamboo.step",
   detachSoundId: "block.bamboo.break",
   airProbing: {

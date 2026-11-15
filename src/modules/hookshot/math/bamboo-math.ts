@@ -1,6 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
-import { BAUMGARTE_BOTTOM_OUT, EPSILON } from "../constants";
+import { BAUMGARTE_BOTTOM_OUT_FACTOR, EPSILON } from "../constants";
 import {
   convertTargetVelocityToImpulse,
   getAirDrag,
@@ -176,7 +176,7 @@ export function calculateBambooVelocity(
     // 最大しなり量（限界圧縮）が指定されている場合の底打ち剛体拘束
     if (maxCompression !== undefined && compression > maxCompression) {
       const bottomOutExcess = compression - maxCompression;
-      const targetSpeed = bottomOutExcess * BAUMGARTE_BOTTOM_OUT;
+      const targetSpeed = bottomOutExcess * BAUMGARTE_BOTTOM_OUT_FACTOR;
       const vn = getNormalComponent(vPred, normal);
 
       // normal はアンカーから外向き。vn < targetSpeed なら押し戻す

@@ -15,7 +15,7 @@ import {
 } from "../types";
 
 export const SPRING_HOOKSHOT_ID = "spring";
-export const SLIME_BALL_ITEM_ID = "various_hookshot_addon:spring_hookshot";
+export const SPRING_ITEM_ID = "various_hookshot_addon:spring_hookshot";
 
 export interface SpringHookshotState
   extends BaseHookshotState<typeof SPRING_HOOKSHOT_ID>,
@@ -67,7 +67,7 @@ export function getSpringBendingAxis(
  */
 export const springHookshotDefinition: SpringHookshotDefinition = {
   id: SPRING_HOOKSHOT_ID,
-  itemTypeId: SLIME_BALL_ITEM_ID,
+  itemTypeId: SPRING_ITEM_ID,
   maxDistance: 48,
   reel: {
     mode: "continuous",
@@ -79,8 +79,8 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   detachOnMaxExtend: true,
   bendingMode: "shot_angle",
   physics: {
-    maxLengthMin: 200,
-    maxLengthMultiplier: 1.5,
+    minConstraintLength: 200,
+    constraintLengthMultiplier: 1.5,
     stiffness: 0.9,
     damping: 0.01,
     maxAcceleration: 10,
@@ -113,14 +113,17 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   getWireAxis: (state) => getSpringBendingAxis(state),
   calculateImpulse: (player, state) => {
     const bendingAxis = getSpringBendingAxis(state);
-    const { maxLengthMin, maxLengthMultiplier, ...springParams } =
-      springHookshotDefinition.physics;
+    const {
+      minConstraintLength,
+      constraintLengthMultiplier,
+      ...springParams
+    } = springHookshotDefinition.physics;
 
     return calculateSpringHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
       maxLength: Math.max(
-        maxLengthMin,
-        state.currentLength * maxLengthMultiplier,
+        minConstraintLength,
+        state.currentLength * constraintLengthMultiplier,
       ),
       surfaceNormal: state.normal,
       bendingAxis,

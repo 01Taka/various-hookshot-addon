@@ -16,9 +16,9 @@ import {
 
 export interface SpringPhysicsConfig {
   /** 限界長の下限値 (blocks) */
-  maxLengthMin: number;
+  minConstraintLength: number;
   /** 現在長に対する限界長倍率 */
-  maxLengthMultiplier: number;
+  constraintLengthMultiplier: number;
   /** 動径方向の弾性係数 (ヤング率×断面積相当)。実効バネ定数は `stiffness / Math.max(naturalLength, minRadialDenominator)` */
   stiffness: number;
   /** 動径方向の速度減衰率 (0〜1)。大きいほど振動が早く収まる */
@@ -40,7 +40,10 @@ export interface SpringPhysicsConfig {
 }
 
 export interface SpringRopeParams
-  extends Omit<SpringPhysicsConfig, "maxLengthMin" | "maxLengthMultiplier"> {
+  extends Omit<
+    SpringPhysicsConfig,
+    "minConstraintLength" | "constraintLengthMultiplier"
+  > {
   /** バネの自然長。これより伸びると引力、縮むと反発力（斥力）が働く */
   naturalLength: number;
   /** 限界長。これを超えると硬い拘束に切り替わる */

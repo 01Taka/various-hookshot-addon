@@ -30,7 +30,7 @@ import {
   DEFAULT_TIMED_SOUND_INTERVAL_TICKS,
   PREVIEW_MIN_RAYCAST_DISTANCE,
   PROJECTION_FALLBACK_DISTANCE,
-  RETRACT_END_THRESHOLD,
+  RETRACT_END_MIN_DISTANCE,
   RETRACT_START_MIN_DISTANCE,
   TICKS_PER_SECOND,
 } from "./constants";
@@ -741,7 +741,7 @@ export class HookshotSystem {
       );
     state.lastRetractTick = nextLastTick;
 
-    if (currentLength <= RETRACT_END_THRESHOLD) {
+    if (currentLength <= RETRACT_END_MIN_DISTANCE) {
       PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
       return;
     }
@@ -1082,7 +1082,7 @@ export class HookshotSystem {
       return false;
     }
     const distance = Vector3Utils.distance(player.location, state.anchor);
-    return distance - state.currentLength >= def.detachOnOverstretch;
+    return distance - state.currentLength >= def.maxOverstretchDistance;
   }
 
   private static resetStepReelState(state: HookshotState): boolean {

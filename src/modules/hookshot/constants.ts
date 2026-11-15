@@ -23,7 +23,7 @@ export const PROJECTION_FALLBACK_DISTANCE = 0.25;
 export const BAUMGARTE_FACTOR = 0.15;
 
 /** 限界圧縮底打ち拘束における Baumgarte 位置誤差安定化係数 */
-export const BAUMGARTE_BOTTOM_OUT = 0.2;
+export const BAUMGARTE_BOTTOM_OUT_FACTOR = 0.2;
 
 /** 剛体ロープの同期遅延による発振を防ぐ動径補正ゲイン */
 export const RADIAL_CORRECTION_GAIN = 0.7;
@@ -43,8 +43,8 @@ export const PREVIEW_MIN_RAYCAST_DISTANCE = 250;
 /** 格納アニメーションを開始する最小距離閾値 (blocks) */
 export const RETRACT_START_MIN_DISTANCE = 0.1;
 
-/** 格納アニメーションを完了とみなす残り距離閾値 (blocks) */
-export const RETRACT_END_THRESHOLD = 0.05;
+/** 格納アニメーションを完了とみなす最小残り距離閾値 (blocks) */
+export const RETRACT_END_MIN_DISTANCE = 0.05;
 
 /** 未着弾構え時の最小ヒット除外距離のフォールバック値 (blocks) */
 export const DEFAULT_PROBING_MIN_HIT_DISTANCE = 1.5;

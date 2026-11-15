@@ -15,7 +15,7 @@ import {
 } from "../types";
 
 export const ELASTIC_HOOKSHOT_ID = "elastic";
-export const LEAD_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
+export const ELASTIC_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
 
 export interface ElasticHookshotState
   extends BaseHookshotState<typeof ELASTIC_HOOKSHOT_ID>,
@@ -70,7 +70,7 @@ export interface ElasticHookshotDefinition
  */
 export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   id: ELASTIC_HOOKSHOT_ID,
-  itemTypeId: LEAD_ITEM_ID,
+  itemTypeId: ELASTIC_ITEM_ID,
   maxDistance: 250,
   reel: {
     mode: "continuous",
@@ -88,8 +88,8 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   hitSoundId: "leashknot.place",
   missSoundId: "leashknot.break",
   physics: {
-    maxLengthMin: 250,
-    maxLengthMultiplier: 1.5,
+    minConstraintLength: 250,
+    constraintLengthMultiplier: 1.5,
     hangElasticity: 0.65,
     minHangDenominator: 18.0,
     maxHangDenominator: 120.0,
@@ -108,7 +108,7 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   release: {
     soundId: "random.bow",
     minStretch: 5.0,
-    refStretch: 75.0,
+    referenceStretch: 75.0,
     minLaunchSpeed: 1.45,
     maxLaunchSpeed: 4.0,
     launchSpeedExponent: 1.6,
@@ -134,14 +134,17 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
     return `${prefix}${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m${stretchSuffix}`;
   },
   calculateImpulse: (player, state) => {
-    const { maxLengthMin, maxLengthMultiplier, ...elasticParams } =
-      elasticHookshotDefinition.physics;
+    const {
+      minConstraintLength,
+      constraintLengthMultiplier,
+      ...elasticParams
+    } = elasticHookshotDefinition.physics;
     return calculateElasticHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
       extraCharge: state.extraCharge,
       maxLength: Math.max(
-        maxLengthMin,
-        state.currentLength * maxLengthMultiplier,
+        minConstraintLength,
+        state.currentLength * constraintLengthMultiplier,
       ),
       isReelingIn: state.isReelingIn,
       isChargeReleasing: state.isChargeReleasing,

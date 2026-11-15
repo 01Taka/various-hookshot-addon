@@ -31,9 +31,9 @@ export interface ElasticInputChargeControlConfig {
 
 export interface ElasticPhysicsConfig {
   /** 限界長の下限値 (blocks) */
-  maxLengthMin: number;
+  minConstraintLength: number;
   /** 現在長に対する限界長倍率 */
-  maxLengthMultiplier: number;
+  constraintLengthMultiplier: number;
   /** バネ定数（通常ぶら下がり時の固定値オーバーライド用） */
   stiffness?: number;
   /** 通常ぶら下がり時の弾性係数 (ヤング率相当: 実効バネ定数 = hangElasticity / clampedLength) */
@@ -62,7 +62,7 @@ export interface ElasticReleaseConfig {
   /** 発射を有効とする最小の伸び量 (blocks) */
   minStretch: number;
   /** 最高速度に到達する基準伸び量 (blocks) */
-  refStretch: number;
+  referenceStretch: number;
   /** 最小有効伸び量時の初速 (blocks/tick) */
   minLaunchSpeed: number;
   /** 解放時の最高初速上限 (blocks/tick) */
@@ -84,7 +84,7 @@ export interface ElasticReleaseConfig {
 export interface ElasticRopeParams
   extends Omit<
     ElasticPhysicsConfig,
-    "maxLengthMin" | "maxLengthMultiplier" | "inputChargeControl"
+    "minConstraintLength" | "constraintLengthMultiplier" | "inputChargeControl"
   > {
   /** ロープの自然長。これ以下ではたるんで力が働かない */
   naturalLength: number;
@@ -181,7 +181,10 @@ export function calculateElasticVelocity(
       z: toAnchor.z,
     };
     const launchDir = Vector3Utils.normalize(biasedDir);
-    const stretchSpan = Math.max(EPSILON, release.refStretch - release.minStretch);
+    const stretchSpan = Math.max(
+      EPSILON,
+      release.referenceStretch - release.minStretch,
+    );
     const t = Math.min(
       1,
       Math.max(0, (stretch - release.minStretch) / stretchSpan),

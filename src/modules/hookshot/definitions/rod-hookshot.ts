@@ -11,7 +11,7 @@ import {
 } from "../types";
 
 export const ROD_HOOKSHOT_ID = "rod";
-export const STICK_ITEM_ID = "various_hookshot_addon:rod_hookshot";
+export const ROD_ITEM_ID = "various_hookshot_addon:rod_hookshot";
 
 export interface RodHookshotState
   extends BaseHookshotState<typeof ROD_HOOKSHOT_ID>,
@@ -30,7 +30,7 @@ export interface RodHookshotDefinition
  */
 export const rodHookshotDefinition: RodHookshotDefinition = {
   id: ROD_HOOKSHOT_ID,
-  itemTypeId: STICK_ITEM_ID,
+  itemTypeId: ROD_ITEM_ID,
   maxDistance: 42,
   reel: {
     mode: "step",
