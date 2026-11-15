@@ -1,6 +1,10 @@
 import { Player } from "@minecraft/server";
 import { ELASTIC_WIRE_STYLE } from "../../render";
-import { calculateElasticHookshot } from "../math/elastic-math";
+import {
+  calculateElasticHookshot,
+  ElasticPhysicsConfig,
+  ElasticReleaseConfig,
+} from "../math/elastic-math";
 import { canUseGazeSteering } from "../math/steering-math";
 import {
   BaseHookshotDefinition,
@@ -44,10 +48,10 @@ export interface ElasticHookshotDefinition
     RaycastGraceCapable {
   /** 最小ロープ長到達後に追加で蓄積できる仮想チャージ上限 (blocks) */
   maxExtraCharge: number;
-  /** 巻き取り終了（チャージ解放）時の効果音ID */
-  releaseSoundId: string;
-  /** 巻き取り終了時に発射を有効とする最小の伸び量 (blocks) */
-  minReleaseStretch: number;
+  /** 伸縮ゴム紐の弾性・チャージ物理パラメータ */
+  physics: ElasticPhysicsConfig;
+  /** チャージ解放（パチンコ射出）パラメータ */
+  release: ElasticReleaseConfig;
   /** チャージ中の伸び量マイルストーン効果音設定 */
   chargeMilestoneSound: ChargeMilestoneSoundConfig;
   /** 接続中アクションバーの表示文字列をカスタマイズするコールバック */
@@ -83,8 +87,37 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
   shotSoundId: "armor.equip_leather",
   hitSoundId: "leashknot.place",
   missSoundId: "leashknot.break",
-  releaseSoundId: "random.bow",
-  minReleaseStretch: 5.0,
+  physics: {
+    maxLengthMin: 250,
+    maxLengthMultiplier: 1.5,
+    hangElasticity: 0.65,
+    minHangDenominator: 18.0,
+    maxHangDenominator: 120.0,
+    chargeStiffness: 0.003,
+    damping: 0.001,
+    chargeDamping: 0.085,
+    maxAcceleration: 1.35,
+    inputChargeControl: {
+      enabled: true,
+      forwardGainNormal: 0.5,
+      forwardGainBoosted: 1.2,
+      backwardMinMultiplierNormal: 0.65,
+      backwardMinMultiplierBoosted: 0.3,
+    },
+  },
+  release: {
+    soundId: "random.bow",
+    minStretch: 5.0,
+    refStretch: 75.0,
+    minLaunchSpeed: 1.45,
+    maxLaunchSpeed: 4.0,
+    launchSpeedExponent: 1.6,
+    upwardBias: 0.22,
+    minFlightTicks: 4,
+    stallApproachSpeed: 0.4,
+    maxStallTicks: 5,
+    maxReleaseTicks: 60,
+  },
   chargeMilestoneSound: {
     soundId: "note.guitar",
     step: 15,
@@ -101,15 +134,21 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
     return `${prefix}${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m${stretchSuffix}`;
   },
   calculateImpulse: (player, state) => {
+    const { maxLengthMin, maxLengthMultiplier, ...elasticParams } =
+      elasticHookshotDefinition.physics;
     return calculateElasticHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
       extraCharge: state.extraCharge,
-      maxLength: Math.max(250, state.currentLength * 1.5),
+      maxLength: Math.max(
+        maxLengthMin,
+        state.currentLength * maxLengthMultiplier,
+      ),
       isReelingIn: state.isReelingIn,
       isChargeReleasing: state.isChargeReleasing,
       releaseShotPending: state.releaseShotPending,
-      enableInputChargeControl: true,
       boostInputChargeControl: canUseGazeSteering(player),
+      release: elasticHookshotDefinition.release,
+      ...elasticParams,
     });
   },
 };

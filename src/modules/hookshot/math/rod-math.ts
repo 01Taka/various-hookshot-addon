@@ -1,5 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
+import { BAUMGARTE_FACTOR, EPSILON } from "../constants";
 import {
   convertTargetVelocityToImpulse,
   getAirDrag,
@@ -21,7 +22,7 @@ export function calculateRodVelocity(
     anchor,
     player.location,
   );
-  if (r < 0.0001) return null;
+  if (r < EPSILON) return null;
 
   const currentVel = player.getVelocity();
   const speed = Vector3Utils.magnitude(currentVel);
@@ -39,7 +40,6 @@ export function calculateRodVelocity(
   // 3. 剛体ロッドの位置誤差補正（双方向Baumgarte安定化）
   // 外側にはみ出ている (r > rodLength) 場合は内側へ引き戻し、
   // 内側に入り込んでいる (r < rodLength) 場合は外側へ押し戻す
-  const BAUMGARTE_FACTOR = 0.15;
   const error = r - rodLength;
   const targetRadialSpeed = -error * BAUMGARTE_FACTOR;
 

@@ -5,6 +5,12 @@ import {
   MINECRAFT_DRAG,
   MINECRAFT_GRAVITY,
 } from "addon-utils";
+import {
+  AIR_DRAG_BASE,
+  AIR_DRAG_COEFFICIENT,
+  AIR_DRAG_SPEED_THRESHOLD,
+  EPSILON,
+} from "../constants";
 
 /**
  * 2点間の方向（正規化ベクトル）と距離を同時に取得します。
@@ -16,7 +22,7 @@ export function getDirectionAndDistance(
   const diff = Vector3Utils.subtract(to, from);
   const distance = Vector3Utils.magnitude(diff);
 
-  if (distance < 0.0001) {
+  if (distance < EPSILON) {
     return { dir: { x: 0, y: 0, z: 0 }, distance: 0 };
   }
 
@@ -78,14 +84,12 @@ export function clampOutwardVelocity(
  * 超過速度に応じた動的空気抵抗（過剰加速防止）
  */
 export function getAirDrag(speed: number): number {
-  const SPEED_THRESHOLD = 2.4; // blocks/tick
-  const DRAG_COEFFICIENT = 0.4;
+  let effectiveDragXZ = AIR_DRAG_BASE;
 
-  let effectiveDragXZ = 0.99;
-
-  if (speed > SPEED_THRESHOLD) {
-    const excessSpeed = speed - SPEED_THRESHOLD;
-    const brakeFactor = 1 / (1 + DRAG_COEFFICIENT * excessSpeed * excessSpeed);
+  if (speed > AIR_DRAG_SPEED_THRESHOLD) {
+    const excessSpeed = speed - AIR_DRAG_SPEED_THRESHOLD;
+    const brakeFactor =
+      1 / (1 + AIR_DRAG_COEFFICIENT * excessSpeed * excessSpeed);
     effectiveDragXZ *= brakeFactor;
   }
 

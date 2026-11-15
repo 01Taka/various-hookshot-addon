@@ -2,6 +2,12 @@ import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import { MINECRAFT_GRAVITY, PlayerDirectionResolver } from "addon-utils";
 import {
+  AIR_DRAG_BASE,
+  BAUMGARTE_FACTOR,
+  EPSILON,
+  INPUT_DEADZONE,
+} from "../constants";
+import {
   clampOutwardVelocity,
   convertTargetVelocityToImpulse,
   getAirDrag,
@@ -10,63 +16,115 @@ import {
   predictTickPhysics,
 } from "./physics-utils";
 
-export interface ElasticRopeParams {
+export interface ElasticInputChargeControlConfig {
+  /** 前後移動入力によるチャージ/巻き取り配分を有効にするかどうか */
+  enabled: boolean;
+  /** 前入力 (W) 時のチャージバネ定数加算ゲイン（通常時） */
+  forwardGainNormal: number;
+  /** 前入力 (W) 時のチャージバネ定数加算ゲイン（エアロベスト強化時） */
+  forwardGainBoosted: number;
+  /** 後入力 (S) 時のチャージバネ定数最小倍率（通常時） */
+  backwardMinMultiplierNormal: number;
+  /** 後入力 (S) 時のチャージバネ定数最小倍率（エアロベスト強化時） */
+  backwardMinMultiplierBoosted: number;
+}
+
+export interface ElasticPhysicsConfig {
+  /** 限界長の下限値 (blocks) */
+  maxLengthMin: number;
+  /** 現在長に対する限界長倍率 */
+  maxLengthMultiplier: number;
+  /** バネ定数（通常ぶら下がり時の固定値オーバーライド用） */
+  stiffness?: number;
+  /** 通常ぶら下がり時の弾性係数 (ヤング率相当: 実効バネ定数 = hangElasticity / clampedLength) */
+  hangElasticity: number;
+  /** 通常ぶら下がり時のヤング率分母の下限 (blocks) */
+  minHangDenominator: number;
+  /** 通常ぶら下がり時のヤング率分母の上限 (blocks) */
+  maxHangDenominator: number;
+  /** チャージ中（isReelingIn=true）の基本バネ定数。小さいほど移動せず張力が溜まりやすい */
+  chargeStiffness: number;
+  /** 解放時（isReelingIn=false）のフォールバック用バネ定数 */
+  releaseStiffness?: number;
+  /** 解放時の法線方向減衰率 (0〜1) */
+  damping: number;
+  /** チャージ中の法線方向減衰率 (0〜1)。巻き取り速度との収束点を決める */
+  chargeDamping: number;
+  /** 1Tickあたりの最大引き込み加速度 (blocks/tick²)。急な伸びでの暴発防止 */
+  maxAcceleration: number;
+  /** 前後入力によるチャージ/巻き取り配分設定 */
+  inputChargeControl: ElasticInputChargeControlConfig;
+}
+
+export interface ElasticReleaseConfig {
+  /** 巻き取り終了（チャージ解放）時の効果音ID */
+  soundId: string;
+  /** 発射を有効とする最小の伸び量 (blocks) */
+  minStretch: number;
+  /** 最高速度に到達する基準伸び量 (blocks) */
+  refStretch: number;
+  /** 最小有効伸び量時の初速 (blocks/tick) */
+  minLaunchSpeed: number;
+  /** 解放時の最高初速上限 (blocks/tick) */
+  maxLaunchSpeed: number;
+  /** 伸び量に応じた初速カーブのべき乗指数 */
+  launchSpeedExponent: number;
+  /** 射出方向への上向きバイアス (Y成分加算量、山なり軌道用) */
+  upwardBias: number;
+  /** 放物線射出中の失速判定を開始するまでの最低飛行猶予Tick数 */
+  minFlightTicks: number;
+  /** 放物線射出中に失速とみなすアンカー接近速度の閾値 (blocks/tick) */
+  stallApproachSpeed: number;
+  /** 連続失速とみなして放物線モードを終了するTick数 */
+  maxStallTicks: number;
+  /** 放物線射出モードの最大持続Tick数 */
+  maxReleaseTicks: number;
+}
+
+export interface ElasticRopeParams
+  extends Omit<
+    ElasticPhysicsConfig,
+    "maxLengthMin" | "maxLengthMultiplier" | "inputChargeControl"
+  > {
   /** ロープの自然長。これ以下ではたるんで力が働かない */
   naturalLength: number;
   /** 最小ロープ長到達後に追加で蓄積された仮想チャージ量 */
   extraCharge?: number;
   /** ロープの限界長。これを超えると硬い拘束に切り替わる */
   maxLength?: number;
-  /** バネ定数（通常ぶら下がり時の固定値オーバーライド用） */
-  stiffness?: number;
-  /** 通常ぶら下がり時の弾性係数 (ヤング率相当: 実効バネ定数 = hangElasticity / clampedLength) */
-  hangElasticity?: number;
-  /** 通常ぶら下がり時のヤング率分母の下限 (blocks) */
-  minHangDenominator?: number;
-  /** 通常ぶら下がり時のヤング率分母の上限 (blocks) */
-  maxHangDenominator?: number;
-  /** チャージ中（isReelingIn=true）の基本バネ定数。小さいほど移動せず張力が溜まりやすい */
-  chargeStiffness?: number;
-  /** 解放時（isReelingIn=false）のフォールバック用バネ定数 */
-  releaseStiffness?: number;
-  /** 解放時の法線方向減衰率 (0〜1) */
-  damping?: number;
-  /** チャージ中の法線方向減衰率 (0〜1)。巻き取り速度との収束点を決める */
-  chargeDamping?: number;
-  /** 1Tickあたりの最大引き込み加速度 (blocks/tick²)。急な伸びでの暴発防止 */
-  maxAcceleration?: number;
-  /** 解放時の最高速度上限 (blocks/tick) */
-  releaseMaxSpeed?: number;
   /** 空中ジャンプ入力によって現在チャージ（巻き取り）中かどうか */
   isReelingIn?: boolean;
   /** チャージ解放による放物線射出モード中かどうか */
   isChargeReleasing?: boolean;
   /** リリース直後の初速インパルスを適用するTickかどうか */
   releaseShotPending?: boolean;
-  /** 射出方向への上向きバイアス (Y成分加算量、山なり軌道用) */
-  upwardBias?: number;
-  /** 前後移動入力によるチャージ/巻き取り配分を有効にするかどうか */
-  enableInputChargeControl?: boolean;
+  /** 前後入力によるチャージ/巻き取り配分設定 */
+  inputChargeControl: ElasticInputChargeControlConfig;
   /** エアロベスト装備等によって前後入力の調整幅を強化するかどうか */
   boostInputChargeControl?: boolean;
+  /** リリース射出パラメータ */
+  release: ElasticReleaseConfig;
 }
 
 /**
  * 前後入力（W/S）に応じたチャージ中バネ定数の倍率を計算します。
- * - 前入力 (W, z > 0): 引っ張り力を強めて巻き取り移動を優先（未装備最大 1.5倍 / 強化時最大 2.2倍）
- * - 後入力 (S, z < 0): 引っ張り力を弱めてチャージの蓄積を優先（未装備最小 0.65倍 / 強化時最小 0.3倍）
  */
 function getChargeStiffnessMultiplier(
   player: Player,
+  control: ElasticInputChargeControlConfig,
   isBoosted?: boolean,
 ): number {
   const inputZ = PlayerDirectionResolver.get(player).input.vector.z;
-  if (inputZ > 0.05) {
-    const forwardGain = isBoosted ? 1.2 : 0.5;
+  if (inputZ > INPUT_DEADZONE) {
+    const forwardGain = isBoosted
+      ? control.forwardGainBoosted
+      : control.forwardGainNormal;
     return 1.0 + Math.min(1.0, inputZ) * forwardGain;
   }
-  if (inputZ < -0.05) {
-    const minMultiplier = isBoosted ? 0.3 : 0.65;
+  if (inputZ < -INPUT_DEADZONE) {
+    const minMultiplier = isBoosted
+      ? control.backwardMinMultiplierBoosted
+      : control.backwardMinMultiplierNormal;
     const backwardGain = 1.0 - minMultiplier;
     return Math.max(minMultiplier, 1.0 + Math.max(-1.0, inputZ) * backwardGain);
   }
@@ -81,28 +139,27 @@ export function calculateElasticVelocity(
     extraCharge = 0,
     maxLength,
     stiffness,
-    hangElasticity = 0.65,
-    minHangDenominator = 18.0,
-    maxHangDenominator = 120.0,
-    chargeStiffness = 0.003,
+    hangElasticity,
+    minHangDenominator,
+    maxHangDenominator,
+    chargeStiffness,
     releaseStiffness,
-    damping = 0.001,
-    chargeDamping = 0.085,
-    maxAcceleration = 1.35,
-    releaseMaxSpeed = 4.0,
+    damping,
+    chargeDamping,
+    maxAcceleration,
     isReelingIn,
     isChargeReleasing,
     releaseShotPending,
-    upwardBias = 0.22,
-    enableInputChargeControl,
+    inputChargeControl,
     boostInputChargeControl,
+    release,
   }: ElasticRopeParams,
 ): Vector3 | null {
   const { dir: normal, distance: r } = getDirectionAndDistance(
     anchor,
     player.location,
   );
-  if (r < 0.0001) return null;
+  if (r < EPSILON) return null;
 
   const effectiveNaturalLength = naturalLength - extraCharge;
 
@@ -120,28 +177,27 @@ export function calculateElasticVelocity(
     const toAnchor = Vector3Utils.scale(normal, -1);
     const biasedDir = {
       x: toAnchor.x,
-      y: toAnchor.y + upwardBias,
+      y: toAnchor.y + release.upwardBias,
       z: toAnchor.z,
     };
     const launchDir = Vector3Utils.normalize(biasedDir);
-    // 伸び量に応じた非線形（1.6乗）カーブで初速を決定（5mで1.45、75m以上でreleaseMaxSpeed）
-    const minLaunchSpeed = 1.45;
-    const minStretch = 5.0;
-    const refStretch = 75.0;
+    const stretchSpan = Math.max(EPSILON, release.refStretch - release.minStretch);
     const t = Math.min(
       1,
-      Math.max(0, (stretch - minStretch) / (refStretch - minStretch)),
+      Math.max(0, (stretch - release.minStretch) / stretchSpan),
     );
     const launchSpeed =
-      minLaunchSpeed + (releaseMaxSpeed - minLaunchSpeed) * Math.pow(t, 1.6);
+      release.minLaunchSpeed +
+      (release.maxLaunchSpeed - release.minLaunchSpeed) *
+        Math.pow(t, release.launchSpeedExponent);
     return Vector3Utils.scale(launchDir, launchSpeed);
   }
 
-  // --- 2. 放物線飛行中: 引き寄せを止め、0.99 空気抵抗＋重力のみの自由放物線 ---
+  // --- 2. 放物線飛行中: 引き寄せを止め、空気抵抗＋重力のみの自由放物線 ---
   if (isLaunching) {
     return predictTickPhysics({
       velocity: currentVel,
-      dragXZ: 0.99,
+      dragXZ: AIR_DRAG_BASE,
     });
   }
 
@@ -154,9 +210,10 @@ export function calculateElasticVelocity(
   let activeStiffness: number;
   if (isCharging) {
     activeStiffness = chargeStiffness;
-    if (enableInputChargeControl) {
+    if (inputChargeControl.enabled) {
       activeStiffness *= getChargeStiffnessMultiplier(
         player,
+        inputChargeControl,
         boostInputChargeControl,
       );
     }
@@ -194,7 +251,6 @@ export function calculateElasticVelocity(
   if (maxLength) {
     const penetration = Math.max(0, r - maxLength);
     if (penetration > 0) {
-      const BAUMGARTE_FACTOR = 0.15;
       target = clampOutwardVelocity(
         target,
         normal,

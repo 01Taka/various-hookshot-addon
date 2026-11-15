@@ -1,6 +1,11 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import {
+  BAUMGARTE_FACTOR,
+  EPSILON,
+  PROJECTION_FALLBACK_DISTANCE,
+} from "../constants";
+import {
   clampOutwardVelocity,
   convertTargetVelocityToImpulse,
   getAirDrag,
@@ -9,23 +14,37 @@ import {
   predictTickPhysics,
 } from "./physics-utils";
 
-export interface SpringRopeParams {
+export interface SpringPhysicsConfig {
+  /** 限界長の下限値 (blocks) */
+  maxLengthMin: number;
+  /** 現在長に対する限界長倍率 */
+  maxLengthMultiplier: number;
+  /** 動径方向の弾性係数 (ヤング率×断面積相当)。実効バネ定数は `stiffness / Math.max(naturalLength, minRadialDenominator)` */
+  stiffness: number;
+  /** 動径方向の速度減衰率 (0〜1)。大きいほど振動が早く収まる */
+  damping: number;
+  /** 1Tickあたりの最大加速度 (blocks/tick²)。急激な伸び縮みでの暴発防止 */
+  maxAcceleration: number;
+  /** 動径（縦）方向のひずみ計算時の分母下限値 (blocks) */
+  minRadialDenominator: number;
+  /** 曲げ（横）方向のひずみ計算時の分母下限値 (blocks) */
+  minBendingDenominator: number;
+  /** 曲げ方向の弾性係数。曲げひずみ `lateralOffset / bendingDenominator` に応じた復元力を計算します */
+  bendingStiffness: number;
+  /** 曲げひずみのべき乗指数 (1 = 線形, 2 = 2次プログレッシブ) */
+  bendingPower: number;
+  /** 曲げ方向の減衰率 (0〜1)。大きいほど横揺れが早く収まる */
+  bendingDamping: number;
+  /** 着弾面の裏側へめり込んだ際の反発倍率（effectiveStiffness に対する倍率） */
+  surfacePenetrationMultiplier: number;
+}
+
+export interface SpringRopeParams
+  extends Omit<SpringPhysicsConfig, "maxLengthMin" | "maxLengthMultiplier"> {
   /** バネの自然長。これより伸びると引力、縮むと反発力（斥力）が働く */
   naturalLength: number;
   /** 限界長。これを超えると硬い拘束に切り替わる */
   maxLength?: number;
-  /** 動径方向の弾性係数 (ヤング率×断面積相当)。実効バネ定数は `stiffness / Math.max(naturalLength, minDenominator)` */
-  stiffness?: number;
-  /** 動径方向の速度減衰率 (0〜1)。大きいほど振動が早く収まる */
-  damping?: number;
-  /** 1Tickあたりの最大加速度 (blocks/tick²)。急激な伸び縮みでの暴発防止 */
-  maxAcceleration?: number;
-  /** ひずみ計算時の分母（自然長）の共通下限値 (blocks, デフォルト: 1.5) */
-  minDenominator?: number;
-  /** 動径（縦）方向のひずみ計算時の分母下限値 (blocks, 省略時は minDenominator) */
-  minRadialDenominator?: number;
-  /** 曲げ（横）方向のひずみ計算時の分母下限値 (blocks, 省略時は minDenominator) */
-  minBendingDenominator?: number;
   /** 着弾面の法線ベクトル（面の裏側へのめり込み防止に使用。また bendingAxis 未指定時の基準軸としてもフォールバック利用される） */
   surfaceNormal?: Vector3;
   /**
@@ -34,12 +53,6 @@ export interface SpringRopeParams {
    * 指定がない場合は surfaceNormal が使用される。
    */
   bendingAxis?: Vector3;
-  /** 曲げ方向の弾性係数。曲げひずみ `lateralOffset / bendingDenominator` に応じた復元力を計算します */
-  bendingStiffness?: number;
-  /** 曲げひずみのべき乗指数 (デフォルト: 1 = 線形, 2 = 2次プログレッシブ) */
-  bendingPower?: number;
-  /** 曲げ方向の減衰率 (0〜1)。大きいほど横揺れが早く収まる */
-  bendingDamping?: number;
 }
 
 /**
@@ -52,17 +65,17 @@ export function calculateSpringVelocity(
   {
     naturalLength,
     maxLength,
-    stiffness = 0.9,
-    damping = 0.01,
-    maxAcceleration = 10,
-    minDenominator = 1.5,
+    stiffness,
+    damping,
+    maxAcceleration,
     minRadialDenominator,
     minBendingDenominator,
     surfaceNormal,
     bendingAxis,
-    bendingStiffness = 0,
-    bendingPower = 1,
-    bendingDamping = 0.02,
+    bendingStiffness,
+    bendingPower,
+    bendingDamping,
+    surfacePenetrationMultiplier,
   }: SpringRopeParams,
 ): Vector3 | null {
   const { dir: rawNormal, distance: r } = getDirectionAndDistance(
@@ -72,7 +85,9 @@ export function calculateSpringVelocity(
   const referenceAxis = bendingAxis ?? surfaceNormal;
   // アンカーと足元が重なっている場合（真下撃ち等）は、微小な水平ズレで真横に飛ばないよう基準軸を使用する
   const normal =
-    r >= 0.25 ? rawNormal : (referenceAxis ?? { x: 0, y: 1, z: 0 });
+    r >= PROJECTION_FALLBACK_DISTANCE
+      ? rawNormal
+      : (referenceAxis ?? { x: 0, y: 1, z: 0 });
 
   const currentVel = player.getVelocity();
   const speed = Vector3Utils.magnitude(currentVel);
@@ -83,14 +98,8 @@ export function calculateSpringVelocity(
   });
 
   // ヤング率に基づく実効バネ定数（自然長が短いほど硬く、長いほど柔らかい）
-  const radialDenominator = Math.max(
-    naturalLength,
-    minRadialDenominator ?? minDenominator,
-  );
-  const bendingDenominator = Math.max(
-    naturalLength,
-    minBendingDenominator ?? minDenominator,
-  );
+  const radialDenominator = Math.max(naturalLength, minRadialDenominator);
+  const bendingDenominator = Math.max(naturalLength, minBendingDenominator);
   const effectiveStiffness = stiffness / radialDenominator;
 
   // --- 双方向のバネ復元力（フックの法則＋ヤング率: a = -C * (r - L0) / L0） ---
@@ -128,7 +137,7 @@ export function calculateSpringVelocity(
     );
     const lateralOffset = Vector3Utils.magnitude(rPerp);
 
-    if (lateralOffset > 0.0001) {
+    if (lateralOffset > EPSILON) {
       const lateralDir = Vector3Utils.scale(rPerp, 1 / lateralOffset);
       const bendingStrain = lateralOffset / bendingDenominator;
       // 横ズレを戻す復元加速度（-lateralDir 方向）
@@ -154,7 +163,7 @@ export function calculateSpringVelocity(
       const pushDot = Vector3Utils.dot(rVec, pushNormal);
       if (pushDot < 0) {
         const penetrationPush = Math.min(
-          Math.abs(pushDot) * (effectiveStiffness * 1.5),
+          Math.abs(pushDot) * (effectiveStiffness * surfacePenetrationMultiplier),
           maxAcceleration,
         );
         target = Vector3Utils.add(
@@ -169,7 +178,6 @@ export function calculateSpringVelocity(
   if (maxLength) {
     const penetration = Math.max(0, r - maxLength);
     if (penetration > 0) {
-      const BAUMGARTE_FACTOR = 0.15;
       target = clampOutwardVelocity(
         target,
         normal,

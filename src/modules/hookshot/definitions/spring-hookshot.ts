@@ -1,6 +1,9 @@
 import { Vector3 } from "@minecraft/server";
 import { SPRING_WIRE_STYLE } from "../../render";
-import { calculateSpringHookshot } from "../math/spring-math";
+import {
+  calculateSpringHookshot,
+  SpringPhysicsConfig,
+} from "../math/spring-math";
 import {
   AirProbingCapable,
   AirProbingState,
@@ -32,6 +35,10 @@ export interface SpringHookshotDefinition
     RetractCapable {
   /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた時に自動解除するか */
   detachOnMaxExtend: boolean;
+  /** 曲げ復元力の基準モード ("shot_angle" | "surface_normal") */
+  bendingMode: SpringBendingMode;
+  /** バネの物理パラメータ */
+  physics: SpringPhysicsConfig;
   /** ワイヤー描画時の基準軸（法線または曲げ軸）を解決するコールバック */
   getWireAxis: (state: SpringHookshotState) => Vector3 | undefined;
 }
@@ -44,23 +51,12 @@ export interface SpringHookshotDefinition
 export type SpringBendingMode = "shot_angle" | "surface_normal";
 
 /**
- * スライムバネの設定
- * bendingMode を "surface_normal" に変更することで従来の面法線維持仕様へ簡単に切り替え可能です。
- */
-export interface SpringHookshotConfig {
-  /** 曲げ復元力の基準モード ("shot_angle" | "surface_normal") */
-  bendingMode: SpringBendingMode;
-}
-
-export const springHookshotConfig: SpringHookshotConfig = {
-  bendingMode: "shot_angle",
-};
-
-/**
  * 現在の設定に応じた曲げ基準軸（角度維持ベクトル）を取得します
  */
-export function getSpringBendingAxis(state: SpringHookshotState): Vector3 | undefined {
-  return springHookshotConfig.bendingMode === "shot_angle"
+export function getSpringBendingAxis(
+  state: SpringHookshotState,
+): Vector3 | undefined {
+  return springHookshotDefinition.bendingMode === "shot_angle"
     ? (state.initialDirection ?? state.normal)
     : state.normal;
 }
@@ -81,6 +77,20 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   reelMode: "extend",
   minRopeLength: 0.5,
   detachOnMaxExtend: true,
+  bendingMode: "shot_angle",
+  physics: {
+    maxLengthMin: 200,
+    maxLengthMultiplier: 1.5,
+    stiffness: 0.9,
+    damping: 0.01,
+    maxAcceleration: 10,
+    minRadialDenominator: 7.0,
+    minBendingDenominator: 1.0,
+    bendingStiffness: 1.8,
+    bendingPower: 2,
+    bendingDamping: 0.02,
+    surfacePenetrationMultiplier: 1.5,
+  },
   shotSoundId: "mob.slime.jump",
   airProbing: {
     initialLength: 2.0,
@@ -102,21 +112,19 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   wireStyle: SPRING_WIRE_STYLE,
   getWireAxis: (state) => getSpringBendingAxis(state),
   calculateImpulse: (player, state) => {
-    // 設定された bendingMode に応じた基準軸を選択
     const bendingAxis = getSpringBendingAxis(state);
+    const { maxLengthMin, maxLengthMultiplier, ...springParams } =
+      springHookshotDefinition.physics;
 
     return calculateSpringHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
-      maxLength: Math.max(200, state.currentLength * 1.5),
-      stiffness: 0.9,
-      damping: 0.01,
-      minRadialDenominator: 7.0,
-      minBendingDenominator: 1.0,
+      maxLength: Math.max(
+        maxLengthMin,
+        state.currentLength * maxLengthMultiplier,
+      ),
       surfaceNormal: state.normal,
       bendingAxis,
-      bendingStiffness: 1.8,
-      bendingPower: 2,
-      bendingDamping: 0.02,
+      ...springParams,
     });
   },
 };

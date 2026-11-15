@@ -1,5 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
+import { BAUMGARTE_BOTTOM_OUT, EPSILON } from "../constants";
 import {
   convertTargetVelocityToImpulse,
   getAirDrag,
@@ -8,56 +9,48 @@ import {
   predictTickPhysics,
 } from "./physics-utils";
 
-export interface BambooPhysicsParams {
+export interface BambooPhysicsConfig {
+  /**
+   * しなり具合・柔軟度 (flexibility)
+   * 1.0 が標準。値が大きいほど柔らかく深くしなり、値が小さいほど硬くしなりにくくなります。
+   * compressionStiffness が未指定の場合、`baseStiffnessFactor / flexibility` として計算されます。
+   */
+  flexibility: number;
+  /** flexibility から実効バネ定数を算出する基準係数 (blocks/tick² per block) */
+  baseStiffnessFactor: number;
+  /** 圧縮時の弾性バネ定数（直接指定する場合のオーバーライド用） */
+  compressionStiffness?: number;
+  /** 最大しなり量（ブロック数）。竹がこれ以上縮まない限界圧縮量 */
+  maxCompression?: number;
+  /**
+   * 伸ばす際に接線方向（竹のしなり解消方向）へ振り分けるエネルギー比率 (0.0〜1.0)
+   * 外向きに伸びる際（vn > 0）、動径反発力の一部をパーティクルのしなり解消方向へ配分し、跳躍やスイングを加速させます。
+   */
+  tangentTransferRatio: number;
+  /** 動径方向の速度減衰率 (0〜1)。振動の収束 */
+  damping: number;
+  /** 1Tickあたりの最大反発加速度 (blocks/tick²) */
+  maxAcceleration: number;
+  /**
+   * 上方向反発の減衰を開始する上向き比率の閾値 (0.0〜1.0, sin(仰角))
+   * 例: 0.5 = 仰角30°より上向きの反発から減衰を開始
+   */
+  upwardDecayThreshold: number;
+  /** 真上方向 (上向き比率 1.0) の反発における最小倍率 (0.0〜1.0) */
+  upwardMinScale: number;
+  /** 上方向反発減衰カーブの指数 (1.0で線形、値が大きいほど真上付近で急激に減衰) */
+  upwardDecayExponent: number;
+  /** 伸び切り時 (r >= naturalLength) の外向き速度保持率 (0.0〜1.0) */
+  stretchOutwardRetention: number;
+  /** 伸び切り時 (r >= naturalLength) の水平速度 (X/Z) 保持率 (0.0〜1.0) */
+  stretchHorizontalRetention: number;
+}
+
+export interface BambooPhysicsParams extends BambooPhysicsConfig {
   /** 竹ポールの自然長（現在のロープ長） */
   naturalLength: number;
   /** 着弾面の法線ベクトル（パーティクルと完全同期したしなり方向の計算に使用） */
   surfaceNormal?: Vector3;
-  /**
-   * しなり具合・柔軟度 (flexibility)
-   * 1.0 が標準。値が大きいほど柔らかく深くしなり、値が小さいほど硬くしなりにくくなります。
-   * compressionStiffness が未指定の場合、`0.14 / flexibility` として計算されます。
-   */
-  flexibility?: number;
-  /** 圧縮時の弾性バネ定数 (blocks/tick² per block)。縮むほど強力に外側へ押し出す（直接指定時） */
-  compressionStiffness?: number;
-  /** 最大しなり量（ブロック数）。竹がこれ以上縮まない限界圧縮量（省略時は無制限） */
-  maxCompression?: number;
-  /**
-   * 伸ばす際に接線方向（竹のしなり解消方向）へ振り分けるエネルギー比率 (0.0〜1.0)
-   * デフォルト: 0.35 (35%)
-   * 外向きに伸びる際（vn > 0）、動径反発力の一部をパーティクルのしなり解消方向へ配分し、跳躍やスイングを加速させます。
-   */
-  tangentTransferRatio?: number;
-  /** 動径方向の速度減衰率 (0〜1)。振動の収束 */
-  damping?: number;
-  /** 1Tickあたりの最大反発加速度 (blocks/tick²) */
-  maxAcceleration?: number;
-  /**
-   * 上方向反発の減衰を開始する上向き比率の閾値 (0.0〜1.0, sin(仰角))
-   * 例: 0.5 = 仰角30°より上向きの反発から減衰を開始。デフォルト: 0.5
-   */
-  upwardDecayThreshold?: number;
-  /**
-   * 真上方向 (上向き比率 1.0) の反発における最小倍率 (0.0〜1.0)
-   * デフォルト: 0.25
-   */
-  upwardMinScale?: number;
-  /**
-   * 上方向反発減衰カーブの指数 (1.0で線形、値が大きいほど真上付近で急激に減衰)
-   * デフォルト: 1.5
-   */
-  upwardDecayExponent?: number;
-  /**
-   * 伸び切り時 (r >= naturalLength) の外向き速度保持率 (0.0〜1.0)
-   * 小さいほど外向きへの飛び出しを強く減衰させる。デフォルト: 0.55
-   */
-  stretchOutwardRetention?: number;
-  /**
-   * 伸び切り時 (r >= naturalLength) の水平速度 (X/Z) 保持率 (0.0〜1.0)
-   * 手動解除を逃した際の失速ペナルティ。デフォルト: 0.88
-   */
-  stretchHorizontalRetention?: number;
 }
 
 /**
@@ -72,7 +65,7 @@ export function calculateBambooBendDirection(
 ): Vector3 {
   const diff = Vector3Utils.subtract(anchorPos, playerPos);
   const dist = Vector3Utils.magnitude(diff);
-  if (dist < 0.0001) return { x: 0, y: 1, z: 0 };
+  if (dist < EPSILON) return { x: 0, y: 1, z: 0 };
 
   const dir = Vector3Utils.scale(diff, 1 / dist);
   const globalRef: Vector3 =
@@ -108,16 +101,16 @@ export function calculateBambooBendDirection(
  */
 export function calculateUpwardDecayFactor(
   reboundAccel: Vector3,
-  threshold = 0.5,
-  minScale = 0.25,
-  exponent = 1.5,
+  threshold: number,
+  minScale: number,
+  exponent: number,
 ): number {
   if (reboundAccel.y <= 0 || threshold >= 1.0) {
     return 1.0;
   }
 
   const mag = Vector3Utils.magnitude(reboundAccel);
-  if (mag <= 0.0001) {
+  if (mag <= EPSILON) {
     return 1.0;
   }
 
@@ -145,24 +138,25 @@ export function calculateBambooVelocity(
   {
     naturalLength,
     surfaceNormal,
-    flexibility = 1.0,
+    flexibility,
+    baseStiffnessFactor,
     compressionStiffness,
     maxCompression,
-    tangentTransferRatio = 0.35,
-    damping = 0.02,
-    maxAcceleration = 12,
-    upwardDecayThreshold = 0.5,
-    upwardMinScale = 0.25,
-    upwardDecayExponent = 1.5,
-    stretchOutwardRetention = 0.55,
-    stretchHorizontalRetention = 0.88,
+    tangentTransferRatio,
+    damping,
+    maxAcceleration,
+    upwardDecayThreshold,
+    upwardMinScale,
+    upwardDecayExponent,
+    stretchOutwardRetention,
+    stretchHorizontalRetention,
   }: BambooPhysicsParams,
 ): Vector3 | null {
   const { dir: normal, distance: r } = getDirectionAndDistance(
     anchor,
     player.location,
   );
-  if (r < 0.0001) return null;
+  if (r < EPSILON) return null;
 
   const currentVel = player.getVelocity();
   const speed = Vector3Utils.magnitude(currentVel);
@@ -182,7 +176,6 @@ export function calculateBambooVelocity(
     // 最大しなり量（限界圧縮）が指定されている場合の底打ち剛体拘束
     if (maxCompression !== undefined && compression > maxCompression) {
       const bottomOutExcess = compression - maxCompression;
-      const BAUMGARTE_BOTTOM_OUT = 0.2;
       const targetSpeed = bottomOutExcess * BAUMGARTE_BOTTOM_OUT;
       const vn = getNormalComponent(vPred, normal);
 
@@ -198,7 +191,8 @@ export function calculateBambooVelocity(
 
     // しなりやすさ（flexibility）に応じた実効バネ定数の計算
     const effectiveStiffness =
-      compressionStiffness ?? 0.14 / Math.max(0.01, flexibility);
+      compressionStiffness ??
+      baseStiffnessFactor / Math.max(0.01, flexibility);
 
     const springAccel = Math.min(
       compression * effectiveStiffness,

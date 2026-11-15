@@ -8,6 +8,7 @@ import { rodHookshotDefinition } from "./definitions/rod-hookshot";
 import { springHookshotDefinition } from "./definitions/spring-hookshot";
 import { HookshotSystem } from "./hookshot-system";
 
+export * from "./constants";
 export * from "./types";
 export * from "./hookshot-system";
 export * from "./definitions";

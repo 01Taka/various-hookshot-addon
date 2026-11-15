@@ -25,6 +25,16 @@ import {
   canUseGazeSteering,
 } from "./math/steering-math";
 import {
+  DEFAULT_CONTINUOUS_SOUND_INTERVAL_TICKS,
+  DEFAULT_PROBING_MIN_HIT_DISTANCE,
+  DEFAULT_TIMED_SOUND_INTERVAL_TICKS,
+  PREVIEW_MIN_RAYCAST_DISTANCE,
+  PROJECTION_FALLBACK_DISTANCE,
+  RETRACT_END_THRESHOLD,
+  RETRACT_START_MIN_DISTANCE,
+  TICKS_PER_SECOND,
+} from "./constants";
+import {
   AirProbingConfig,
   AnchorPosition,
   HookshotDefinition,
@@ -46,8 +56,6 @@ interface PendingRaycastState {
   remainingTicks: number;
   dimensionId: string;
 }
-
-const DEFAULT_PROBING_MIN_HIT_DISTANCE = 1.5;
 
 export class HookshotSystem {
   private static definitionsByItem = new Map<string, HookshotDefinition>();
@@ -180,7 +188,7 @@ export class HookshotSystem {
       const distance = Vector3Utils.distance(player.location, state.anchor);
       const stretch =
         Math.max(0, distance - state.currentLength) + (state.extraCharge ?? 0);
-      if (stretch > def.minReleaseStretch) {
+      if (stretch > def.release.minStretch) {
         state.isReelingIn = false;
         state.isChargeReleasing = true;
         state.releaseShotPending = true;
@@ -188,7 +196,7 @@ export class HookshotSystem {
         if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
           player.applyImpulse(impulse);
         }
-        this.playSoundSafe(player, def.releaseSoundId);
+        this.playSoundSafe(player, def.release.soundId);
       }
     }
 
@@ -391,7 +399,7 @@ export class HookshotSystem {
     const initialVector = Vector3Utils.subtract(player.location, anchor);
     const initialDistance = Vector3Utils.magnitude(initialVector);
     const initialDirection =
-      initialDistance >= 0.25
+      initialDistance >= PROJECTION_FALLBACK_DISTANCE
         ? Vector3Utils.scale(initialVector, 1 / initialDistance)
         : normal;
 
@@ -591,7 +599,8 @@ export class HookshotSystem {
           config.soundId &&
           (direction > 0 || nextLength > 0)
         ) {
-          const interval = config.soundIntervalTicks ?? 2;
+          const interval =
+            config.soundIntervalTicks ?? DEFAULT_TIMED_SOUND_INTERVAL_TICKS;
           if (now - nextLastTick >= interval) {
             nextLastTick = now;
             this.playSoundSafe(player, config.soundId);
@@ -669,12 +678,12 @@ export class HookshotSystem {
     if (state.isAnchored !== false) {
       const toAnchor = Vector3Utils.subtract(state.anchor, player.location);
       const dist = Vector3Utils.magnitude(toAnchor);
-      if (dist <= 0.1) return false;
+      if (dist <= RETRACT_START_MIN_DISTANCE) return false;
       retractDirection = Vector3Utils.scale(toAnchor, 1 / dist);
       retractLength = dist;
     } else {
       retractLength = state.currentLength;
-      if (retractLength <= 0.1) return false;
+      if (retractLength <= RETRACT_START_MIN_DISTANCE) return false;
       retractDirection = state.probingDirection ?? player.getViewDirection();
     }
 
@@ -732,7 +741,7 @@ export class HookshotSystem {
       );
     state.lastRetractTick = nextLastTick;
 
-    if (currentLength <= 0.05) {
+    if (currentLength <= RETRACT_END_THRESHOLD) {
       PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
       return;
     }
@@ -1156,7 +1165,7 @@ export class HookshotSystem {
     // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）
     if (
       mode === "shorten" &&
-      "enableGazeSteering" in def &&
+      def.id === "rigid" &&
       def.enableGazeSteering &&
       canUseGazeSteering(player)
     ) {
@@ -1164,13 +1173,15 @@ export class HookshotSystem {
         player,
         state.anchor,
         state.currentLength,
+        def.steering,
       );
       delta *= multiplier;
     }
 
     let continuousSoundId: string | undefined;
     if (reelConfig.soundId) {
-      const interval = reelConfig.soundIntervalTicks ?? 4;
+      const interval =
+        reelConfig.soundIntervalTicks ?? DEFAULT_CONTINUOUS_SOUND_INTERVAL_TICKS;
       const lastSoundTick =
         "lastContinuousReelSoundTick" in state
           ? state.lastContinuousReelSoundTick
@@ -1408,7 +1419,7 @@ export class HookshotSystem {
               const stretch =
                 Math.max(0, distance - state.currentLength) +
                 (state.extraCharge ?? 0);
-              if (stretch <= def.minReleaseStretch) {
+              if (stretch <= def.release.minStretch) {
                 const minLength = def.minRopeLength;
                 const maxLength = def.maxDistance;
                 state.currentLength = Math.max(
@@ -1422,14 +1433,14 @@ export class HookshotSystem {
                 state.lastReleaseDistance = undefined;
                 state.releaseStallTicks = undefined;
                 releaseStateDirty = true;
-              } else if (stretch > 0.5) {
+              } else {
                 state.isChargeReleasing = true;
                 state.releaseShotPending = true;
                 state.releaseStartTick = system.currentTick;
                 state.lastReleaseDistance = distance;
                 state.releaseStallTicks = 0;
                 releaseStateDirty = true;
-                this.playSoundSafe(player, def.releaseSoundId);
+                this.playSoundSafe(player, def.release.soundId);
               }
             } else if (state.isChargeReleasing) {
               const elapsedTicks =
@@ -1442,15 +1453,18 @@ export class HookshotSystem {
                 state.lastReleaseDistance = undefined;
                 state.releaseStallTicks = undefined;
                 releaseStateDirty = true;
-              } else if (elapsedTicks >= 4) {
+              } else if (elapsedTicks >= def.release.minFlightTicks) {
                 const approachSpeed =
                   (state.lastReleaseDistance ?? distance) - distance;
                 state.releaseStallTicks =
-                  approachSpeed <= 0.4 ? (state.releaseStallTicks ?? 0) + 1 : 0;
-                const isStoppedOrPassed = state.releaseStallTicks >= 5;
+                  approachSpeed <= def.release.stallApproachSpeed
+                    ? (state.releaseStallTicks ?? 0) + 1
+                    : 0;
+                const isStoppedOrPassed =
+                  state.releaseStallTicks >= def.release.maxStallTicks;
                 const isGrounded =
                   player.isOnGround || player.isInWater || player.isClimbing;
-                const isTimedOut = elapsedTicks >= 60;
+                const isTimedOut = elapsedTicks >= def.release.maxReleaseTicks;
 
                 if (isStoppedOrPassed || isGrounded || isTimedOut) {
                   const minLength = def.minRopeLength;
@@ -1668,7 +1682,7 @@ export class HookshotSystem {
     }
 
     const maxDistance = def.maxDistance;
-    const raycastDistance = Math.max(maxDistance, 250);
+    const raycastDistance = Math.max(maxDistance, PREVIEW_MIN_RAYCAST_DISTANCE);
 
     const hit = player.getBlockFromViewDirection({
       maxDistance: raycastDistance,
@@ -1775,7 +1789,7 @@ export class HookshotSystem {
           distance,
         );
         player.onScreenDisplay.setActionBar(
-          `${baseText} | ${speed.toFixed(2)} b/t (${(speed * 20).toFixed(1)} m/s)`,
+          `${baseText} | ${speed.toFixed(2)} b/t (${(speed * TICKS_PER_SECOND).toFixed(1)} m/s)`,
         );
       }
       PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);

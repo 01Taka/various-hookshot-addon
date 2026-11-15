@@ -2,6 +2,26 @@ import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import { PlayerDirectionResolver } from "addon-utils";
 import { PostFlightSystem } from "../../post-flight";
+import {
+  EPSILON,
+  INPUT_DEADZONE,
+  PLAYER_CHEST_HEIGHT_OFFSET,
+} from "../constants";
+
+export interface RigidSteeringConfig {
+  /** 視線・ストレイフによる接線方向ステアリング加速度 (blocks/tick²) */
+  steerAccel: number;
+  /** 回転にまわせるパワーの最大比率 (例: 0.6 = 最大60%回転 / 40%巻き取り) */
+  maxRotationPowerRatio: number;
+  /** 最大回転パワーが得られる基準距離 (m) */
+  referenceSwingDistance: number;
+  /** たるみ判定の許容マージン (blocks) */
+  slackDeadzone: number;
+  /** スイングポンプの静止→スイング遷移開始水平速度 (blocks/tick) */
+  pumpLowSpeedStart: number;
+  /** スイングポンプの静止→スイング遷移完了水平速度 (blocks/tick) */
+  pumpLowSpeedEnd: number;
+}
 
 /**
  * 視線・移動入力によるステアリングボーナスが利用可能かを判定します。
@@ -11,25 +31,17 @@ export function canUseGazeSteering(player: Player): boolean {
   return PostFlightSystem.getEquippedVestInfo(player) !== null;
 }
 
-/** 視線・ストレイフによる接線方向ステアリング加速度 (blocks/tick²) */
-export const DEFAULT_STEER_ACCEL = 0.085;
-
-/** 回転にまわせるパワーの最大比率（最大60%回転 / 40%巻き取り） */
-export const MAX_ROTATION_POWER_RATIO = 0.6;
-
-/** 最大回転パワー（60%）が得られる基準距離 (m) */
-export const REFERENCE_SWING_DISTANCE = 30;
-
 /**
  * 距離に応じた回転パワー係数 (0.0 〜 1.0) を取得します。
- * 約30m以内では最大値 1.0（60% 回転 / 40% 巻き取り）。
- * 30mを超えると距離が遠くなるほど回転にまわせるパワーの最大値が低下します。
  */
-export function getDistanceRotationFactor(distance: number): number {
-  if (distance <= REFERENCE_SWING_DISTANCE) {
+export function getDistanceRotationFactor(
+  distance: number,
+  referenceSwingDistance: number,
+): number {
+  if (distance <= referenceSwingDistance) {
     return 1.0;
   }
-  return REFERENCE_SWING_DISTANCE / distance;
+  return referenceSwingDistance / distance;
 }
 
 /**
@@ -37,7 +49,7 @@ export function getDistanceRotationFactor(distance: number): number {
  */
 export function getPlayerChestLocation(player: Player): Vector3 {
   const pos = player.location;
-  return { x: pos.x, y: pos.y + 1.0, z: pos.z };
+  return { x: pos.x, y: pos.y + PLAYER_CHEST_HEIGHT_OFFSET, z: pos.z };
 }
 
 /**
@@ -76,20 +88,26 @@ export function calculateGazeRotationRatio(
 export function calculateGazeSteeringAcceleration(
   player: Player,
   anchor: Vector3,
-  steerAccel = DEFAULT_STEER_ACCEL,
+  steering: Pick<
+    RigidSteeringConfig,
+    "steerAccel" | "referenceSwingDistance"
+  >,
 ): Vector3 {
   const chest = getPlayerChestLocation(player);
   const diff = Vector3Utils.subtract(anchor, chest);
   const r = Vector3Utils.magnitude(diff);
-  if (r < 0.0001) return { x: 0, y: 0, z: 0 };
+  if (r < EPSILON) return { x: 0, y: 0, z: 0 };
 
   const toAnchorDir = Vector3Utils.scale(diff, 1 / r);
   const resolver = PlayerDirectionResolver.get(player);
   const lookDir = resolver.view.vector;
 
-  // 距離に応じた回転パワー係数（30m以内で1.0、遠いほど低下）
-  const distFactor = getDistanceRotationFactor(r);
-  const effectiveSteerAccel = steerAccel * distFactor;
+  // 距離に応じた回転パワー係数
+  const distFactor = getDistanceRotationFactor(
+    r,
+    steering.referenceSwingDistance,
+  );
+  const effectiveSteerAccel = steering.steerAccel * distFactor;
 
   // --- 1. 視線移動単体による接線インパルス（巻き取り速度が削れた分、45度で最大比率） ---
   const gazeDot = Vector3Utils.dot(lookDir, toAnchorDir);
@@ -99,7 +117,7 @@ export function calculateGazeSteeringAcceleration(
   );
   const tangentGazeLen = Vector3Utils.magnitude(tangentGaze);
   let totalSteer: Vector3;
-  if (tangentGazeLen > 0.0001) {
+  if (tangentGazeLen > EPSILON) {
     const gazeRatio = calculateGazeRotationRatio(lookDir, toAnchorDir);
     const tangentGazeDir = Vector3Utils.scale(tangentGaze, 1 / tangentGazeLen);
     totalSteer = Vector3Utils.scale(
@@ -113,7 +131,7 @@ export function calculateGazeSteeringAcceleration(
   // --- 2. キー入力による追加の接線インパルス（※ 基準となる視線方向は2倍せずそのまま使用） ---
   const input = resolver.input;
   const inputLen = Math.hypot(input.vector.x, input.vector.z);
-  if (inputLen > 0.05) {
+  if (inputLen > INPUT_DEADZONE) {
     const rot = player.getRotation();
     const yawRad = (rot.y * Math.PI) / 180;
 
@@ -166,15 +184,22 @@ export function calculateGazeSteeringAcceleration(
 export function calculateReelSpeedMultiplier(
   player: Player,
   anchor: Vector3,
-  currentLength?: number,
+  currentLength: number | undefined,
+  steering: Pick<
+    RigidSteeringConfig,
+    "maxRotationPowerRatio" | "referenceSwingDistance" | "slackDeadzone"
+  >,
 ): number {
   const chest = getPlayerChestLocation(player);
   const diff = Vector3Utils.subtract(anchor, chest);
   const r = Vector3Utils.magnitude(diff);
-  if (r < 0.0001) return 1.0;
+  if (r < EPSILON) return 1.0;
 
   // ロープがたるんでいる間は通常速度で巻き取る
-  if (currentLength !== undefined && r < currentLength - 0.5) {
+  if (
+    currentLength !== undefined &&
+    r < currentLength - steering.slackDeadzone
+  ) {
     return 1.0;
   }
 
@@ -185,9 +210,12 @@ export function calculateReelSpeedMultiplier(
   // 角度を2倍にして評価（約45度で最大回転比率 1.0 に到達）
   const gazeRotationalRatio = calculateGazeRotationRatio(lookDir, toAnchorDir);
 
-  // 距離に応じた回転パワー上限（30m以内で最大60%、遠くなるほど低下）
-  const distFactor = getDistanceRotationFactor(r);
-  const maxRotationRatio = MAX_ROTATION_POWER_RATIO * distFactor;
+  // 距離に応じた回転パワー上限
+  const distFactor = getDistanceRotationFactor(
+    r,
+    steering.referenceSwingDistance,
+  );
+  const maxRotationRatio = steering.maxRotationPowerRatio * distFactor;
 
   // 視線とアンカーの角度のみに基づき短縮速度を減速（最大でも 1.0 - maxRotationRatio までしか低下しない）
   return Math.max(
@@ -208,19 +236,21 @@ export function calculatePendulumPumpAcceleration(
   normal: Vector3,
   velocity: Vector3,
   pumpAccel: number,
+  lowSpeedStart: number,
+  lowSpeedEnd: number,
 ): Vector3 {
   if (pumpAccel <= 0) return { x: 0, y: 0, z: 0 };
 
   const resolver = PlayerDirectionResolver.get(player);
   const input = resolver.input;
   const inputLen = Math.hypot(input.vector.x, input.vector.z);
-  if (inputLen <= 0.05) return { x: 0, y: 0, z: 0 };
+  if (inputLen <= INPUT_DEADZONE) return { x: 0, y: 0, z: 0 };
 
   // 現在地からアンカーへの水平ベクトル（normal は anchor -> player のため反転）
   const toAnchorX = -normal.x;
   const toAnchorZ = -normal.z;
   const horizDist = Math.hypot(toAnchorX, toAnchorZ);
-  if (horizDist < 0.05) return { x: 0, y: 0, z: 0 };
+  if (horizDist < INPUT_DEADZONE) return { x: 0, y: 0, z: 0 };
 
   const toAnchorDirXZ: Vector3 = {
     x: toAnchorX / horizDist,
@@ -250,7 +280,7 @@ export function calculatePendulumPumpAcceleration(
   const vtHorizLen = Math.hypot(vtVec.x, vtVec.z);
 
   let alignmentFactor = standstillFactor;
-  if (vtHorizLen > 0.0001) {
+  if (vtHorizLen > EPSILON) {
     const vtDirXZ: Vector3 = {
       x: vtVec.x / vtHorizLen,
       y: 0,
@@ -263,19 +293,15 @@ export function calculatePendulumPumpAcceleration(
       cosAnchorVel * cosAnchorVel * (cosInputVel * cosInputVel);
 
     // 静止状態からスイング状態へ滑らかにブレンド
-    const LOW_SPEED_START = 0.05;
-    const LOW_SPEED_END = 0.25;
+    const span = Math.max(EPSILON, lowSpeedEnd - lowSpeedStart);
     const blend = Math.max(
       0,
-      Math.min(
-        1,
-        (vtHorizLen - LOW_SPEED_START) / (LOW_SPEED_END - LOW_SPEED_START),
-      ),
+      Math.min(1, (vtHorizLen - lowSpeedStart) / span),
     );
     alignmentFactor = standstillFactor * (1 - blend) + swingFactor * blend;
   }
 
-  if (alignmentFactor <= 0.0001) return { x: 0, y: 0, z: 0 };
+  if (alignmentFactor <= EPSILON) return { x: 0, y: 0, z: 0 };
 
   // 入力方向をロープの接線平面へ射影し、3D接線方向の推進力を生成
   const inputDotNormal = Vector3Utils.dot(inputDirXZ, normal);
@@ -284,7 +310,7 @@ export function calculatePendulumPumpAcceleration(
     Vector3Utils.scale(normal, inputDotNormal),
   );
   const tangentPushLen = Vector3Utils.magnitude(tangentPush);
-  if (tangentPushLen < 0.0001) return { x: 0, y: 0, z: 0 };
+  if (tangentPushLen < EPSILON) return { x: 0, y: 0, z: 0 };
 
   const inputMag = Math.min(1.0, inputLen);
   return Vector3Utils.scale(

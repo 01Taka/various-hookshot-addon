@@ -2,7 +2,11 @@ import { Vector3Utils } from "@minecraft/math";
 import { Player, system, world } from "@minecraft/server";
 import { PlayerStateManager } from "addon-utils";
 import { BAMBOO_WIRE_STYLE } from "../../render";
-import { calculateBambooHookshot } from "../math/bamboo-math";
+import { EPSILON } from "../constants";
+import {
+  BambooPhysicsConfig,
+  calculateBambooHookshot,
+} from "../math/bamboo-math";
 import {
   AirProbingCapable,
   AirProbingState,
@@ -36,116 +40,25 @@ interface BambooTautState {
 
 const bambooTautStates = new Map<string, BambooTautState>();
 
-/**
- * 竹フックショットの設定インターフェース
- */
-export interface BambooHookshotConfig {
-  /**
-   * しなり具合・柔軟度 (flexibility)
-   * 1.0 が標準。値が大きいほど柔らかく深くしなり、値が小さいほど硬くしなりにくくなります。
-   */
-  flexibility?: number;
-  /** 圧縮時の弾性バネ定数（直接指定する場合） */
-  compressionStiffness?: number;
-  /** 最大しなり量（ブロック数）。これ以上竹が縮まない限界値 */
-  maxCompression?: number;
-  /**
-   * 伸ばす際に接線方向（竹のしなり解消方向）へ振り分けるエネルギー比率 (0.0〜1.0)
-   * デフォルト: 0.35 (35%)
-   */
-  tangentTransferRatio?: number;
-  /**
-   * 水平方向（X/Z 軸の走る速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick)。
-   * デフォルト: 4.0
-   */
-  speedFlexBonusFactorXZ?: number;
-  /**
-   * 鉛直方向（Y 軸の落下・上昇速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick)。
-   * デフォルト: 2.0
-   */
-  speedFlexBonusFactorY?: number;
-  /**
-   * 速度しなりボーナスの最大追加長 (blocks)。
-   * デフォルト: 3.5
-   */
-  maxSpeedFlexBonus?: number;
-  /**
-   * 一度竹を使用した後、着地せずにもう一度竹を使用した場合（空中2回目以降）のしなりボーナス倍率 (0.0〜1.0)。
-   * 空中1回目は100%（減衰なし）、空中2回目でこの設定倍率に減衰し、3回目以降もこの倍率で固定されます。
-   * - 1.0: 減衰なし（常に100%のボーナス）
-   * - 0.5: 空中2回目以降はボーナスが50%で固定
-   * - 0.0: 空中2回目以降はボーナスなし (0%)
-   * デフォルト: 0.5
-   */
-  consecutiveAirBonusDecayRate?: number;
-  /** 動径減衰係数 */
-  damping?: number;
-  /** 最大反発加速度 */
-  maxAcceleration?: number;
-  /**
-   * 上方向反発の減衰を開始する上向き比率の閾値 (0.0〜1.0, sin(仰角))
-   * デフォルト: 0.5 (仰角30°より上向きの反発から減衰)
-   */
-  upwardDecayThreshold?: number;
-  /**
-   * 真上方向 (上向き比率 1.0) の反発における最小倍率 (0.0〜1.0)
-   * デフォルト: 0.25
-   */
-  upwardMinScale?: number;
-  /**
-   * 上方向反発減衰カーブの指数
-   * デフォルト: 1.5
-   */
-  upwardDecayExponent?: number;
-  /**
-   * 伸び切り時 (r >= naturalLength) の外向き速度保持率 (0.0〜1.0)
-   * デフォルト: 0.55
-   */
-  stretchOutwardRetention?: number;
-  /**
-   * 伸び切り時 (r >= naturalLength) の水平速度保持率 (0.0〜1.0)
-   * デフォルト: 0.88
-   */
-  stretchHorizontalRetention?: number;
-  /**
-   * 竹がピンと張って減衰を開始するタイミングのSE
-   * デフォルト: "block.bamboo.hit"
-   */
-  tautSoundId?: string;
-  /**
-   * 竹がピンと張ったときのSEピッチ
-   * デフォルト: 1.5
-   */
-  tautSoundPitch?: number;
-  /**
-   * 竹がピンと張ったときのSE音量
-   * デフォルト: 2.5
-   */
-  tautSoundVolume?: number;
+export interface BambooAirChainBonusConfig {
+  /** 水平方向（X/Z 軸の走る速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick) */
+  speedFlexBonusFactorXZ: number;
+  /** 鉛直方向（Y 軸の落下・上昇速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick) */
+  speedFlexBonusFactorY: number;
+  /** 速度しなりボーナスの最大追加長 (blocks) */
+  maxSpeedFlexBonus: number;
+  /** 空中2回目以降のしなりボーナス倍率 (0.0〜1.0) */
+  consecutiveAirBonusDecayRate: number;
 }
 
-/**
- * 竹フックショットのグローバル設定
- * flexibility や tangentTransferRatio、maxCompression を変更することで、
- * しなりの深さや接線への打ち出し力を自由に変更可能です。
- */
-export const bambooHookshotConfig: BambooHookshotConfig = {
-  flexibility: 1.0,
-  maxCompression: 5.0,
-  tangentTransferRatio: 0.7,
-  maxSpeedFlexBonus: 12.0,
-  speedFlexBonusFactorXZ: 16.0,
-  speedFlexBonusFactorY: 1.0,
-  consecutiveAirBonusDecayRate: 0.5,
-  upwardDecayThreshold: 0.5,
-  upwardMinScale: 0.25,
-  upwardDecayExponent: 1.5,
-  stretchOutwardRetention: 0.55,
-  stretchHorizontalRetention: 0.88,
-  tautSoundId: "block.bamboo.hit",
-  tautSoundPitch: 1.5,
-  tautSoundVolume: 2.5,
-};
+export interface BambooTautSoundConfig {
+  /** 竹がピンと張って減衰を開始するタイミングのSE */
+  soundId: string;
+  /** 竹がピンと張ったときのSEピッチ */
+  pitch: number;
+  /** 竹がピンと張ったときのSE音量 */
+  volume: number;
+}
 
 let isTrackingInitialized = false;
 
@@ -212,13 +125,10 @@ function updateBambooTautSound(
 
   if (taut.hasCompressed && !taut.isTaut) {
     taut.isTaut = true;
-    const soundId = bambooHookshotConfig.tautSoundId;
+    const { soundId, volume, pitch } = bambooHookshotDefinition.tautSound;
     if (soundId) {
       try {
-        player.playSound(soundId, {
-          volume: bambooHookshotConfig.tautSoundVolume ?? 2.5,
-          pitch: bambooHookshotConfig.tautSoundPitch ?? 1.5,
-        });
+        player.playSound(soundId, { volume, pitch });
       } catch {}
     }
   }
@@ -241,6 +151,12 @@ export interface BambooHookshotDefinition
   detachOnOverstretch: number;
   /** 自動解除時の効果音ID */
   detachSoundId: string;
+  /** 竹ポールの弾性・反発・しなり物理パラメータ */
+  physics: BambooPhysicsConfig;
+  /** 着弾時の速度に応じたしなりボーナス設定 */
+  airChainBonus: BambooAirChainBonusConfig;
+  /** 竹がピンと張ったときの効果音設定 */
+  tautSound: BambooTautSoundConfig;
   /** フック接続時のコールバック */
   onAttach: (player: Player, state: BambooHookshotState) => void;
   /** フック解除時のコールバック */
@@ -288,24 +204,37 @@ export const bambooHookshotDefinition: BambooHookshotDefinition = {
     soundId: "block.bamboo.place",
   },
   wireStyle: BAMBOO_WIRE_STYLE,
+  physics: {
+    flexibility: 1.0,
+    baseStiffnessFactor: 0.14,
+    maxCompression: 5.0,
+    tangentTransferRatio: 0.7,
+    damping: 0.02,
+    maxAcceleration: 12,
+    upwardDecayThreshold: 0.5,
+    upwardMinScale: 0.25,
+    upwardDecayExponent: 1.5,
+    stretchOutwardRetention: 0.55,
+    stretchHorizontalRetention: 0.88,
+  },
+  airChainBonus: {
+    speedFlexBonusFactorXZ: 16.0,
+    speedFlexBonusFactorY: 1.0,
+    maxSpeedFlexBonus: 12.0,
+    consecutiveAirBonusDecayRate: 0.5,
+  },
+  tautSound: {
+    soundId: "block.bamboo.hit",
+    pitch: 1.5,
+    volume: 2.5,
+  },
   calculateImpulse: (player, state) => {
     updateBambooTautSound(player, state.anchor, state.currentLength);
 
     return calculateBambooHookshot(player, state.anchor, {
       naturalLength: state.currentLength,
       surfaceNormal: state.normal,
-      flexibility: bambooHookshotConfig.flexibility,
-      compressionStiffness: bambooHookshotConfig.compressionStiffness,
-      maxCompression: bambooHookshotConfig.maxCompression,
-      tangentTransferRatio: bambooHookshotConfig.tangentTransferRatio,
-      damping: bambooHookshotConfig.damping,
-      maxAcceleration: bambooHookshotConfig.maxAcceleration,
-      upwardDecayThreshold: bambooHookshotConfig.upwardDecayThreshold,
-      upwardMinScale: bambooHookshotConfig.upwardMinScale,
-      upwardDecayExponent: bambooHookshotConfig.upwardDecayExponent,
-      stretchOutwardRetention: bambooHookshotConfig.stretchOutwardRetention,
-      stretchHorizontalRetention:
-        bambooHookshotConfig.stretchHorizontalRetention,
+      ...bambooHookshotDefinition.physics,
     });
   },
   onAttach: (player, state) => {
@@ -321,7 +250,7 @@ export const bambooHookshotDefinition: BambooHookshotDefinition = {
     const vel = player.getVelocity();
     const toAnchor = Vector3Utils.subtract(state.anchor, player.location);
     const dist = Vector3Utils.magnitude(toAnchor);
-    if (dist > 0.0001) {
+    if (dist > EPSILON) {
       const dirToAnchor = Vector3Utils.scale(toAnchor, 1 / dist);
 
       // 水平方向（X, Z）および鉛直方向（Y）それぞれのアンカー接近速度成分
@@ -331,27 +260,28 @@ export const bambooHookshotDefinition: BambooHookshotDefinition = {
       );
       const inwardY = Math.max(0, vel.y * dirToAnchor.y);
 
-      const factorXZ = bambooHookshotConfig.speedFlexBonusFactorXZ ?? 4.0;
-      const factorY = bambooHookshotConfig.speedFlexBonusFactorY ?? 2.0;
+      const {
+        speedFlexBonusFactorXZ,
+        speedFlexBonusFactorY,
+        maxSpeedFlexBonus,
+        consecutiveAirBonusDecayRate,
+      } = bambooHookshotDefinition.airChainBonus;
 
-      const rawBonus = inwardXZ * factorXZ + inwardY * factorY;
+      const rawBonus =
+        inwardXZ * speedFlexBonusFactorXZ + inwardY * speedFlexBonusFactorY;
       if (rawBonus > 0) {
-        const maxBonus = bambooHookshotConfig.maxSpeedFlexBonus ?? 3.5;
-        let bonus = Math.min(rawBonus, maxBonus);
+        let bonus = Math.min(rawBonus, maxSpeedFlexBonus);
 
         // 一度竹を使い、着地せずにもう一度竹を使用した場合（空中2回目以降）のしなりボーナス減衰処理
         if (airUses > 0) {
           const decayRate = Math.max(
             0,
-            Math.min(
-              1,
-              bambooHookshotConfig.consecutiveAirBonusDecayRate ?? 0.5,
-            ),
+            Math.min(1, consecutiveAirBonusDecayRate),
           );
           bonus *= decayRate;
         }
 
-        if (bonus > 0.0001) {
+        if (bonus > EPSILON) {
           state.currentLength += bonus;
         }
       }

@@ -1,6 +1,6 @@
 import { RIGID_WIRE_STYLE } from "../../render";
-import { calculateRigidHookshot } from "../math/rigid-math";
-import { canUseGazeSteering } from "../math/steering-math";
+import { calculateRigidHookshot, RigidPhysicsConfig } from "../math/rigid-math";
+import { canUseGazeSteering, RigidSteeringConfig } from "../math/steering-math";
 import {
   BaseHookshotDefinition,
   BaseHookshotState,
@@ -30,6 +30,10 @@ export interface RigidHookshotDefinition
     /** 1Tickあたりの最大短縮速度 (blocks/tick) */
     speed: number;
   };
+  /** 剛体ロープの物理パラメータ */
+  physics: RigidPhysicsConfig;
+  /** 視線ステアリング・振り子スイングパラメータ */
+  steering: RigidSteeringConfig;
 }
 
 /**
@@ -60,13 +64,34 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     ticks: 15,
     speed: 5.0,
   },
+  physics: {
+    tautMargin: 0.25,
+    innerSwingMargin: 2.0,
+    innerBaumgarteFactor: 0.08,
+    inwardEscapeThreshold: 0.45,
+    maxSteeringSpeed: 1.65,
+    swingPumpAccelNormal: 0.015,
+    swingPumpAccelVest: 0.04,
+  },
+  steering: {
+    steerAccel: 0.085,
+    maxRotationPowerRatio: 0.6,
+    referenceSwingDistance: 30,
+    slackDeadzone: 0.5,
+    pumpLowSpeedStart: 0.05,
+    pumpLowSpeedEnd: 0.25,
+  },
   calculateImpulse: (player, state) => {
     const hasVest = canUseGazeSteering(player);
+    const { physics, steering } = rigidHookshotDefinition;
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
       enableSteering: hasVest,
-      maxSteeringSpeed: 1.65,
-      swingPumpAccel: hasVest ? 0.04 : 0.015,
+      physics,
+      steering,
+      swingPumpAccel: hasVest
+        ? physics.swingPumpAccelVest
+        : physics.swingPumpAccelNormal,
     });
   },
 };
