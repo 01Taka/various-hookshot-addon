@@ -77,16 +77,21 @@ export function calculateRigidVelocity(
     }
   }
 
-  // 3. 内側スイング継続ゾーン：内側2m以内でアンカーより下〜横側にいる空中時は
-  //    自由落下に落とさず振り子運動を続け、なめらかに実際のロープ長へ戻す
+  // 3. 内側スイング継続ゾーン：内側2m以内でアンカーより下側にいる空中時は
+  //    自由落下に落とさず振り子運動を続け、水平に近づくほど（二乗カーブで）力を抜いて
+  //    上側では完全に無効化しつつ、なめらかに実際のロープ長へ戻す
   const INNER_SWING_MARGIN = 2.0;
   const INNER_BAUMGARTE_FACTOR = 0.08;
+  const INWARD_ESCAPE_THRESHOLD = 0.45;
+  const bottomWeight = Math.max(0, -normal.y);
+  const radialWeight = bottomWeight * bottomWeight;
+
   const inInnerSwingZone =
     !player.isOnGround &&
     !options?.isReelingIn &&
     r < ropeLength &&
     r >= ropeLength - INNER_SWING_MARGIN &&
-    normal.y <= 0.15;
+    radialWeight > 0;
 
   // 2.5 非巻き取り時の振り子スイング追加加速度（空中かつロープが張っている／内側スイング中のみ）
   let isPumpApplied = false;
@@ -112,11 +117,12 @@ export function calculateRigidVelocity(
   const predDistance = r + vn;
   const RADIAL_CORRECTION_GAIN = 0.7;
 
-  if (inInnerSwingZone) {
+  if (inInnerSwingZone && vn > -INWARD_ESCAPE_THRESHOLD) {
     const vtVec = Vector3Utils.subtract(vPred, Vector3Utils.scale(normal, vn));
-    const targetRadialSpeed = (ropeLength - r) * INNER_BAUMGARTE_FACTOR;
-    const dampedRadialSpeed =
-      vn + (targetRadialSpeed - vn) * RADIAL_CORRECTION_GAIN;
+    const targetRadialSpeed =
+      (ropeLength - r) * INNER_BAUMGARTE_FACTOR * radialWeight;
+    const effectiveGain = RADIAL_CORRECTION_GAIN * radialWeight;
+    const dampedRadialSpeed = vn + (targetRadialSpeed - vn) * effectiveGain;
     return Vector3Utils.add(
       vtVec,
       Vector3Utils.scale(normal, dampedRadialSpeed),
