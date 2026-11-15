@@ -52,7 +52,6 @@ const DEFAULT_PROBING_MIN_HIT_DISTANCE = 1.5;
 export class HookshotSystem {
   private static definitionsByItem = new Map<string, HookshotDefinition>();
   private static definitionsById = new Map<string, HookshotDefinition>();
-  private static externalUnhookHandlers: Array<(player: Player) => void> = [];
   private static isInitialized = false;
 
   /**
@@ -68,16 +67,6 @@ export class HookshotSystem {
    */
   public static isHookshotItem(itemTypeId: string): boolean {
     return this.definitionsByItem.has(itemTypeId);
-  }
-
-  /**
-   * 外部の特殊フックショットシステムが発射された時に、このシステムを解除するためのハンドラを登録します。
-   * （疎結合な排他制御用）
-   */
-  public static registerExternalUnhookHandler(
-    handler: (player: Player) => void,
-  ): void {
-    this.externalUnhookHandlers.push(handler);
   }
 
   /**
@@ -185,7 +174,6 @@ export class HookshotSystem {
     if (!hit) {
       const graceTicks = def.raycastGraceTicks ?? 0;
       if (graceTicks > 0) {
-        this.notifyExternalUnhook(player);
         PlayerStateManager.set(player.id, PENDING_RAYCAST_KEY, {
           hookshotId: def.id,
           slotIndex: player.selectedSlotIndex,
@@ -209,7 +197,6 @@ export class HookshotSystem {
     hit: BlockRaycastHit,
   ): void {
     this.clearPendingRaycast(player);
-    this.notifyExternalUnhook(player);
 
     const state: HookshotState = {
       hookshotId: def.id,
@@ -242,8 +229,6 @@ export class HookshotSystem {
     const probing = def.airProbing;
     if (!probing) return;
 
-    this.notifyExternalUnhook(player);
-
     const maxDistance =
       def.maxRopeLength ?? def.maxDistance ?? DEFAULT_MAX_DISTANCE;
     const head = player.getHeadLocation();
@@ -271,15 +256,6 @@ export class HookshotSystem {
     };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, probingState);
-  }
-
-  /**
-   * 外部の特殊フックショット解除ハンドラを実行します。
-   */
-  private static notifyExternalUnhook(player: Player): void {
-    for (const handler of this.externalUnhookHandlers) {
-      handler(player);
-    }
   }
 
   /**

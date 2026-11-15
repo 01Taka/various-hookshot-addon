@@ -3,7 +3,6 @@ import { LineRenderer } from "./line-renderer";
 import { WireStyle } from "./types";
 import {
   ELASTIC_WIRE_STYLE,
-  PATHFINDER_WIRE_STYLE,
   RIGID_WIRE_STYLE,
   ROD_WIRE_STYLE,
   SPRING_WIRE_STYLE,
@@ -57,12 +56,5 @@ export class HookRenderManager {
     const style =
       customStyle ?? DEFAULT_STYLES_BY_ID[hookshotId] ?? RIGID_WIRE_STYLE;
     this.render(player, anchor, style, currentLength, normal, extraCharge);
-  }
-
-  /**
-   * パスファインダー型グラップルのワイヤーを描画します。
-   */
-  public static renderPathfinder(player: Player, anchor: Vector3): void {
-    this.render(player, anchor, PATHFINDER_WIRE_STYLE);
   }
 }

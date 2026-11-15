@@ -349,24 +349,3 @@ export class PostFlightSystem {
     });
   }
 }
-
-/** 慣性飛行開始のショートカット関数 */
-export function startPostFlight(
-  player: Player,
-  options?: PostFlightOptions,
-): boolean {
-  return PostFlightSystem.start(player, options);
-}
-
-/** 慣性飛行解除のショートカット関数 */
-export function stopPostFlight(player: Player): void {
-  PostFlightSystem.stop(player);
-}
-
-/** 慣性飛行インパルス計算のショートカット関数 */
-export function calculatePostFlightImpulse(
-  player: Player,
-  state: PostFlightState,
-): Vector3 | null {
-  return PostFlightSystem.calculateImpulse(player, state);
-}

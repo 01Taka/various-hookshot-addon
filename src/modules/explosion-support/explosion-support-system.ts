@@ -8,7 +8,6 @@ import {
 } from "@minecraft/server";
 import { getMainhandItem } from "addon-utils";
 import { HookshotSystem } from "../hookshot";
-import { PATHFINDER_ITEM_ID } from "../pathfinder-grapple";
 
 /** 爆発サポート用消費アイテムID */
 export const EXPLOSION_ITEM_ID = "various_hookshot_addon:burst_charge";
@@ -28,7 +27,7 @@ export const EXPLOSION_SUPPORT_UPWARD_IMPULSE = 0.85;
 /**
  * 爆発サポートシステム
  * - 単体使用: メインハンドにバーストチャージを持って右クリックで1個消費して発動
- * - フックショット併用: オフハンドにバーストチャージ、メインハンドにフックショット（パスファインダー除く）を持って左クリックで1個消費して発動
+ * - フックショット併用: オフハンドにバーストチャージ、メインハンドにフックショットを持って左クリックで1個消費して発動
  * 1秒のクールダウン（インターバル）が適用されます。クリエイティブモードでは消費しません。
  */
 export class ExplosionSupportSystem {
@@ -83,12 +82,7 @@ export class ExplosionSupportSystem {
     const itemTypeId = heldItemTypeId ?? getMainhandItem(player)?.typeId;
     if (!itemTypeId) return;
 
-    // パスファインダーのグラップルは除外
-    if (itemTypeId === PATHFINDER_ITEM_ID) {
-      return;
-    }
-
-    // パスファインダー以外の登録フックショットか判定
+    // 登録済みのフックショットか判定
     if (!HookshotSystem.isHookshotItem(itemTypeId)) {
       return;
     }

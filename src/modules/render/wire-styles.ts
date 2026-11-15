@@ -56,17 +56,6 @@ export const SPRING_WIRE_STYLE: WireStyle = {
 };
 
 /**
- * パスファインダー型（鉄インゴット）のワイヤースタイル
- * 青白い電気スパークによる高張力ケーブル（1tick寿命）
- */
-export const PATHFINDER_WIRE_STYLE: WireStyle = {
-  particleId: "various_hookshot_addon:wire_pathfinder",
-  stepDistance: 0.45,
-  shapeMode: "straight",
-  anchorParticleId: "various_hookshot_addon:wire_pathfinder",
-};
-
-/**
  * 竹（しなる棒高跳びポール）のワイヤースタイル
  * 鮮やかな竹色パーティクルで、圧縮荷重に応じたしなり（bent）を表現
  */
