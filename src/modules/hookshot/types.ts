@@ -187,6 +187,13 @@ export interface BaseHookshotDefinition<
   reelMode: ReelMode;
   /** 最小ロープ長 (blocks) */
   minRopeLength: number;
+  /** 着弾中の実距離とロープ長の差による伸縮制限 (blocks) */
+  reelLengthDiffLimit?: {
+    /** 実距離がロープ長よりこの値以上長いとき、短縮（巻き取り）を停止する */
+    outward?: number;
+    /** ロープ長が実距離よりこの値以上長いとき、伸長を停止する */
+    inward?: number;
+  };
   /** ワイヤーの描画スタイル（パーティクル、形状モードなど） */
   wireStyle: WireStyle;
   /** 発射時の効果音ID */

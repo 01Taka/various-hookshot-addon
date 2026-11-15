@@ -42,6 +42,10 @@ export const rodHookshotDefinition: RodHookshotDefinition = {
   },
   reelMode: "extend",
   minRopeLength: 2.0,
+  reelLengthDiffLimit: {
+    outward: 4.0,
+    inward: 4.0,
+  },
   shotSoundId: "step.wood",
   airProbing: {
     initialLength: 2.0,

@@ -1047,6 +1047,22 @@ export class HookshotSystem {
 
     // ジャンプは空中時のみ通常方向（短くする）に動作（放物線飛行中は無効）
     if (effectiveJumpPressed && !onGround) {
+      if (
+        baseMode === "shorten" &&
+        this.isReelBlockedByLengthDiff(player, state, def, baseMode)
+      ) {
+        if (state.isReelingIn) {
+          state.isReelingIn = false;
+          stateDirty = true;
+        }
+        if (this.resetStepReelState(state)) {
+          stateDirty = true;
+        }
+        if (stateDirty) {
+          PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+        }
+        return null;
+      }
       if (baseMode === "shorten" && !state.isReelingIn) {
         state.isReelingIn = true;
         stateDirty = true;
@@ -1087,6 +1103,26 @@ export class HookshotSystem {
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
     return null;
+  }
+
+  private static isReelBlockedByLengthDiff(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+    mode: ReelMode,
+  ): boolean {
+    const limit = def.reelLengthDiffLimit;
+    if (!limit || !this.isStateAnchored(state)) {
+      return false;
+    }
+    const distance = Vector3Utils.distance(player.location, state.anchor);
+    if (mode === "shorten" && limit.outward !== undefined) {
+      return distance - state.currentLength >= limit.outward;
+    }
+    if (mode === "extend" && limit.inward !== undefined) {
+      return state.currentLength - distance >= limit.inward;
+    }
+    return false;
   }
 
   private static shouldDetachOnOverstretch(
@@ -1399,6 +1435,32 @@ export class HookshotSystem {
           nextExtra = Number.isFinite(maxExtra)
             ? Math.min(maxExtra, prevExtra + remaining)
             : prevExtra + remaining;
+        }
+      }
+    }
+
+    const diffLimit = def.reelLengthDiffLimit;
+    if (diffLimit && this.isStateAnchored(state)) {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      if (mode === "extend" && diffLimit.inward !== undefined) {
+        const maxAllowedByDiff = distance + diffLimit.inward;
+        nextLength =
+          prevLength >= maxAllowedByDiff
+            ? prevLength
+            : Math.min(nextLength, maxAllowedByDiff);
+      } else if (mode === "shorten" && diffLimit.outward !== undefined) {
+        const minAllowedByDiff = distance - diffLimit.outward;
+        nextLength =
+          prevLength <= minAllowedByDiff
+            ? prevLength
+            : Math.max(nextLength, minAllowedByDiff);
+        if (
+          def.id === "rigid" &&
+          nextLength <= minAllowedByDiff &&
+          state.isReelingIn
+        ) {
+          state.isReelingIn = false;
+          forceSave = true;
         }
       }
     }

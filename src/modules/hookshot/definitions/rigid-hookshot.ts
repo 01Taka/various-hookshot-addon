@@ -54,6 +54,9 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
   },
   reelMode: "shorten",
   minRopeLength: 1.5,
+  reelLengthDiffLimit: {
+    outward: 4.0,
+  },
   raycastGraceTicks: 10,
   shotSoundId: "crossbow.shoot",
   hitSoundId: "place.chain",
