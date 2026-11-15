@@ -7,7 +7,10 @@ import {
   getNormalComponent,
   predictTickPhysics,
 } from "./physics-utils";
-import { calculateGazeSteeringAcceleration } from "./steering-math";
+import {
+  calculateGazeSteeringAcceleration,
+  calculatePendulumPumpAcceleration,
+} from "./steering-math";
 
 export interface RigidHookshotOptions {
   /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
@@ -18,6 +21,8 @@ export interface RigidHookshotOptions {
   steerAccel?: number;
   /** ステアリング加速時の最高速度上限 (blocks/tick、省略時は上限なし) */
   maxSteeringSpeed?: number;
+  /** 非巻き取り時の振り子スイング追加加速度 (blocks/tick²) */
+  swingPumpAccel?: number;
 }
 
 /**
@@ -72,10 +77,6 @@ export function calculateRigidVelocity(
     }
   }
 
-  const vn = getNormalComponent(vPred, normal);
-  const predDistance = r + vn;
-  const RADIAL_CORRECTION_GAIN = 0.7;
-
   // 3. 内側スイング継続ゾーン：内側2m以内でアンカーより下〜横側にいる空中時は
   //    自由落下に落とさず振り子運動を続け、なめらかに実際のロープ長へ戻す
   const INNER_SWING_MARGIN = 2.0;
@@ -86,6 +87,30 @@ export function calculateRigidVelocity(
     r < ropeLength &&
     r >= ropeLength - INNER_SWING_MARGIN &&
     normal.y <= 0.15;
+
+  // 2.5 非巻き取り時の振り子スイング追加加速度（空中かつロープが張っている／内側スイング中のみ）
+  let isPumpApplied = false;
+  if (
+    !player.isOnGround &&
+    !options?.isReelingIn &&
+    options?.swingPumpAccel &&
+    (isTaut || inInnerSwingZone)
+  ) {
+    const pump = calculatePendulumPumpAcceleration(
+      player,
+      normal,
+      vPred,
+      options.swingPumpAccel,
+    );
+    if (pump.x !== 0 || pump.y !== 0 || pump.z !== 0) {
+      vPred = Vector3Utils.add(vPred, pump);
+      isPumpApplied = true;
+    }
+  }
+
+  const vn = getNormalComponent(vPred, normal);
+  const predDistance = r + vn;
+  const RADIAL_CORRECTION_GAIN = 0.7;
 
   if (inInnerSwingZone) {
     const vtVec = Vector3Utils.subtract(vPred, Vector3Utils.scale(normal, vn));
@@ -99,9 +124,9 @@ export function calculateRigidVelocity(
   }
 
   // 4. たるみ判定：次Tickの予測距離がロープ長以内であれば、外力不要（完全な自由落下）
-  // ※ステアリング推進力が加わっている場合は、接線速度を反映するため null ではなく目標速度を返す
+  // ※ステアリング推進力や振り子加速が加わっている場合は、接線速度を反映するため null ではなく目標速度を返す
   if (predDistance <= ropeLength) {
-    if (isSteeringActive) {
+    if (isSteeringActive || isPumpApplied) {
       return vPred;
     }
     return null;

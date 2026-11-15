@@ -195,3 +195,100 @@ export function calculateReelSpeedMultiplier(
     1.0 - gazeRotationalRatio * maxRotationRatio,
   );
 }
+
+/**
+ * 非巻き取り時の振り子スイング用・接線追加加速度を計算します。
+ *
+ * 円錐状の旋回（アンカー水平方向と接線速度が直交）での無限加速を防ぐため、
+ * 水平面（XZ）上で「アンカー方向」「移動入力方向」「接線速度方向」が平行に近いほど強く効き、
+ * 接線方向から離れるほど cos² カーブで滑らかに減衰します。
+ */
+export function calculatePendulumPumpAcceleration(
+  player: Player,
+  normal: Vector3,
+  velocity: Vector3,
+  pumpAccel: number,
+): Vector3 {
+  if (pumpAccel <= 0) return { x: 0, y: 0, z: 0 };
+
+  const resolver = PlayerDirectionResolver.get(player);
+  const input = resolver.input;
+  const inputLen = Math.hypot(input.vector.x, input.vector.z);
+  if (inputLen <= 0.05) return { x: 0, y: 0, z: 0 };
+
+  // 現在地からアンカーへの水平ベクトル（normal は anchor -> player のため反転）
+  const toAnchorX = -normal.x;
+  const toAnchorZ = -normal.z;
+  const horizDist = Math.hypot(toAnchorX, toAnchorZ);
+  if (horizDist < 0.05) return { x: 0, y: 0, z: 0 };
+
+  const toAnchorDirXZ: Vector3 = {
+    x: toAnchorX / horizDist,
+    y: 0,
+    z: toAnchorZ / horizDist,
+  };
+
+  // 入力方向をプレイヤーの向き基準でワールド水平方向へ変換
+  const rot = player.getRotation();
+  const yawRad = (rot.y * Math.PI) / 180;
+  const alpha = Math.atan2(input.vector.x, input.vector.z);
+  const cosA = Math.cos(alpha);
+  const sinA = Math.sin(alpha);
+  const inputDirXZ: Vector3 = {
+    x: cosA * -Math.sin(yawRad) + sinA * -Math.cos(yawRad),
+    y: 0,
+    z: cosA * Math.cos(yawRad) + sinA * -Math.sin(yawRad),
+  };
+
+  // 静止〜低速時はアンカー水平方向と入力方向の平行度（cos²）で漕ぎ出しを許可
+  const cosAnchorInput = Vector3Utils.dot(toAnchorDirXZ, inputDirXZ);
+  const standstillFactor = cosAnchorInput * cosAnchorInput;
+
+  // 現在の接線速度の水平成分を取得
+  const vn = Vector3Utils.dot(velocity, normal);
+  const vtVec = Vector3Utils.subtract(velocity, Vector3Utils.scale(normal, vn));
+  const vtHorizLen = Math.hypot(vtVec.x, vtVec.z);
+
+  let alignmentFactor = standstillFactor;
+  if (vtHorizLen > 0.0001) {
+    const vtDirXZ: Vector3 = {
+      x: vtVec.x / vtHorizLen,
+      y: 0,
+      z: vtVec.z / vtHorizLen,
+    };
+    const cosAnchorVel = Vector3Utils.dot(toAnchorDirXZ, vtDirXZ);
+    const cosInputVel = Math.max(0, Vector3Utils.dot(inputDirXZ, vtDirXZ));
+    // 振り子度（cos²φ） × 入力と進行方向の一致度（cos²θ）
+    const swingFactor =
+      cosAnchorVel * cosAnchorVel * (cosInputVel * cosInputVel);
+
+    // 静止状態からスイング状態へ滑らかにブレンド
+    const LOW_SPEED_START = 0.05;
+    const LOW_SPEED_END = 0.25;
+    const blend = Math.max(
+      0,
+      Math.min(
+        1,
+        (vtHorizLen - LOW_SPEED_START) / (LOW_SPEED_END - LOW_SPEED_START),
+      ),
+    );
+    alignmentFactor = standstillFactor * (1 - blend) + swingFactor * blend;
+  }
+
+  if (alignmentFactor <= 0.0001) return { x: 0, y: 0, z: 0 };
+
+  // 入力方向をロープの接線平面へ射影し、3D接線方向の推進力を生成
+  const inputDotNormal = Vector3Utils.dot(inputDirXZ, normal);
+  const tangentPush = Vector3Utils.subtract(
+    inputDirXZ,
+    Vector3Utils.scale(normal, inputDotNormal),
+  );
+  const tangentPushLen = Vector3Utils.magnitude(tangentPush);
+  if (tangentPushLen < 0.0001) return { x: 0, y: 0, z: 0 };
+
+  const inputMag = Math.min(1.0, inputLen);
+  return Vector3Utils.scale(
+    tangentPush,
+    (pumpAccel * inputMag * alignmentFactor) / tangentPushLen,
+  );
+}

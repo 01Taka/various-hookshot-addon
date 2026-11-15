@@ -35,6 +35,7 @@ export const rigidHookshotDefinition: HookshotDefinition = {
       isReelingIn: state.isReelingIn,
       enableSteering: canUseGazeSteering(player),
       maxSteeringSpeed: 1.65,
+      swingPumpAccel: 0.04,
     });
   },
 };
