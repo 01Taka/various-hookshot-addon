@@ -26,6 +26,8 @@ export interface SpringHookshotState
   initialDirection?: Vector3;
   /** minRopeLength 未満で着弾した際、minRopeLength まで自動伸長中かどうか */
   isAutoExtendingToMin?: boolean;
+  /** 手動伸長中の前Tickにおけるアンカーからの距離 (blocks) */
+  lastExtendDistance?: number;
 }
 
 export interface SpringAutoExtendToMinConfig {
@@ -42,6 +44,8 @@ export interface SpringHookshotDefinition
     RetractCapable {
   /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた時に自動解除するか */
   detachOnMaxExtend: boolean;
+  /** 圧縮状態で手動伸長する際、外向き移動量に追従して距離差が縮まないように伸ばすか */
+  matchOutwardExtend: boolean;
   /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす設定 */
   autoExtendToMin: SpringAutoExtendToMinConfig;
   /** 曲げ復元力の基準モード ("shot_angle" | "surface_normal") */
@@ -80,12 +84,16 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   maxDistance: 48,
   reel: {
     mode: "continuous",
-    speed: 1.5,
+    speed: {
+      shorten: 2.0,
+      extend: 1.0,
+    },
     initialDelta: 0.0,
   },
   reelMode: "extend",
   minRopeLength: 5.0,
   detachOnMaxExtend: true,
+  matchOutwardExtend: true,
   autoExtendToMin: {
     speed: 2.0,
   },

@@ -693,7 +693,9 @@ export class HookshotSystem {
       ...state,
       isAnchored: false,
       isAutoExtending: false,
-      ...(state.hookshotId === "spring" ? { isAutoExtendingToMin: false } : {}),
+      ...(state.hookshotId === "spring"
+        ? { isAutoExtendingToMin: false, lastExtendDistance: undefined }
+        : {}),
       isReelingIn: false,
       isRetracting: true,
       retractDirection,
@@ -1150,7 +1152,13 @@ export class HookshotSystem {
         : reelConfig.initialDelta;
 
     const initialStep = isInitial ? (configuredInitial ?? 0) : 0;
-    let baseSpeed = reelConfig.speed;
+    const configuredSpeed =
+      typeof reelConfig.speed === "object"
+        ? mode === "extend"
+          ? reelConfig.speed.extend
+          : reelConfig.speed.shorten
+        : reelConfig.speed;
+    let baseSpeed = configuredSpeed;
     if (
       mode === "shorten" &&
       this.isStateAnchored(state) &&
@@ -1162,7 +1170,26 @@ export class HookshotSystem {
         baseSpeed =
           slack >= reelConfig.slackSpeed
             ? reelConfig.slackSpeed
-            : slack + (1 - slack / reelConfig.slackSpeed) * reelConfig.speed;
+            : slack + (1 - slack / reelConfig.slackSpeed) * configuredSpeed;
+      }
+    } else if (
+      mode === "extend" &&
+      def.id === "spring" &&
+      state.hookshotId === "spring" &&
+      def.matchOutwardExtend &&
+      this.isStateAnchored(state)
+    ) {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      const prevDistance = state.lastExtendDistance;
+      state.lastExtendDistance = distance;
+      forceSave = true;
+      if (
+        !isInitial &&
+        prevDistance !== undefined &&
+        distance < state.currentLength
+      ) {
+        const outwardDelta = Math.max(0, distance - prevDistance);
+        baseSpeed = Math.max(baseSpeed, outwardDelta);
       }
     }
     let delta = baseSpeed + initialStep;
@@ -1400,6 +1427,14 @@ export class HookshotSystem {
         const activeReelMode = this.handleReelInput(player, state, def);
 
         if (this.isStateAnchored(state)) {
+          if (
+            state.hookshotId === "spring" &&
+            state.lastExtendDistance !== undefined &&
+            activeReelMode !== "extend"
+          ) {
+            state.lastExtendDistance = undefined;
+            PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+          }
           const distance = Vector3Utils.distance(player.location, state.anchor);
           this.updateAutoTakeUp(player, state, def, distance, activeReelMode);
           this.updateAutoExtendToMin(player, state, def);

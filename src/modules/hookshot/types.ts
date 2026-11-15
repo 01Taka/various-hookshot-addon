@@ -30,8 +30,8 @@ export type ReelMode = "shorten" | "extend";
 export type ReelConfig =
   | {
       mode: "continuous";
-      /** 継続的な長さ変更速度 (blocks/tick) */
-      speed: number;
+      /** 継続的な長さ変更速度 (blocks/tick, 単一数値または { shorten, extend } で指定可能) */
+      speed: number | { shorten: number; extend: number };
       /** 距離が自然長以下（たるみ中）のときの短縮速度 (blocks/tick, 省略時は speed と同じ) */
       slackSpeed?: number;
       /** ボタンを押した瞬間に追加で一気に変更する瞬間変化量 (blocks, 単一数値または { shorten?, extend? } で指定可能) */
