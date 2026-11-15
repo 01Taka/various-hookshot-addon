@@ -171,9 +171,12 @@ export class LineRenderer {
     }
 
     const particlesPerSlice = isRingMode ? Math.max(1, ringCount) : 1;
+    const hasCenterParticle =
+      isRingMode && particlesPerSlice > 1 && ringRadius > 0.4;
+    const totalPerSlice = particlesPerSlice + (hasCenterParticle ? 1 : 0);
     const maxSlices = Math.max(
       2,
-      Math.floor(MAX_PARTICLES_PER_WIRE / particlesPerSlice),
+      Math.floor(MAX_PARTICLES_PER_WIRE / totalPerSlice),
     );
     const steps = Math.min(
       Math.max(2, Math.floor(pathLength / Math.max(0.05, step))),
@@ -274,6 +277,14 @@ export class LineRenderer {
       }
 
       if (particlesPerSlice > 1) {
+        if (hasCenterParticle) {
+          this.spawnParticleSafe(
+            dimension,
+            style.particleId,
+            { x: px, y: py, z: pz },
+            wireMolangVars,
+          );
+        }
         const angleOffset =
           style.ringStagger && i % 2 === 1 ? Math.PI / particlesPerSlice : 0;
         const angleStep = (Math.PI * 2) / particlesPerSlice;
@@ -333,17 +344,29 @@ export class LineRenderer {
     );
     const lengthScore = 1 - lengthNorm;
 
-    const minRatio = style.scoreMinRatio ?? 0.35;
-    const maxRatio = style.scoreMaxRatio ?? 1.8;
-    const ratio =
-      currentLength !== undefined && currentLength > 0.001
-        ? dist / currentLength
-        : 1.0;
-    const strainNorm = Math.min(
-      Math.max((ratio - minRatio) / Math.max(0.001, maxRatio - minRatio), 0),
-      1,
-    );
-    const strainScore = 1 - strainNorm;
+    let strainScore: number;
+    if (style.scoreDiffRange !== undefined && currentLength !== undefined) {
+      const center = style.scoreDiffCenter ?? 0;
+      const range = Math.max(0.001, style.scoreDiffRange);
+      const exponent = style.scoreDiffExponent ?? 0.65;
+      const diffFromCenter = dist - currentLength - center;
+      const clampedNorm = Math.min(Math.max(diffFromCenter / range, -1), 1);
+      const curved =
+        Math.sign(clampedNorm) * Math.pow(Math.abs(clampedNorm), exponent);
+      strainScore = 0.5 - 0.5 * curved;
+    } else {
+      const minRatio = style.scoreMinRatio ?? 0.35;
+      const maxRatio = style.scoreMaxRatio ?? 1.8;
+      const ratio =
+        currentLength !== undefined && currentLength > 0.001
+          ? dist / currentLength
+          : 1.0;
+      const strainNorm = Math.min(
+        Math.max((ratio - minRatio) / Math.max(0.001, maxRatio - minRatio), 0),
+        1,
+      );
+      strainScore = 1 - strainNorm;
+    }
 
     const lengthWeight = Math.min(
       Math.max(style.lengthScoreWeight ?? 0.35, 0),

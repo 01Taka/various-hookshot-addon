@@ -55,6 +55,12 @@ export interface WireStyle {
   scoreMinRatio?: number;
   /** 伸縮スコアが最小(0.0)になる距離比率 (dist / currentLength) */
   scoreMaxRatio?: number;
+  /** 伸縮スコアを絶対差 (dist - currentLength) ベースで計算する際の中立オフセット (blocks, 例: -2.0) */
+  scoreDiffCenter?: number;
+  /** 伸縮スコアを絶対差ベースで計算する際の最大振幅 (blocks, 例: 15.0) */
+  scoreDiffRange?: number;
+  /** 絶対差ベースの非線形カーブ指数 (<1 で中央付近の変化を強調, 例: 0.65) */
+  scoreDiffExponent?: number;
 }
 
 export interface WireRenderContext {
