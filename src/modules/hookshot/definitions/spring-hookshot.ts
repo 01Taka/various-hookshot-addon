@@ -29,7 +29,7 @@ export interface SpringHookshotState
 }
 
 export interface SpringAutoExtendToMinConfig {
-  /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす速度 (blocks/s) */
+  /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす速度 (blocks/tick) */
   speed: number;
 }
 
@@ -80,14 +80,14 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   maxDistance: 48,
   reel: {
     mode: "continuous",
-    speed: 2.0,
+    speed: 1.5,
     initialDelta: 0.0,
   },
   reelMode: "extend",
   minRopeLength: 5.0,
   detachOnMaxExtend: true,
   autoExtendToMin: {
-    speed: 4.0,
+    speed: 2.0,
   },
   bendingMode: "shot_angle",
   physics: {
@@ -97,7 +97,7 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
     damping: 0.01,
     maxAcceleration: 10,
     minRadialDenominator: 7.0,
-    minBendingDenominator: 1.0,
+    minBendingDenominator: 3.0,
     bendingStiffness: 1.8,
     bendingPower: 2,
     bendingDamping: 0.02,

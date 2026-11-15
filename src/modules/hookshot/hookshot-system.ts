@@ -1790,10 +1790,7 @@ export class HookshotSystem {
       return;
     }
 
-    const stepPerTick = Math.max(
-      0,
-      def.autoExtendToMin.speed / TICKS_PER_SECOND,
-    );
+    const stepPerTick = Math.max(0, def.autoExtendToMin.speed);
     const nextLength = Math.min(
       state.currentLength + stepPerTick,
       targetMinLength,
