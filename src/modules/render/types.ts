@@ -45,6 +45,16 @@ export interface WireStyle {
   maxRingRadius?: number;
   /** 隣接スライス間でリング角度を半ステップずらして網目状に配置するか */
   ringStagger?: boolean;
+  /** 2軸スコア合成時の全体長スコア重み (0〜1, 残りが自然長比率の重み) */
+  lengthScoreWeight?: number;
+  /** 全体長スコアが最大(1.0)になる距離 (blocks) */
+  scoreMinDistance?: number;
+  /** 全体長スコアが最小(0.0)になる距離 (blocks) */
+  scoreMaxDistance?: number;
+  /** 伸縮スコアが最大(1.0)になる距離比率 (dist / currentLength) */
+  scoreMinRatio?: number;
+  /** 伸縮スコアが最小(0.0)になる距離比率 (dist / currentLength) */
+  scoreMaxRatio?: number;
 }
 
 export interface WireRenderContext {

@@ -91,15 +91,14 @@ export class LineRenderer {
     const maxStep = style.maxStepDistance ?? 2.6;
     const minStep = style.minStepDistance ?? 0.08;
 
-    if (isRatioSpacing && currentLength !== undefined && currentLength > 0.001) {
-      const ratio = dist / currentLength;
-      if (ratio < 1.0) {
-        const compressT = Math.min(1, (1.0 - ratio) / 0.75);
-        step = style.stepDistance - (style.stepDistance - minStep) * compressT;
-      } else {
-        const stretchT = Math.min(1, (ratio - 1.0) / 1.5);
-        step = style.stepDistance + (maxStep - style.stepDistance) * stretchT;
-      }
+    // 全体長と自然長比率の2軸スコア (1.0=最短・最大圧縮 / 0.0=最長・最大伸長)
+    const thicknessScore =
+      isRatioSpacing || style.ringRadiusScaling
+        ? this.calculateThicknessScore(style, dist, currentLength)
+        : 0.5;
+
+    if (isRatioSpacing) {
+      step = maxStep - (maxStep - minStep) * thicknessScore;
       step = Math.min(Math.max(step, minStep), maxStep);
     } else if (isElastic && currentLength !== undefined && currentLength > 0.001) {
       const stretch = Math.max(0, dist - currentLength) + extraCharge;
@@ -129,27 +128,13 @@ export class LineRenderer {
     let ringCount = style.ringSliceParticles ?? 1;
 
     if (style.ringRadiusScaling) {
-      const baseRadius = style.baseRingRadius ?? 0.24;
       const minRadius = style.minRingRadius ?? 0.06;
       const maxRadius = style.maxRingRadius ?? 0.45;
-      const baseSize = style.baseParticleSize ?? 0.13;
       const minSize = style.minParticleSize ?? 0.08;
       const maxSize = style.maxParticleSize ?? 0.18;
-      const ratio =
-        currentLength !== undefined && currentLength > 0.001
-          ? dist / currentLength
-          : 1.0;
 
-      let wireSize: number;
-      if (ratio < 1.0) {
-        const compressT = Math.min(1, (1.0 - ratio) / 0.75);
-        ringRadius = baseRadius + (maxRadius - baseRadius) * compressT;
-        wireSize = baseSize + (maxSize - baseSize) * compressT;
-      } else {
-        const stretchT = Math.min(1, (ratio - 1.0) / 1.5);
-        ringRadius = baseRadius - (baseRadius - minRadius) * stretchT;
-        wireSize = baseSize - (baseSize - minSize) * stretchT;
-      }
+      ringRadius = minRadius + (maxRadius - minRadius) * thicknessScore;
+      const wireSize = minSize + (maxSize - minSize) * thicknessScore;
 
       if (isRingMode) {
         if (ringRadius < 0.08) {
@@ -330,6 +315,41 @@ export class LineRenderer {
         wireMolangVars,
       );
     }
+  }
+
+  /**
+   * 全体の距離と自然長比率の2軸から太さ・密度スコア (0.0〜1.0) を算出します。
+   */
+  private static calculateThicknessScore(
+    style: WireStyle,
+    dist: number,
+    currentLength?: number,
+  ): number {
+    const minDist = style.scoreMinDistance ?? 2.0;
+    const maxDist = style.scoreMaxDistance ?? 40.0;
+    const lengthNorm = Math.min(
+      Math.max((dist - minDist) / Math.max(0.001, maxDist - minDist), 0),
+      1,
+    );
+    const lengthScore = 1 - lengthNorm;
+
+    const minRatio = style.scoreMinRatio ?? 0.35;
+    const maxRatio = style.scoreMaxRatio ?? 1.8;
+    const ratio =
+      currentLength !== undefined && currentLength > 0.001
+        ? dist / currentLength
+        : 1.0;
+    const strainNorm = Math.min(
+      Math.max((ratio - minRatio) / Math.max(0.001, maxRatio - minRatio), 0),
+      1,
+    );
+    const strainScore = 1 - strainNorm;
+
+    const lengthWeight = Math.min(
+      Math.max(style.lengthScoreWeight ?? 0.35, 0),
+      1,
+    );
+    return lengthWeight * lengthScore + (1 - lengthWeight) * strainScore;
   }
 
   private static warnedParticleIds = new Set<string>();
