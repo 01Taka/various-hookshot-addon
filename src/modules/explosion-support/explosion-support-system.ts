@@ -27,7 +27,7 @@ export const EXPLOSION_SUPPORT_UPWARD_IMPULSE = 0.85;
 /**
  * 爆発サポートシステム
  * - 単体使用: メインハンドにバーストチャージを持って右クリックで1個消費して発動
- * - フックショット併用: オフハンドにバーストチャージ、メインハンドにフックショットを持って左クリックで1個消費して発動
+ * - オフハンド併用: オフハンドにバーストチャージを持ち、メインハンドにフックショットまたは素手で左クリックすると1個消費して発動
  * 1秒のクールダウン（インターバル）が適用されます。クリエイティブモードでは消費しません。
  */
 export class ExplosionSupportSystem {
@@ -71,19 +71,20 @@ export class ExplosionSupportSystem {
   ): void {
     if (!player.isValid) return;
 
-    // 左クリック攻撃・空振りスイング以外（ブロック採掘、アイテム使用等）は除外
+    // 左クリック（攻撃・空振り・ブロック採掘）以外のスイング（アイテム使用、設置、ドロップ等）は除外
     if (
       swingSource !== EntitySwingSource.Attack &&
+      swingSource !== EntitySwingSource.Mine &&
       swingSource !== EntitySwingSource.None
     ) {
       return;
     }
 
     const itemTypeId = heldItemTypeId ?? getMainhandItem(player)?.typeId;
-    if (!itemTypeId) return;
+    const isBareHand = !itemTypeId || itemTypeId === "minecraft:air";
 
-    // 登録済みのフックショットか判定
-    if (!HookshotSystem.isHookshotItem(itemTypeId)) {
+    // メインハンドが素手または登録済みのフックショットの場合のみ発動
+    if (!isBareHand && !HookshotSystem.isHookshotItem(itemTypeId)) {
       return;
     }
 
