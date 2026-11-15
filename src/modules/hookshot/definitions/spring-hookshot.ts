@@ -1,4 +1,4 @@
-import { Vector3 } from "@minecraft/server";
+import { Player, Vector3 } from "@minecraft/server";
 import { SPRING_WIRE_STYLE } from "../../render";
 import {
   calculateSpringHookshot,
@@ -54,6 +54,12 @@ export interface SpringHookshotDefinition
   physics: SpringPhysicsConfig;
   /** ワイヤー描画時の基準軸（法線または曲げ軸）を解決するコールバック */
   getWireAxis: (state: SpringHookshotState) => Vector3 | undefined;
+  /** 接続中アクションバーの表示文字列をカスタマイズするコールバック */
+  formatDistanceUi: (
+    player: Player,
+    state: SpringHookshotState,
+    distance: number,
+  ) => string;
 }
 
 /**
@@ -131,6 +137,14 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   },
   wireStyle: SPRING_WIRE_STYLE,
   getWireAxis: (state) => getSpringBendingAxis(state),
+  formatDistanceUi: (_player, state, distance) => {
+    const diff = distance - state.currentLength;
+    const diffSuffix =
+      Math.abs(diff) > 0.1
+        ? ` (${diff > 0 ? "+" : ""}${diff.toFixed(1)}m)`
+        : "";
+    return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m${diffSuffix}`;
+  },
   calculateImpulse: (player, state) => {
     const bendingAxis = getSpringBendingAxis(state);
     const {

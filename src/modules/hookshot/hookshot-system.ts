@@ -138,6 +138,9 @@ export class HookshotSystem {
     if (def.id === "elastic" && state.hookshotId === "elastic") {
       return def.formatDistanceUi(player, state, distance);
     }
+    if (def.id === "spring" && state.hookshotId === "spring") {
+      return def.formatDistanceUi(player, state, distance);
+    }
     return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`;
   }
 
