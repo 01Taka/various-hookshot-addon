@@ -15,7 +15,7 @@ export function canUseGazeSteering(player: Player): boolean {
 export const DEFAULT_STEER_ACCEL = 0.085;
 
 /** フックショットスイングの最高速度上限 (blocks/tick ≈ 33 m/s) */
-export const MAX_HOOKSHOT_SPEED = 1.65;
+export const MAX_HOOKSHOT_SPEED = Infinity;
 
 /** 回転にまわせるパワーの最大比率（最大60%回転 / 40%巻き取り） */
 export const MAX_ROTATION_POWER_RATIO = 0.6;

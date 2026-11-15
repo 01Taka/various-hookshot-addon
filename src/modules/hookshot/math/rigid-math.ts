@@ -1,7 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import {
-  clampOutwardVelocity,
   convertTargetVelocityToImpulse,
   getAirDrag,
   getDirectionAndDistance,
@@ -71,6 +70,7 @@ export function calculateRigidVelocity(
 
   const vn = getNormalComponent(vPred, normal);
   const predDistance = r + vn;
+  const RADIAL_CORRECTION_GAIN = 0.7;
 
   // 3. 内側スイング継続ゾーン：内側2m以内でアンカーより下〜横側にいる空中時は
   //    自由落下に落とさず振り子運動を続け、なめらかに実際のロープ長へ戻す
@@ -86,9 +86,11 @@ export function calculateRigidVelocity(
   if (inInnerSwingZone) {
     const vtVec = Vector3Utils.subtract(vPred, Vector3Utils.scale(normal, vn));
     const targetRadialSpeed = (ropeLength - r) * INNER_BAUMGARTE_FACTOR;
+    const dampedRadialSpeed =
+      vn + (targetRadialSpeed - vn) * RADIAL_CORRECTION_GAIN;
     let target = Vector3Utils.add(
       vtVec,
-      Vector3Utils.scale(normal, targetRadialSpeed),
+      Vector3Utils.scale(normal, dampedRadialSpeed),
     );
     const targetSpeed = Vector3Utils.magnitude(target);
     if (targetSpeed > MAX_HOOKSHOT_SPEED) {
@@ -106,7 +108,7 @@ export function calculateRigidVelocity(
     return null;
   }
 
-  // 5. 拘束適用：ロープ長を超える外向き成分をクランプ
+  // 5. 拘束適用：ロープ長を超える外向き成分をクランプ（同期遅延による発振防止のためゲイン0.7で適用）
   const penetration = Math.max(0, r - ropeLength);
   const BAUMGARTE_FACTOR = 0.15;
 
@@ -117,8 +119,15 @@ export function calculateRigidVelocity(
       ? -penetration * BAUMGARTE_FACTOR
       : Math.max(0, ropeLength - r);
 
-  // 接線方向（スイングの勢い）を100%維持したまま、法線方向のみを制限して返す
-  let target = clampOutwardVelocity(vPred, normal, maxOutwardSpeed);
+  // 接線方向（スイングの勢い）を100%維持したまま、法線方向のみをゲイン付きで制限して返す
+  const excess = Math.max(0, vn - maxOutwardSpeed);
+  let target =
+    excess > 0
+      ? Vector3Utils.subtract(
+          vPred,
+          Vector3Utils.scale(normal, excess * RADIAL_CORRECTION_GAIN),
+        )
+      : vPred;
   const targetSpeed = Vector3Utils.magnitude(target);
   if (targetSpeed > MAX_HOOKSHOT_SPEED) {
     target = Vector3Utils.scale(target, MAX_HOOKSHOT_SPEED / targetSpeed);
