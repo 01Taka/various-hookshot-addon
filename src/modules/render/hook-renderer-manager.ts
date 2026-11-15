@@ -1,4 +1,4 @@
-import { Player, system, Vector3 } from "@minecraft/server";
+import { Player, Vector3 } from "@minecraft/server";
 import { LineRenderer } from "./line-renderer";
 import { WireStyle } from "./types";
 import {
@@ -30,7 +30,7 @@ export class HookRenderManager {
     if (!player.isValid) return 0;
 
     const start = LineRenderer.getHandPosition(player);
-    const count = LineRenderer.drawWire(player.dimension, {
+    return LineRenderer.drawWire(player.dimension, {
       dimensionId: player.dimension.id,
       start,
       end: anchor,
@@ -39,12 +39,6 @@ export class HookRenderManager {
       extraCharge,
       style,
     });
-
-    if (system.currentTick % 10 === 0) {
-      player.sendMessage(`[Debug] Particles: ${count}`);
-    }
-
-    return count;
   }
 
   /**
