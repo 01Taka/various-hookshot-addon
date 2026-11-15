@@ -1184,14 +1184,15 @@ export class HookshotSystem {
       const { minDistance, maxDistance, maxSpeed } = def.distanceReelSpeed;
       const span = Math.max(EPSILON, maxDistance - minDistance);
       const t = Math.min(1, Math.max(0, (distance - minDistance) / span));
-      configuredSpeed = configuredSpeed + t * (maxSpeed - configuredSpeed);
 
-      const { airChainMultiplier, maxBoostedSpeed } = def.chargeSpeedBoost;
       if (isElasticAirChainActive(player)) {
-        configuredSpeed = Math.min(
-          maxBoostedSpeed,
-          configuredSpeed * airChainMultiplier,
+        const { airChainMinSpeed, airChainMaxSpeed } = def.chargeSpeedBoost;
+        configuredSpeed = Math.max(
+          configuredSpeed,
+          airChainMinSpeed + t * (airChainMaxSpeed - airChainMinSpeed),
         );
+      } else {
+        configuredSpeed = configuredSpeed + t * (maxSpeed - configuredSpeed);
       }
     }
 

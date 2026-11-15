@@ -125,10 +125,10 @@ export interface ElasticDistanceReelSpeedConfig {
 }
 
 export interface ElasticChargeSpeedBoostConfig {
-  /** フックショット射出後〜着地までの空中チェイン時の巻き取り速度倍率 */
-  airChainMultiplier: number;
-  /** バフ適用時の巻き取り速度上限 (blocks/tick) */
-  maxBoostedSpeed: number;
+  /** 空中チェイン時の近距離側（minDistance以下）の巻き取り速度 (blocks/tick) */
+  airChainMinSpeed: number;
+  /** 空中チェイン時の遠距離側（maxDistance以上）の巻き取り速度 (blocks/tick) */
+  airChainMaxSpeed: number;
 }
 
 export interface ElasticHookshotDefinition
@@ -189,8 +189,8 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
     maxSpeed: 4.0,
   },
   chargeSpeedBoost: {
-    airChainMultiplier: 1.4,
-    maxBoostedSpeed: 6.0,
+    airChainMinSpeed: 4.5,
+    airChainMaxSpeed: 5.2,
   },
   raycastGraceTicks: 10,
   shotSoundId: "armor.equip_leather",
