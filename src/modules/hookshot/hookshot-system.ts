@@ -1045,21 +1045,27 @@ export class HookshotSystem {
 
     // ジャンプは地上・空中のどちらでも通常方向（短くする／ロッドは伸ばす）に動作
     if (effectiveJumpPressed) {
-      if (
-        baseMode === "shorten" &&
-        this.isReelBlockedByLengthDiff(player, state, def, baseMode)
-      ) {
-        if (state.isReelingIn) {
-          state.isReelingIn = false;
+      if (baseMode === "shorten") {
+        const stallResult = this.updateRigidStallStop(player, state, def);
+        if (stallResult.dirty) {
           stateDirty = true;
         }
-        if (this.resetStepReelState(state)) {
-          stateDirty = true;
+        if (
+          stallResult.blocked ||
+          this.isReelBlockedByLengthDiff(player, state, def, baseMode)
+        ) {
+          if (state.isReelingIn) {
+            state.isReelingIn = false;
+            stateDirty = true;
+          }
+          if (this.resetStepReelState(state)) {
+            stateDirty = true;
+          }
+          if (stateDirty) {
+            PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+          }
+          return null;
         }
-        if (stateDirty) {
-          PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
-        }
-        return null;
       }
       if (baseMode === "shorten" && !state.isReelingIn) {
         state.isReelingIn = true;
@@ -1093,6 +1099,58 @@ export class HookshotSystem {
       PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
     }
     return null;
+  }
+
+  private static updateRigidStallStop(
+    player: Player,
+    state: HookshotState,
+    def: HookshotDefinition,
+  ): { blocked: boolean; dirty: boolean } {
+    if (
+      def.id !== "rigid" ||
+      state.hookshotId !== "rigid" ||
+      !this.isStateAnchored(state)
+    ) {
+      return { blocked: false, dirty: false };
+    }
+
+    const { maxSpeed, ticks, restoreDiff } = def.stallReelStop;
+    const distance = Vector3Utils.distance(player.location, state.anchor);
+    const diff = distance - state.currentLength;
+    const speed = Vector3Utils.magnitude(player.getVelocity());
+    const prevTicks = state.stallReelTicks ?? 0;
+
+    if (speed <= maxSpeed && diff >= restoreDiff - 0.01) {
+      if (prevTicks >= ticks) {
+        let dirty = false;
+        if (diff > restoreDiff) {
+          state.currentLength = Math.min(
+            def.maxDistance,
+            distance - restoreDiff,
+          );
+          dirty = true;
+        }
+        return { blocked: true, dirty };
+      }
+      if (diff > restoreDiff) {
+        const nextTicks = prevTicks + 1;
+        state.stallReelTicks = nextTicks;
+        if (nextTicks >= ticks) {
+          state.currentLength = Math.min(
+            def.maxDistance,
+            distance - restoreDiff,
+          );
+          return { blocked: true, dirty: true };
+        }
+        return { blocked: false, dirty: true };
+      }
+    }
+
+    if (prevTicks !== 0) {
+      state.stallReelTicks = 0;
+      return { blocked: false, dirty: true };
+    }
+    return { blocked: false, dirty: false };
   }
 
   private static isReelBlockedByLengthDiff(
@@ -1274,42 +1332,22 @@ export class HookshotSystem {
       }
     }
     let delta = baseSpeed + initialStep;
-    let isRigidTautShorten = false;
 
+    // 視線ステアリング対応フックショットでエアロベスト装備中に短縮（巻き取り）する場合、
+    // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）
     if (
       mode === "shorten" &&
       def.id === "rigid" &&
-      state.hookshotId === "rigid" &&
-      this.isStateAnchored(state)
+      def.enableGazeSteering &&
+      canUseGazeSteering(player)
     ) {
-      const distance = Vector3Utils.distance(player.location, state.anchor);
-      isRigidTautShorten =
-        distance >= state.currentLength - def.physics.tautMargin;
-      if (isRigidTautShorten) {
-        const currentRampTicks = state.tautReelTicks ?? 0;
-        const { initialRatio, durationTicks } = def.reelRampUp;
-        const progress =
-          durationTicks > 0 ? Math.min(1, currentRampTicks / durationTicks) : 1;
-        const rampMultiplier = initialRatio + (1 - initialRatio) * progress;
-        delta *= rampMultiplier;
-        state.tautReelTicks = currentRampTicks + 1;
-      } else {
-        state.tautReelTicks = 0;
-        state.lastTautReelSpeed = 0;
-      }
-      forceSave = true;
-
-      // 視線ステアリング対応フックショットでエアロベスト装備中に短縮（巻き取り）する場合、
-      // 回転方向の力を得た分だけ短縮速度を遅くする（横向きならロープが縮まず円周運動を維持）
-      if (def.enableGazeSteering && canUseGazeSteering(player)) {
-        const multiplier = calculateReelSpeedMultiplier(
-          player,
-          state.anchor,
-          state.currentLength,
-          def.steering,
-        );
-        delta *= multiplier;
-      }
+      const multiplier = calculateReelSpeedMultiplier(
+        player,
+        state.anchor,
+        state.currentLength,
+        def.steering,
+      );
+      delta *= multiplier;
     }
 
     let continuousSoundId: string | undefined;
@@ -1337,7 +1375,6 @@ export class HookshotSystem {
       delta,
       forceSave,
       continuousSoundId,
-      isRigidTautShorten,
     );
   }
 
@@ -1411,7 +1448,6 @@ export class HookshotSystem {
     delta: number,
     forceSave: boolean,
     soundId?: string,
-    isRigidTautShorten = false,
   ): void {
     const prevLength = state.currentLength;
     const prevExtra =
@@ -1474,16 +1510,6 @@ export class HookshotSystem {
           state.isReelingIn = false;
           forceSave = true;
         }
-      }
-    }
-
-    if (state.hookshotId === "rigid") {
-      const nextRigidReelSpeed = isRigidTautShorten
-        ? Math.max(0, prevLength - nextLength)
-        : 0;
-      if (state.lastTautReelSpeed !== nextRigidReelSpeed) {
-        state.lastTautReelSpeed = nextRigidReelSpeed;
-        forceSave = true;
       }
     }
 
@@ -1573,10 +1599,9 @@ export class HookshotSystem {
         if (
           state.hookshotId === "rigid" &&
           activeReelMode !== "shorten" &&
-          (state.tautReelTicks || state.lastTautReelSpeed)
+          state.stallReelTicks
         ) {
-          state.tautReelTicks = 0;
-          state.lastTautReelSpeed = 0;
+          state.stallReelTicks = 0;
           PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
         }
 

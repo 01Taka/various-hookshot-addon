@@ -38,8 +38,6 @@ export interface RigidPhysicsConfig {
 export interface RigidHookshotOptions {
   /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
   isReelingIn?: boolean;
-  /** 張った状態での当Tickの実巻き取り速度 (blocks/tick) */
-  reelingSpeed?: number;
   /** 視線ステアリング推進力を有効にするかどうか */
   enableSteering?: boolean;
   /** 剛体ロープ物理パラメータ */
@@ -158,15 +156,13 @@ export function calculateRigidVelocity(
 
   // 5. 拘束適用：ロープ長を超える外向き成分をクランプ（同期遅延による発振防止のためゲインで適用）
   const penetration = Math.max(0, r - ropeLength);
-  const reelingSpeed = Math.max(0, options.reelingSpeed ?? 0);
 
   // まだはみ出ていない場合はちょうどロープ長に留まる速度 (ropeLength - r) を上限とし、
   // すでにはみ出ている場合のみマイルドに内側へ引き戻す (-penetration * BAUMGARTE_FACTOR)
-  // 張った状態での能動巻き取り中は、巻き取り速度 (-reelingSpeed) を直接目標速度へ加算する
   const maxOutwardSpeed =
-    (penetration > 0
+    penetration > 0
       ? -penetration * BAUMGARTE_FACTOR
-      : Math.max(0, ropeLength - r)) - reelingSpeed;
+      : Math.max(0, ropeLength - r);
 
   // 接線方向（スイングの勢い）を100%維持したまま、法線方向のみをゲイン付きで制限して返す
   const excess = Math.max(0, vn - maxOutwardSpeed);

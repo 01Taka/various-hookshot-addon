@@ -17,10 +17,8 @@ export interface RigidHookshotState
     ContinuousReelState {
   /** 着弾直後の自動巻き取り残りTick数 */
   autoTakeUpRemainingTicks?: number;
-  /** 張った状態での連続巻き取り継続Tick数（立ち上がりランプアップ用） */
-  tautReelTicks?: number;
-  /** 直近Tickで張った状態から実際に短縮した長さ (blocks/tick) */
-  lastTautReelSpeed?: number;
+  /** 巻き取り中に速度低下で停止している連続Tick数 */
+  stallReelTicks?: number;
 }
 
 export interface RigidHookshotDefinition
@@ -34,12 +32,14 @@ export interface RigidHookshotDefinition
     /** 1Tickあたりの最大短縮速度 (blocks/tick) */
     speed: number;
   };
-  /** 張った状態での巻き取り開始時の立ち上がり設定 */
-  reelRampUp: {
-    /** 開始時の速度倍率 (0〜1) */
-    initialRatio: number;
-    /** 最高速度（100%）に到達するまでのTick数 */
-    durationTicks: number;
+  /** 巻き取り中にプレイヤーがほとんど停止した場合の戻し・停止設定 */
+  stallReelStop: {
+    /** 停止とみなす速度閾値 (blocks/tick) */
+    maxSpeed: number;
+    /** 停止判定が成立する連続Tick数 */
+    ticks: number;
+    /** 停止時にチェーン長を戻す基準の距離差 (blocks) */
+    restoreDiff: number;
   };
   /** 剛体ロープの物理パラメータ */
   physics: RigidPhysicsConfig;
@@ -59,19 +59,19 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
   reel: {
     mode: "continuous",
     speed: 2.0,
-    slackSpeed: 4.0,
     initialDelta: 0.0,
     soundId: "step.chain",
     soundIntervalTicks: 4,
   },
-  reelRampUp: {
-    initialRatio: 0.35,
-    durationTicks: 4,
-  },
   reelMode: "shorten",
   minRopeLength: 1.5,
   reelLengthDiffLimit: {
-    outward: 4.0,
+    outward: 8.0,
+  },
+  stallReelStop: {
+    maxSpeed: 0.1,
+    ticks: 4,
+    restoreDiff: 4.0,
   },
   raycastGraceTicks: 10,
   shotSoundId: "crossbow.shoot",
@@ -105,7 +105,6 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     const { physics, steering } = rigidHookshotDefinition;
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
-      reelingSpeed: state.lastTautReelSpeed ?? 0,
       enableSteering: hasVest,
       physics,
       steering,
