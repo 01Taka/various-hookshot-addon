@@ -1062,28 +1062,6 @@ export class HookshotSystem {
     return null;
   }
 
-  private static shouldDetachOnMaxExtend(
-    player: Player,
-    state: HookshotState,
-    def: HookshotDefinition,
-    activeReelMode: ReelMode | null,
-  ): boolean {
-    if (
-      def.id !== "spring" ||
-      !def.detachOnMaxExtend ||
-      !this.isStateAnchored(state) ||
-      activeReelMode !== "extend"
-    ) {
-      return false;
-    }
-    const maxLength = def.maxDistance;
-    if (state.currentLength < maxLength) {
-      return false;
-    }
-    const distance = Vector3Utils.distance(player.location, state.anchor);
-    return distance >= state.currentLength;
-  }
-
   private static shouldDetachOnOverstretch(
     player: Player,
     state: HookshotState,
@@ -1548,11 +1526,8 @@ export class HookshotSystem {
         }
 
         if (this.isStateAnchored(state)) {
-          // 最高速度到達時（最大長到達＋自然長通過）または外向き高速突破時に自動解除
-          if (
-            this.shouldDetachOnMaxExtend(player, state, def, activeReelMode) ||
-            this.shouldDetachOnOverstretch(player, state, def)
-          ) {
+          // 外向き高速突破時に自動解除
+          if (this.shouldDetachOnOverstretch(player, state, def)) {
             this.unhook(player);
             continue;
           }

@@ -42,8 +42,6 @@ export interface SpringHookshotDefinition
     >,
     AirProbingCapable,
     RetractCapable {
-  /** 最大長まで伸ばしきった状態で、伸ばすボタン押下中に自然長を超えた時に自動解除するか */
-  detachOnMaxExtend: boolean;
   /** 圧縮状態で手動伸長する際、外向き移動量に追従して距離差が縮まないように伸ばすか */
   matchOutwardExtend: boolean;
   /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす設定 */
@@ -98,7 +96,6 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
   },
   reelMode: "extend",
   minRopeLength: 5.0,
-  detachOnMaxExtend: true,
   matchOutwardExtend: true,
   autoExtendToMin: {
     speed: 2.0,
