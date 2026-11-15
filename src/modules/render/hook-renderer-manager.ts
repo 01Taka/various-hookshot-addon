@@ -1,4 +1,4 @@
-import { Player, Vector3 } from "@minecraft/server";
+import { Player, system, Vector3 } from "@minecraft/server";
 import { LineRenderer } from "./line-renderer";
 import { WireStyle } from "./types";
 import {
@@ -26,11 +26,11 @@ export class HookRenderManager {
     currentLength?: number,
     normal?: Vector3,
     extraCharge?: number,
-  ): void {
-    if (!player.isValid) return;
+  ): number {
+    if (!player.isValid) return 0;
 
     const start = LineRenderer.getHandPosition(player);
-    LineRenderer.drawWire(player.dimension, {
+    const count = LineRenderer.drawWire(player.dimension, {
       dimensionId: player.dimension.id,
       start,
       end: anchor,
@@ -39,6 +39,12 @@ export class HookRenderManager {
       extraCharge,
       style,
     });
+
+    if (system.currentTick % 10 === 0) {
+      player.sendMessage(`[Debug] Particles: ${count}`);
+    }
+
+    return count;
   }
 
   /**
@@ -52,9 +58,9 @@ export class HookRenderManager {
     currentLength?: number,
     normal?: Vector3,
     extraCharge?: number,
-  ): void {
+  ): number {
     const style =
       customStyle ?? DEFAULT_STYLES_BY_ID[hookshotId] ?? RIGID_WIRE_STYLE;
-    this.render(player, anchor, style, currentLength, normal, extraCharge);
+    return this.render(player, anchor, style, currentLength, normal, extraCharge);
   }
 }

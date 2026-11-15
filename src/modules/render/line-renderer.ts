@@ -58,13 +58,15 @@ export class LineRenderer {
   public static drawWire(
     dimension: Dimension,
     context: WireRenderContext,
-  ): void {
+  ): number {
     const { start, end, style, currentLength } = context;
     const diff = Vector3Utils.subtract(end, start);
     const dist = Vector3Utils.magnitude(diff);
 
     // 距離が極めて近い場合は描画不要
-    if (dist < 0.25) return;
+    if (dist < 0.25) return 0;
+
+    let spawnedCount = 0;
 
     // たるみ（放物線）およびしなり（弓なり曲げ）の深度計算
     const isSag = style.shapeMode === "sag";
@@ -284,6 +286,7 @@ export class LineRenderer {
             { x: px, y: py, z: pz },
             wireMolangVars,
           );
+          spawnedCount++;
         }
         const angleOffset =
           style.ringStagger && i % 2 === 1 ? Math.PI / particlesPerSlice : 0;
@@ -302,6 +305,7 @@ export class LineRenderer {
             },
             wireMolangVars,
           );
+          spawnedCount++;
         }
       } else {
         this.spawnParticleSafe(
@@ -314,6 +318,7 @@ export class LineRenderer {
           },
           wireMolangVars,
         );
+        spawnedCount++;
       }
     }
 
@@ -325,7 +330,10 @@ export class LineRenderer {
         end,
         wireMolangVars,
       );
+      spawnedCount++;
     }
+
+    return spawnedCount;
   }
 
   /**
