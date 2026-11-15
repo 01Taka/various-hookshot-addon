@@ -31,11 +31,12 @@ export const rigidHookshotDefinition: HookshotDefinition = {
   wireStyle: RIGID_WIRE_STYLE,
   enableGazeSteering: true,
   calculateImpulse: (player, state) => {
+    const hasVest = canUseGazeSteering(player);
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
-      enableSteering: canUseGazeSteering(player),
+      enableSteering: hasVest,
       maxSteeringSpeed: 1.65,
-      swingPumpAccel: 0.04,
+      swingPumpAccel: hasVest ? 0.04 : 0.015,
     });
   },
 };
