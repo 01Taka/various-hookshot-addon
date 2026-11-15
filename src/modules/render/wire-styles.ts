@@ -60,7 +60,7 @@ export const SPRING_WIRE_STYLE: WireStyle = {
   ringRadiusScaling: true,
   baseRingRadius: 0.45,
   minRingRadius: 0.05,
-  maxRingRadius: 1.0,
+  maxRingRadius: 0.8,
   ringStagger: true,
   baseParticleSize: 0.14,
   minParticleSize: 0.07,
