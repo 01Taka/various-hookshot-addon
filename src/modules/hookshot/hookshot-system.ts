@@ -1594,10 +1594,13 @@ export class HookshotSystem {
         );
       } else {
         const distance = Vector3Utils.distance(player.location, state.anchor);
-        const text = def.formatDistanceUi
+        const speed = Vector3Utils.magnitude(player.getVelocity());
+        const baseText = def.formatDistanceUi
           ? def.formatDistanceUi(player, state, distance)
           : `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`;
-        player.onScreenDisplay.setActionBar(text);
+        player.onScreenDisplay.setActionBar(
+          `${baseText} | ${speed.toFixed(2)} b/t (${(speed * 20).toFixed(1)} m/s)`,
+        );
       }
       PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
     } catch {

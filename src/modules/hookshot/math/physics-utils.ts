@@ -78,7 +78,7 @@ export function clampOutwardVelocity(
  * 超過速度に応じた動的空気抵抗（過剰加速防止）
  */
 export function getAirDrag(speed: number): number {
-  const SPEED_THRESHOLD = 1.6; // blocks/tick
+  const SPEED_THRESHOLD = 2.4; // blocks/tick
   const DRAG_COEFFICIENT = 0.4;
 
   let effectiveDragXZ = 0.99;
