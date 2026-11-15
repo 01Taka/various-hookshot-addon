@@ -34,6 +34,7 @@ export const rigidHookshotDefinition: HookshotDefinition = {
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
       enableSteering: canUseGazeSteering(player),
+      maxSteeringSpeed: 1.65,
     });
   },
 };

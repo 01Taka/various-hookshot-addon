@@ -9,7 +9,6 @@ import {
   getNormalComponent,
   predictTickPhysics,
 } from "./physics-utils";
-import { MAX_HOOKSHOT_SPEED } from "./steering-math";
 
 export interface ElasticRopeParams {
   /** ロープの自然長。これ以下ではたるんで力が働かない */
@@ -202,12 +201,6 @@ export function calculateElasticVelocity(
         -penetration * BAUMGARTE_FACTOR,
       );
     }
-  }
-
-  // 最高速度上限クランプ
-  const targetSpeed = Vector3Utils.magnitude(target);
-  if (targetSpeed > MAX_HOOKSHOT_SPEED) {
-    target = Vector3Utils.scale(target, MAX_HOOKSHOT_SPEED / targetSpeed);
   }
 
   return target;

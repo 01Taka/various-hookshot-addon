@@ -7,10 +7,7 @@ import {
   getNormalComponent,
   predictTickPhysics,
 } from "./physics-utils";
-import {
-  calculateGazeSteeringAcceleration,
-  MAX_HOOKSHOT_SPEED,
-} from "./steering-math";
+import { calculateGazeSteeringAcceleration } from "./steering-math";
 
 export interface RigidHookshotOptions {
   /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
@@ -19,6 +16,8 @@ export interface RigidHookshotOptions {
   enableSteering?: boolean;
   /** ステアリング加速度 (blocks/tick²) */
   steerAccel?: number;
+  /** ステアリング加速時の最高速度上限 (blocks/tick、省略時は上限なし) */
+  maxSteeringSpeed?: number;
 }
 
 /**
@@ -62,9 +61,14 @@ export function calculateRigidVelocity(
     );
     vPred = Vector3Utils.add(vPred, steer);
 
-    const predSpeed = Vector3Utils.magnitude(vPred);
-    if (predSpeed > MAX_HOOKSHOT_SPEED) {
-      vPred = Vector3Utils.scale(vPred, MAX_HOOKSHOT_SPEED / predSpeed);
+    if (options?.maxSteeringSpeed !== undefined) {
+      const predSpeed = Vector3Utils.magnitude(vPred);
+      if (predSpeed > options.maxSteeringSpeed) {
+        vPred = Vector3Utils.scale(
+          vPred,
+          options.maxSteeringSpeed / predSpeed,
+        );
+      }
     }
   }
 
@@ -88,15 +92,10 @@ export function calculateRigidVelocity(
     const targetRadialSpeed = (ropeLength - r) * INNER_BAUMGARTE_FACTOR;
     const dampedRadialSpeed =
       vn + (targetRadialSpeed - vn) * RADIAL_CORRECTION_GAIN;
-    let target = Vector3Utils.add(
+    return Vector3Utils.add(
       vtVec,
       Vector3Utils.scale(normal, dampedRadialSpeed),
     );
-    const targetSpeed = Vector3Utils.magnitude(target);
-    if (targetSpeed > MAX_HOOKSHOT_SPEED) {
-      target = Vector3Utils.scale(target, MAX_HOOKSHOT_SPEED / targetSpeed);
-    }
-    return target;
   }
 
   // 4. たるみ判定：次Tickの予測距離がロープ長以内であれば、外力不要（完全な自由落下）
@@ -121,18 +120,12 @@ export function calculateRigidVelocity(
 
   // 接線方向（スイングの勢い）を100%維持したまま、法線方向のみをゲイン付きで制限して返す
   const excess = Math.max(0, vn - maxOutwardSpeed);
-  let target =
-    excess > 0
-      ? Vector3Utils.subtract(
-          vPred,
-          Vector3Utils.scale(normal, excess * RADIAL_CORRECTION_GAIN),
-        )
-      : vPred;
-  const targetSpeed = Vector3Utils.magnitude(target);
-  if (targetSpeed > MAX_HOOKSHOT_SPEED) {
-    target = Vector3Utils.scale(target, MAX_HOOKSHOT_SPEED / targetSpeed);
-  }
-  return target;
+  return excess > 0
+    ? Vector3Utils.subtract(
+        vPred,
+        Vector3Utils.scale(normal, excess * RADIAL_CORRECTION_GAIN),
+      )
+    : vPred;
 }
 
 export function calculateRigidHookshot(
