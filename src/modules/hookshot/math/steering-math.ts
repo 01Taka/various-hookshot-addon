@@ -47,8 +47,10 @@ export interface RigidSteeringConfig {
  * 自動バンク平面とステアリング計算の結果
  */
 export interface RigidSteeringResult {
-  /** 接線方向に加えるステアリング加速度ベクトル */
-  acceleration: Vector3;
+  /** 自動バンク平面上の旋回接線方向単位ベクトル */
+  tangentDir: Vector3;
+  /** 今Tickで接線方向に加算する回転加速度の大きさ (blocks/tick²) */
+  tangentialAccel: number;
   /** 現在の横旋回出力比率 (0.0 〜 1.0) */
   steerRatio: number;
   /** 自動バンク平面の上向き単位法線ベクトル */
@@ -236,11 +238,11 @@ export function calculateRigidSteering(
     | "adPriorityAngleDeg"
   >,
 ): RigidSteeringResult {
-  const chest = getPlayerChestLocation(player);
-  const basis = computeBankedPlaneBasis(chest, anchor, steering);
+  const basis = computeBankedPlaneBasis(player.location, anchor, steering);
   if (!basis) {
     return {
-      acceleration: { x: 0, y: 0, z: 0 },
+      tangentDir: { x: 0, y: 0, z: 0 },
+      tangentialAccel: 0,
       steerRatio: 0,
       planeNormal: { x: 0, y: 1, z: 0 },
     };
@@ -308,7 +310,8 @@ export function calculateRigidSteering(
 
   if (steerRatio <= EPSILON) {
     return {
-      acceleration: { x: 0, y: 0, z: 0 },
+      tangentDir,
+      tangentialAccel: 0,
       steerRatio: 0,
       planeNormal,
     };
@@ -322,7 +325,8 @@ export function calculateRigidSteering(
   const effectiveAccel = steering.steerAccel * distFactor * steerRatio;
 
   return {
-    acceleration: Vector3Utils.scale(tangentDir, effectiveAccel),
+    tangentDir,
+    tangentialAccel: effectiveAccel,
     steerRatio,
     planeNormal,
   };
@@ -349,8 +353,7 @@ export function calculateReelSpeedMultiplier(
     | "slackDeadzone"
   >,
 ): number {
-  const chest = getPlayerChestLocation(player);
-  const basis = computeBankedPlaneBasis(chest, anchor, steering);
+  const basis = computeBankedPlaneBasis(player.location, anchor, steering);
   if (!basis) return 1.0;
 
   // ロープがたるんでいる間は通常速度で巻き取る

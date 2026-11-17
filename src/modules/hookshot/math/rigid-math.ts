@@ -111,13 +111,31 @@ export function calculateRigidVelocity(
       );
     }
 
-    vPred = Vector3Utils.add(vPred, steerResult.acceleration);
+    // 離散Tickでの円弧移動によって外向き（normal方向）へ逃げた接線速度成分を回収し、
+    // 回転を続けるごとに接線回転速度が落ちず連続的に加速し続けるようにする
+    const currentVt = Vector3Utils.dot(vPred, steerResult.tangentDir);
+    let baseVt = currentVt;
+    if (currentVt > 0) {
+      const vnBefore = Vector3Utils.dot(vPred, normal);
+      if (vnBefore > 0) {
+        const maxCurveOutward = (currentVt * currentVt) / Math.max(r, 1.5);
+        const curveOutward = Math.min(vnBefore, maxCurveOutward);
+        const arcSpeed = Math.hypot(currentVt, curveOutward);
+        baseVt =
+          currentVt + (arcSpeed - currentVt) * steerResult.steerRatio;
+      }
+    }
 
-    const predSpeed = Vector3Utils.magnitude(vPred);
-    if (predSpeed > physics.maxSteeringSpeed) {
-      vPred = Vector3Utils.scale(
+    // 接線方向の回転速度に対して直接加速度を加算（巻き取りの内向き速度と干渉させずに maxSteeringSpeed で上限管理）
+    const targetVt = Math.min(
+      physics.maxSteeringSpeed,
+      baseVt + steerResult.tangentialAccel,
+    );
+    const deltaVt = targetVt - currentVt;
+    if (deltaVt !== 0) {
+      vPred = Vector3Utils.add(
         vPred,
-        physics.maxSteeringSpeed / predSpeed,
+        Vector3Utils.scale(steerResult.tangentDir, deltaVt),
       );
     }
   }
