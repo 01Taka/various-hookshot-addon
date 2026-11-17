@@ -19,12 +19,6 @@ export interface RigidHookshotState
   autoTakeUpRemainingTicks?: number;
   /** 巻き取り中に速度低下で停止している連続Tick数 */
   stallReelTicks?: number;
-  /** ステアリング有効状態が連続しているTick数 */
-  steerActiveTicks?: number;
-  /** 10fロックされた旋回方向 (+1: 右, -1: 左) */
-  lockedTurnSign?: 1 | -1;
-  /** 10fロックされた旋回出力比率 (0.0 〜 1.0) */
-  lockedSteerRatio?: number;
 }
 
 export interface RigidHookshotDefinition
@@ -108,7 +102,6 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     steerFadeStartDeg: 90,
     steerFadeEndDeg: 110,
     adPriorityAngleDeg: 30,
-    steerLockTicks: 10,
     minGravityRatio: 0.25,
     planeDownwardDamping: 0.18,
     centrifugalReferenceAccel: 0.1,
@@ -121,30 +114,15 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
   calculateImpulse: (player, state) => {
     const hasVest = canUseGazeSteering(player);
     const { physics, steering, baumgarteFactor } = rigidHookshotDefinition;
-    const steerLockState = {
-      activeTicks: state.steerActiveTicks ?? 0,
-      lockedTurnSign: state.lockedTurnSign,
-      lockedSteerRatio: state.lockedSteerRatio,
-    };
-    const impulse = calculateRigidHookshot(
-      player,
-      state.anchor,
-      state.currentLength,
-      {
-        isReelingIn: state.isReelingIn,
-        enableSteering: hasVest,
-        baumgarteFactor: baumgarteFactor ?? 0.15,
-        physics,
-        steering,
-        swingPumpAccel: hasVest
-          ? physics.swingPumpAccelVest
-          : physics.swingPumpAccelNormal,
-        steerLockState,
-      },
-    );
-    state.steerActiveTicks = steerLockState.activeTicks;
-    state.lockedTurnSign = steerLockState.lockedTurnSign;
-    state.lockedSteerRatio = steerLockState.lockedSteerRatio;
-    return impulse;
+    return calculateRigidHookshot(player, state.anchor, state.currentLength, {
+      isReelingIn: state.isReelingIn,
+      enableSteering: hasVest,
+      baumgarteFactor: baumgarteFactor ?? 0.15,
+      physics,
+      steering,
+      swingPumpAccel: hasVest
+        ? physics.swingPumpAccelVest
+        : physics.swingPumpAccelNormal,
+    });
   },
 };

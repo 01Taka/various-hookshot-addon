@@ -1741,9 +1741,6 @@ export class HookshotSystem {
 
           // 物理インパルス計算と適用
           const impulse = this.calculateImpulseForState(player, def, state);
-          if (state.hookshotId === "rigid") {
-            PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
-          }
           if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
             player.applyImpulse(impulse);
           }
