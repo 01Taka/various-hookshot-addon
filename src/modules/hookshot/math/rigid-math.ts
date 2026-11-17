@@ -1,5 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
+import { MINECRAFT_GRAVITY } from "addon-utils";
 import { EPSILON, RADIAL_CORRECTION_GAIN } from "../constants";
 import {
   convertTargetVelocityToImpulse,
@@ -9,8 +10,8 @@ import {
   predictTickPhysics,
 } from "./physics-utils";
 import {
-  calculateGazeSteeringAcceleration,
   calculatePendulumPumpAcceleration,
+  calculateRigidSteering,
   RigidSteeringConfig,
 } from "./steering-math";
 
@@ -66,13 +67,7 @@ export function calculateRigidVelocity(
   const speed = Vector3Utils.magnitude(currentVel);
   const { physics, steering } = options;
 
-  // 1. アドオンがシミュレートしたい環境抵抗（空気抵抗）を適用した予測速度
-  let vPred = predictTickPhysics({
-    velocity: currentVel,
-    dragXZ: getAirDrag(speed),
-  });
-
-  // 2. 空中ジャンプ巻き取り中かつロープが張っている場合、視線ステアリング推進力を加算
+  // 1. 空中ジャンプ巻き取り中かつロープが張っている場合、自動バンク平面ステアリングを計算
   const isTaut = r >= ropeLength - physics.tautMargin;
   const isSteeringActive = !!(
     options.enableSteering &&
@@ -80,9 +75,43 @@ export function calculateRigidVelocity(
     isTaut
   );
 
-  if (isSteeringActive) {
-    const steer = calculateGazeSteeringAcceleration(player, anchor, steering);
-    vPred = Vector3Utils.add(vPred, steer);
+  const steerResult = isSteeringActive
+    ? calculateRigidSteering(player, anchor, steering)
+    : null;
+  const isSteeringApplied = !!(steerResult && steerResult.steerRatio > 0);
+
+  // 横旋回比率に応じて重力を軽減（最大旋回時でも minGravityRatio 分の重力は残す）
+  const minGravityRatio = Math.max(
+    0,
+    Math.min(1, steering.minGravityRatio),
+  );
+  const effectiveGravity = isSteeringApplied
+    ? MINECRAFT_GRAVITY *
+      (1 - steerResult.steerRatio * (1 - minGravityRatio))
+    : MINECRAFT_GRAVITY;
+
+  // 2. 環境抵抗（空気抵抗）と調整後重力を適用した予測速度
+  let vPred = predictTickPhysics({
+    velocity: currentVel,
+    dragXZ: getAirDrag(speed),
+    gravity: effectiveGravity,
+  });
+
+  if (isSteeringApplied && steerResult) {
+    // 自動バンク平面より下向きに落ちる速度成分（vNp < 0）のみを減衰し、上向き慣性は維持
+    const vNp = Vector3Utils.dot(vPred, steerResult.planeNormal);
+    if (vNp < 0 && steering.planeDownwardDamping > 0) {
+      const damp =
+        vNp *
+        Math.min(1, steering.planeDownwardDamping) *
+        steerResult.steerRatio;
+      vPred = Vector3Utils.subtract(
+        vPred,
+        Vector3Utils.scale(steerResult.planeNormal, damp),
+      );
+    }
+
+    vPred = Vector3Utils.add(vPred, steerResult.acceleration);
 
     const predSpeed = Vector3Utils.magnitude(vPred);
     if (predSpeed > physics.maxSteeringSpeed) {
@@ -146,7 +175,7 @@ export function calculateRigidVelocity(
   // 4. たるみ判定：次Tickの予測距離がロープ長以内であれば、外力不要（完全な自由落下）
   // ※ステアリング推進力や振り子加速が加わっている場合は、接線速度を反映するため null ではなく目標速度を返す
   if (predDistance <= ropeLength) {
-    if (isSteeringActive || isPumpApplied) {
+    if (isSteeringApplied || isPumpApplied) {
       return vPred;
     }
     return null;
