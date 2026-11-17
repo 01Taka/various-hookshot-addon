@@ -12,7 +12,6 @@ import {
 import {
   calculatePendulumPumpAcceleration,
   calculateRigidSteering,
-  cancelPreInputReverseVelocity,
   RigidSteeringConfig,
 } from "./steering-math";
 
@@ -34,8 +33,6 @@ export interface RigidPhysicsConfig {
 }
 
 export interface RigidHookshotOptions {
-  /** アンカーが着弾した直後の初回物理Tickかどうか */
-  isAttachTick?: boolean;
   /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
   isReelingIn?: boolean;
   /** 視線ステアリング推進力を有効にするかどうか */
@@ -100,21 +97,6 @@ export function calculateRigidVelocity(
     gravity: effectiveGravity,
   });
 
-  // 2.1 アンカー着弾直後の初回Tickで A/D が先行入力されている場合、逆回転方向の速度を打ち消す
-  let isReverseCanceled = false;
-  if (options.isAttachTick && options.enableSteering) {
-    const cancelResult = cancelPreInputReverseVelocity(
-      player,
-      anchor,
-      vPred,
-      steering,
-    );
-    if (cancelResult.canceled) {
-      vPred = cancelResult.velocity;
-      isReverseCanceled = true;
-    }
-  }
-
   if (isSteeringApplied && steerResult) {
     // 自動バンク平面より下向きに落ちる速度成分（vNp < 0）のみを減衰し、上向き慣性は維持
     const vNp = Vector3Utils.dot(vPred, steerResult.planeNormal);
@@ -133,10 +115,7 @@ export function calculateRigidVelocity(
     // 回転を続けるごとに接線回転速度が落ちず連続的に加速し続けるようにする
     const currentVt = Vector3Utils.dot(vPred, steerResult.tangentDir);
     let baseVt = currentVt;
-    if (steerResult.hasADPriority && currentVt < 0) {
-      // A/D 入力時は逆回転の接線速度を打ち消してから加速を開始する
-      baseVt = 0;
-    } else if (currentVt > 0) {
+    if (currentVt > 0) {
       const vnBefore = Vector3Utils.dot(vPred, normal);
       if (vnBefore > 0) {
         const maxCurveOutward = (currentVt * currentVt) / Math.max(r, 1.5);
@@ -214,7 +193,7 @@ export function calculateRigidVelocity(
   // 4. たるみ判定：次Tickの予測距離がロープ長以内であれば、外力不要（完全な自由落下）
   // ※ステアリング推進力や振り子加速が加わっている場合は、接線速度を反映するため null ではなく目標速度を返す
   if (predDistance <= ropeLength) {
-    if (isSteeringApplied || isPumpApplied || isReverseCanceled) {
+    if (isSteeringApplied || isPumpApplied) {
       return vPred;
     }
     return null;
