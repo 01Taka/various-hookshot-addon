@@ -436,6 +436,7 @@ export class HookshotSystem {
     if (def.id === "rigid" && state.hookshotId === "rigid") {
       state.autoTakeUpRemainingTicks =
         def.autoTakeUp.ticks > 0 ? def.autoTakeUp.ticks : 0;
+      state.pendingAttachReverseCancel = true;
     }
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
@@ -1748,6 +1749,12 @@ export class HookshotSystem {
           if (state.hookshotId === "elastic" && state.releaseShotPending) {
             state.releaseShotPending = false;
             state.extraCharge = 0;
+            PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+          } else if (
+            state.hookshotId === "rigid" &&
+            state.pendingAttachReverseCancel
+          ) {
+            state.pendingAttachReverseCancel = false;
             PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
           }
 

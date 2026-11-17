@@ -19,6 +19,8 @@ export interface RigidHookshotState
   autoTakeUpRemainingTicks?: number;
   /** 巻き取り中に速度低下で停止している連続Tick数 */
   stallReelTicks?: number;
+  /** アンカー着弾直後にA/D先行入力による逆回転速度打ち消しを行うフラグ */
+  pendingAttachReverseCancel?: boolean;
 }
 
 export interface RigidHookshotDefinition
@@ -115,6 +117,7 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     const hasVest = canUseGazeSteering(player);
     const { physics, steering, baumgarteFactor } = rigidHookshotDefinition;
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
+      isAttachTick: !!state.pendingAttachReverseCancel,
       isReelingIn: state.isReelingIn,
       enableSteering: hasVest,
       baumgarteFactor: baumgarteFactor ?? 0.15,

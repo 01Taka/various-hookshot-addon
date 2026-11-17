@@ -55,6 +55,8 @@ export interface RigidSteeringResult {
   steerRatio: number;
   /** 自動バンク平面の上向き単位法線ベクトル */
   planeNormal: Vector3;
+  /** A/D入力優先が発動しているかどうか */
+  hasADPriority: boolean;
 }
 
 interface BankedPlaneBasis {
@@ -245,6 +247,7 @@ export function calculateRigidSteering(
       tangentialAccel: 0,
       steerRatio: 0,
       planeNormal: { x: 0, y: 1, z: 0 },
+      hasADPriority: false,
     };
   }
 
@@ -314,6 +317,7 @@ export function calculateRigidSteering(
       tangentialAccel: 0,
       steerRatio: 0,
       planeNormal,
+      hasADPriority,
     };
   }
 
@@ -329,7 +333,79 @@ export function calculateRigidSteering(
     tangentialAccel: effectiveAccel,
     steerRatio,
     planeNormal,
+    hasADPriority,
   };
+}
+
+/**
+ * アンカー着弾時に A/D が先行入力されている場合、
+ * その入力と逆回転方向の速度成分を打ち消した速度ベクトルを返します。
+ */
+export function cancelPreInputReverseVelocity(
+  player: Player,
+  anchor: Vector3,
+  velocity: Vector3,
+  steering: Pick<
+    RigidSteeringConfig,
+    "maxUpwardBankDeg" | "bankFullElevationDeg" | "adPriorityAngleDeg"
+  >,
+): { velocity: Vector3; canceled: boolean } {
+  const basis = computeBankedPlaneBasis(player.location, anchor, steering);
+  if (!basis) {
+    return { velocity, canceled: false };
+  }
+
+  const resolver = PlayerDirectionResolver.get(player);
+  const inputVec = resolver.input.vector;
+  const inputLen = Math.hypot(inputVec.x, inputVec.z);
+  const adThresholdSin = Math.sin(
+    (steering.adPriorityAngleDeg * Math.PI) / 180,
+  );
+  const hasADPriority =
+    inputLen > INPUT_DEADZONE &&
+    Math.abs(inputVec.x) / inputLen >= adThresholdSin;
+
+  if (!hasADPriority) {
+    return { velocity, canceled: false };
+  }
+
+  const turnSign = inputVec.x >= 0 ? 1 : -1;
+  const desiredHorizRight: Vector3 = Vector3Utils.scale(
+    basis.rightDir,
+    turnSign,
+  );
+
+  let nextVel = velocity;
+  let canceled = false;
+
+  // 1. 水平面上の逆回転成分（desiredHorizRight と反対向き）を打ち消す
+  const horizRotSpeed = Vector3Utils.dot(nextVel, desiredHorizRight);
+  if (horizRotSpeed < 0) {
+    nextVel = Vector3Utils.subtract(
+      nextVel,
+      Vector3Utils.scale(desiredHorizRight, horizRotSpeed),
+    );
+    canceled = true;
+  }
+
+  // 2. 自動バンク平面上の接線方向に対しても逆回転成分が残っていれば打ち消す
+  const cosPhi = Math.cos(basis.bankAngleRad);
+  const sinPhi = Math.sin(basis.bankAngleRad);
+  const tangentDir: Vector3 = {
+    x: turnSign * cosPhi * basis.rightDir.x + sinPhi * basis.baseUpNormal.x,
+    y: turnSign * cosPhi * basis.rightDir.y + sinPhi * basis.baseUpNormal.y,
+    z: turnSign * cosPhi * basis.rightDir.z + sinPhi * basis.baseUpNormal.z,
+  };
+  const tangentSpeed = Vector3Utils.dot(nextVel, tangentDir);
+  if (tangentSpeed < 0) {
+    nextVel = Vector3Utils.subtract(
+      nextVel,
+      Vector3Utils.scale(tangentDir, tangentSpeed),
+    );
+    canceled = true;
+  }
+
+  return { velocity: nextVel, canceled };
 }
 
 /**
