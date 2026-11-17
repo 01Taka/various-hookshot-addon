@@ -25,6 +25,8 @@ export interface RigidSteeringConfig {
   steerFadeEndDeg: number;
   /** A/D入力優先に切り替わる移動入力の左右角度しきい値 (度) */
   adPriorityAngleDeg: number;
+  /** ステアリング方向・比率をロックするまでの連続Tick数 (0以下でロック無効) */
+  steerLockTicks: number;
   /** 最大横旋回時に残す重力の最小比率 (0.0〜1.0, 例: 0.25 = 25%重力残存) */
   minGravityRatio: number;
   /** 自動バンク平面より下向きへ落下する速度成分の減衰率 (0.0〜1.0) */
@@ -53,6 +55,18 @@ export interface RigidSteeringResult {
   steerRatio: number;
   /** 自動バンク平面の上向き単位法線ベクトル */
   planeNormal: Vector3;
+}
+
+/**
+ * 一定Tick後に旋回方向・比率を固定するためのロック状態
+ */
+export interface RigidSteeringLockState {
+  /** ステアリング有効状態が連続しているTick数 */
+  activeTicks: number;
+  /** ロックされた旋回方向 (+1: 右, -1: 左) */
+  lockedTurnSign?: 1 | -1;
+  /** ロックされた旋回出力比率 (0.0 〜 1.0) */
+  lockedSteerRatio?: number;
 }
 
 interface BankedPlaneBasis {
@@ -234,7 +248,9 @@ export function calculateRigidSteering(
     | "steerFadeStartDeg"
     | "steerFadeEndDeg"
     | "adPriorityAngleDeg"
+    | "steerLockTicks"
   >,
+  lockState?: RigidSteeringLockState,
 ): RigidSteeringResult {
   const chest = getPlayerChestLocation(player);
   const basis = computeBankedPlaneBasis(chest, anchor, steering);
@@ -247,28 +263,6 @@ export function calculateRigidSteering(
   }
 
   const resolver = PlayerDirectionResolver.get(player);
-  const rot = player.getRotation();
-  const yawRad = (rot.y * Math.PI) / 180;
-
-  // プレイヤーの水平視線方向ベクトル（上下ピッチに関わらず安定した水平向きを取得）
-  const lookDirXZ: Vector3 = {
-    x: -Math.sin(yawRad),
-    y: 0,
-    z: Math.cos(yawRad),
-  };
-
-  // アンカー水平方向との角度差 θ_yaw (0 〜 PI)
-  const cosYaw = Math.max(
-    -1,
-    Math.min(1, Vector3Utils.dot(lookDirXZ, basis.toAnchorDirXZ)),
-  );
-  const thetaYawRad = Math.acos(cosYaw);
-
-  // 視線がアンカーに対して右か左か (右: +1, 左: -1)
-  const gazeRightDot = Vector3Utils.dot(lookDirXZ, basis.rightDir);
-  const gazeSign = gazeRightDot >= 0 ? 1 : -1;
-
-  // A/D 入力の判定（入力角度が左右に adPriorityAngleDeg 以上なら A/D 方向を優先）
   const inputVec = resolver.input.vector;
   const inputLen = Math.hypot(inputVec.x, inputVec.z);
   const adThresholdSin = Math.sin(
@@ -278,15 +272,67 @@ export function calculateRigidSteering(
     inputLen > INPUT_DEADZONE &&
     Math.abs(inputVec.x) / inputLen >= adThresholdSin;
 
-  // 90°〜110° の減衰区間でもカメラローカルの A/D 符号（D=+1, A=-1）を使うことで逆回転を防止
-  const turnSign = hasADPriority ? (inputVec.x >= 0 ? 1 : -1) : gazeSign;
-
-  // 台形カーブによる旋回比率 (0.0 〜 1.0)
-  const rawSteerRatio = calculateTrapezoidSteerRatio(
-    thetaYawRad,
-    hasADPriority,
-    steering,
+  const isLocked = !!(
+    lockState &&
+    steering.steerLockTicks > 0 &&
+    lockState.activeTicks >= steering.steerLockTicks &&
+    lockState.lockedTurnSign !== undefined &&
+    lockState.lockedSteerRatio !== undefined
   );
+
+  let turnSign: 1 | -1;
+  let rawSteerRatio: number;
+
+  if (isLocked && lockState) {
+    // ロック済みの場合、A/D 入力があれば切り返しを優先し、なければロック時の方向・比率を維持（視線自由）
+    if (hasADPriority) {
+      turnSign = inputVec.x >= 0 ? 1 : -1;
+      rawSteerRatio = 1.0;
+    } else {
+      turnSign = lockState.lockedTurnSign!;
+      rawSteerRatio = lockState.lockedSteerRatio!;
+    }
+  } else {
+    const rot = player.getRotation();
+    const yawRad = (rot.y * Math.PI) / 180;
+
+    // プレイヤーの水平視線方向ベクトル（上下ピッチに関わらず安定した水平向きを取得）
+    const lookDirXZ: Vector3 = {
+      x: -Math.sin(yawRad),
+      y: 0,
+      z: Math.cos(yawRad),
+    };
+
+    // アンカー水平方向との角度差 θ_yaw (0 〜 PI)
+    const cosYaw = Math.max(
+      -1,
+      Math.min(1, Vector3Utils.dot(lookDirXZ, basis.toAnchorDirXZ)),
+    );
+    const thetaYawRad = Math.acos(cosYaw);
+
+    // 視線がアンカーに対して右か左か (右: +1, 左: -1)
+    const gazeRightDot = Vector3Utils.dot(lookDirXZ, basis.rightDir);
+    const gazeSign: 1 | -1 = gazeRightDot >= 0 ? 1 : -1;
+
+    // 90°〜110° の減衰区間でもカメラローカルの A/D 符号（D=+1, A=-1）を使うことで逆回転を防止
+    turnSign = hasADPriority ? (inputVec.x >= 0 ? 1 : -1) : gazeSign;
+
+    // 台形カーブによる旋回比率 (0.0 〜 1.0)
+    rawSteerRatio = calculateTrapezoidSteerRatio(
+      thetaYawRad,
+      hasADPriority,
+      steering,
+    );
+
+    if (lockState && steering.steerLockTicks > 0) {
+      lockState.activeTicks += 1;
+      if (lockState.activeTicks >= steering.steerLockTicks) {
+        lockState.lockedTurnSign = turnSign;
+        lockState.lockedSteerRatio = rawSteerRatio;
+      }
+    }
+  }
+
   const steerRatio = rawSteerRatio * basis.horizFactor;
 
   const cosPhi = Math.cos(basis.bankAngleRad);

@@ -13,6 +13,7 @@ import {
   calculatePendulumPumpAcceleration,
   calculateRigidSteering,
   RigidSteeringConfig,
+  RigidSteeringLockState,
 } from "./steering-math";
 
 export interface RigidPhysicsConfig {
@@ -45,6 +46,8 @@ export interface RigidHookshotOptions {
   steering: RigidSteeringConfig;
   /** 非巻き取り時の振り子スイング追加加速度 (blocks/tick²) */
   swingPumpAccel: number;
+  /** 10fロック等のステアリングロック状態（呼び出し元で保持・リセット） */
+  steerLockState?: RigidSteeringLockState;
 }
 
 /**
@@ -75,8 +78,19 @@ export function calculateRigidVelocity(
     isTaut
   );
 
+  if (!isSteeringActive && options.steerLockState) {
+    options.steerLockState.activeTicks = 0;
+    options.steerLockState.lockedTurnSign = undefined;
+    options.steerLockState.lockedSteerRatio = undefined;
+  }
+
   const steerResult = isSteeringActive
-    ? calculateRigidSteering(player, anchor, steering)
+    ? calculateRigidSteering(
+        player,
+        anchor,
+        steering,
+        options.steerLockState,
+      )
     : null;
   const isSteeringApplied = !!(steerResult && steerResult.steerRatio > 0);
 
