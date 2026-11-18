@@ -9,14 +9,10 @@ import {
 } from "../constants";
 
 export interface RigidSteeringConfig {
-  /** 視線・A/D入力による接線方向ステアリング最大加速度 (blocks/tick²) */
+  /** 視線・A/D入力による水平接線方向ステアリング最大加速度 (blocks/tick²) */
   steerAccel: number;
   /** 最大回転パワーが得られる基準距離 (m) */
   referenceSwingDistance: number;
-  /** アンカーより下にいるときの自動バンク上向き最大角度 (度) */
-  maxUpwardBankDeg: number;
-  /** 自動バンクが最大角度に達するアンカー仰角 (度) */
-  bankFullElevationDeg: number;
   /** A/D入力なし時に最大加速(100%)へ到達する水平視線角度 (度) */
   fullSteerAngleDeg: number;
   /** 接線加速の減衰を開始する水平視線角度 (度) */
@@ -25,15 +21,25 @@ export interface RigidSteeringConfig {
   steerFadeEndDeg: number;
   /** A/D入力優先に切り替わる移動入力の左右角度しきい値 (度) */
   adPriorityAngleDeg: number;
-  /** 最大横旋回時に残す重力の最小比率 (0.0〜1.0, 例: 0.25 = 25%重力残存) */
-  minGravityRatio: number;
-  /** 自動バンク平面より下向きへ落下する速度成分の減衰率 (0.0〜1.0) */
-  planeDownwardDamping: number;
-  /** 遠心力による巻き取り減速が最大に達する基準遠心加速度 (blocks/tick²) */
+  /** 3D遠心力最大時の重力打ち消し比率 (0.0〜1.0, 例: 0.9 = 最大90%打ち消し) */
+  maxGravityCancelRatio: number;
+  /** 3D遠心力が最大基準に達する遠心加速度 (blocks/tick²) */
+  centrifugal3DReferenceAccel: number;
+  /** 近づく＋下側で接線ベクトルを上向きに回転させる最大角度 (度) */
+  maxUpwardTiltDeg: number;
+  /** 上向き回転が最大に達するアンカー仰角 (度) */
+  tiltFullElevationDeg: number;
+  /** 上向き回転が効き始める最大距離 (blocks) */
+  tiltStartDistance: number;
+  /** 上向き回転が距離要因で最大に達する距離 (blocks) */
+  tiltFullDistance: number;
+  /** 1Tickあたりの接線速度ベクトルの回転追従率 (0.0〜1.0) */
+  tiltRatePerTick: number;
+  /** 横遠心力による巻き取り減速が最大に達する基準遠心加速度 (blocks/tick²) */
   centrifugalReferenceAccel: number;
   /** 遠心力計算時の最小半径クランプ (blocks) */
   centrifugalMinRadius: number;
-  /** 遠心力最大時の巻き取り速度の最小倍率 (0.0以上, 例: 0.25) */
+  /** 横遠心力最大時の巻き取り速度の最小倍率 (0.0以上, 例: 0.25) */
   minReelSpeedMultiplier: number;
   /** たるみ判定の許容マージン (blocks) */
   slackDeadzone: number;
@@ -44,34 +50,42 @@ export interface RigidSteeringConfig {
 }
 
 /**
- * 自動バンク平面とステアリング計算の結果
+ * 接線ステアリングおよび3D遠心力計算の結果
  */
 export interface RigidSteeringResult {
-  /** 自動バンク平面上の旋回接線方向単位ベクトル */
-  tangentDir: Vector3;
-  /** 今Tickで接線方向に加算する回転加速度の大きさ (blocks/tick²) */
+  /** 現在の左右旋回方向の水平接線単位ベクトル */
+  lateralDir: Vector3;
+  /** ロープに直交する上向き単位法線ベクトル */
+  upNormal: Vector3;
+  /** 今Tickで水平接線方向に加算する加速度の大きさ (blocks/tick²) */
   tangentialAccel: number;
   /** 現在の横旋回出力比率 (0.0 〜 1.0) */
   steerRatio: number;
-  /** 自動バンク平面の上向き単位法線ベクトル */
-  planeNormal: Vector3;
+  /** 現在の3D遠心力比率 (0.0 〜 1.0) */
+  centrifugal3DRatio: number;
+  /** 近づく＋下側に応じた目標の上向き回転角 (ラジアン, >= 0) */
+  targetTiltRad: number;
+  /** プレイヤーがアンカーより下（仰角 > 0）にいるかどうか */
+  isBelowAnchor: boolean;
 }
 
-interface BankedPlaneBasis {
+interface SteeringPlaneBasis {
   /** プレイヤーからアンカーへの距離 */
   distance: number;
   /** 水平面上のアンカー距離 */
   horizDist: number;
   /** 接近時（アンカー真上・真下付近）の特異点フェード係数 (0.0 〜 1.0) */
   horizFactor: number;
+  /** アンカーへの3D単位ベクトル */
+  toAnchorDir: Vector3;
   /** アンカーへの水平単位ベクトル */
   toAnchorDirXZ: Vector3;
   /** 水平右方向単位ベクトル (V × U を正規化した方向) */
   rightDir: Vector3;
-  /** 基本平面 P0 の上向き単位法線ベクトル */
+  /** V と R に直交する上向き単位法線ベクトル N0 */
   baseUpNormal: Vector3;
-  /** 自動バンク角 (ラジアン, >= 0) */
-  bankAngleRad: number;
+  /** プレイヤーからアンカーへの仰角 (ラジアン) */
+  elevationRad: number;
 }
 
 /** アンカー真上・真下の特異点フェード距離 (blocks) */
@@ -107,18 +121,12 @@ export function getPlayerChestLocation(player: Player): Vector3 {
 }
 
 /**
- * アンカーとプレイヤー位置から、自動バンク平面の基底ベクトルとバンク角を計算します。
- * - アンカーより下（仰角 > 0）: 最大 +maxUpwardBankDeg まで上向きにバンク
- * - アンカーと同じ高さ〜上（仰角 <= 0）: バンク角 0°
+ * アンカーとプレイヤー位置から、旋回・接線空間の基底ベクトルを計算します。
  */
-function computeBankedPlaneBasis(
+function computeSteeringBasis(
   origin: Vector3,
   anchor: Vector3,
-  steering: Pick<
-    RigidSteeringConfig,
-    "maxUpwardBankDeg" | "bankFullElevationDeg"
-  >,
-): BankedPlaneBasis | null {
+): SteeringPlaneBasis | null {
   const diff = Vector3Utils.subtract(anchor, origin);
   const r = Vector3Utils.magnitude(diff);
   if (r < EPSILON) return null;
@@ -156,27 +164,17 @@ function computeBankedPlaneBasis(
     z: -toAnchorDir.y * toAnchorDirXZ.z,
   };
 
-  // 仰角に応じた自動バンク角 φ (B案: 仰角 > 0 のときのみ上向きバンク、<= 0 は 0°)
   const elevationRad = Math.atan2(toAnchorDir.y, horizLen);
-  let bankAngleRad = 0;
-  if (elevationRad > 0) {
-    const maxBankRad = (steering.maxUpwardBankDeg * Math.PI) / 180;
-    const fullElevRad = (steering.bankFullElevationDeg * Math.PI) / 180;
-    const elevRatio =
-      fullElevRad > EPSILON
-        ? Math.min(1.0, elevationRad / fullElevRad)
-        : 1.0;
-    bankAngleRad = maxBankRad * elevRatio * horizFactor;
-  }
 
   return {
     distance: r,
     horizDist,
     horizFactor,
+    toAnchorDir,
     toAnchorDirXZ,
     rightDir,
     baseUpNormal,
-    bankAngleRad,
+    elevationRad,
   };
 }
 
@@ -220,8 +218,7 @@ function calculateTrapezoidSteerRatio(
 }
 
 /**
- * 自動バンク平面に基づき、視線および A/D 移動キー入力から
- * 接線ステアリング加速度・旋回比率・バンク平面法線を計算します。
+ * 視線および A/D 移動キー入力から水平接線ステアリング加速度・3D遠心力比率・目標上昇回転角を計算します。
  */
 export function calculateRigidSteering(
   player: Player,
@@ -230,21 +227,28 @@ export function calculateRigidSteering(
     RigidSteeringConfig,
     | "steerAccel"
     | "referenceSwingDistance"
-    | "maxUpwardBankDeg"
-    | "bankFullElevationDeg"
     | "fullSteerAngleDeg"
     | "steerFadeStartDeg"
     | "steerFadeEndDeg"
     | "adPriorityAngleDeg"
+    | "centrifugal3DReferenceAccel"
+    | "centrifugalMinRadius"
+    | "maxUpwardTiltDeg"
+    | "tiltFullElevationDeg"
+    | "tiltStartDistance"
+    | "tiltFullDistance"
   >,
 ): RigidSteeringResult {
-  const basis = computeBankedPlaneBasis(player.location, anchor, steering);
+  const basis = computeSteeringBasis(player.location, anchor);
   if (!basis) {
     return {
-      tangentDir: { x: 0, y: 0, z: 0 },
+      lateralDir: { x: 0, y: 0, z: 0 },
+      upNormal: { x: 0, y: 1, z: 0 },
       tangentialAccel: 0,
       steerRatio: 0,
-      planeNormal: { x: 0, y: 1, z: 0 },
+      centrifugal3DRatio: 0,
+      targetTiltRad: 0,
+      isBelowAnchor: false,
     };
   }
 
@@ -291,30 +295,50 @@ export function calculateRigidSteering(
   );
   const steerRatio = rawSteerRatio * basis.horizFactor;
 
-  const cosPhi = Math.cos(basis.bankAngleRad);
-  const sinPhi = Math.sin(basis.bankAngleRad);
+  const lateralDir = Vector3Utils.scale(basis.rightDir, turnSign);
 
-  // 自動バンク平面上の接線方向単位ベクトル T_lat = turnSign * cos(φ) * R + sin(φ) * N0
-  const tangentDir: Vector3 = {
-    x: turnSign * cosPhi * basis.rightDir.x + sinPhi * basis.baseUpNormal.x,
-    y: turnSign * cosPhi * basis.rightDir.y + sinPhi * basis.baseUpNormal.y,
-    z: turnSign * cosPhi * basis.rightDir.z + sinPhi * basis.baseUpNormal.z,
-  };
+  // 3D 接線速度ベクトル v_t3D の大きさと 3D 遠心力比率 (0.0 〜 1.0)
+  const velocity = player.getVelocity();
+  const vRadial = Vector3Utils.dot(velocity, basis.toAnchorDir);
+  const vTangent3D = Vector3Utils.subtract(
+    velocity,
+    Vector3Utils.scale(basis.toAnchorDir, vRadial),
+  );
+  const tangentialSpeed3D = Vector3Utils.magnitude(vTangent3D);
+  const effectiveRadius = Math.max(
+    EPSILON,
+    steering.centrifugalMinRadius,
+    basis.distance,
+  );
+  const centrifugalAccel3D =
+    (tangentialSpeed3D * tangentialSpeed3D) / effectiveRadius;
+  const refAccel3D = Math.max(EPSILON, steering.centrifugal3DReferenceAccel);
+  const centrifugal3DRatio = Math.min(1.0, centrifugalAccel3D / refAccel3D);
 
-  // 自動バンク平面の上向き単位法線ベクトル N_P = -turnSign * sin(φ) * R + cos(φ) * N0
-  const planeNormal: Vector3 = {
-    x: -turnSign * sinPhi * basis.rightDir.x + cosPhi * basis.baseUpNormal.x,
-    y: -turnSign * sinPhi * basis.rightDir.y + cosPhi * basis.baseUpNormal.y,
-    z: -turnSign * sinPhi * basis.rightDir.z + cosPhi * basis.baseUpNormal.z,
-  };
-
-  if (steerRatio <= EPSILON) {
-    return {
-      tangentDir,
-      tangentialAccel: 0,
-      steerRatio: 0,
-      planeNormal,
-    };
+  // 近づくほど × アンカーより下にいる（仰角 > 0）ほど大きくなる上向き回転目標角
+  const isBelowAnchor = basis.elevationRad > 0;
+  let targetTiltRad = 0;
+  if (isBelowAnchor && centrifugal3DRatio > 0) {
+    const distSpan = Math.max(
+      EPSILON,
+      steering.tiltStartDistance - steering.tiltFullDistance,
+    );
+    const distProximity = Math.max(
+      0,
+      Math.min(1, (steering.tiltStartDistance - basis.distance) / distSpan),
+    );
+    const fullElevRad = (steering.tiltFullElevationDeg * Math.PI) / 180;
+    const elevFactor =
+      fullElevRad > EPSILON
+        ? Math.min(1.0, basis.elevationRad / fullElevRad)
+        : 1.0;
+    const maxTiltRad = (steering.maxUpwardTiltDeg * Math.PI) / 180;
+    targetTiltRad =
+      maxTiltRad *
+      distProximity *
+      elevFactor *
+      centrifugal3DRatio *
+      basis.horizFactor;
   }
 
   // 距離に応じた回転パワー減衰
@@ -322,20 +346,26 @@ export function calculateRigidSteering(
     basis.distance,
     steering.referenceSwingDistance,
   );
-  const effectiveAccel = steering.steerAccel * distFactor * steerRatio;
+  const effectiveAccel =
+    steerRatio > EPSILON
+      ? steering.steerAccel * distFactor * steerRatio
+      : 0;
 
   return {
-    tangentDir,
+    lateralDir,
+    upNormal: basis.baseUpNormal,
     tangentialAccel: effectiveAccel,
     steerRatio,
-    planeNormal,
+    centrifugal3DRatio,
+    targetTiltRad,
+    isBelowAnchor,
   };
 }
 
 /**
- * 自動バンク平面上の接線方向速度（遠心力）に基づいてロープ短縮速度の補正倍率を計算します。
+ * 水平横方向（R軸）の接線速度による遠心力に基づいてロープ短縮速度の補正倍率を計算します。
  *
- * - 平面上の接線速度 v_t による遠心力 (v_t² / max(r, centrifugalMinRadius)) が強いほど巻き取り速度が低下
+ * - 横方向の遠心力 (v_horiz² / max(r, centrifugalMinRadius)) が強いほど巻き取り速度が低下
  * - 巻き取り速度は minReelSpeedMultiplier（0以上）まで低下し、負の値にはならない
  * - ロープがたるんでいる（slack）間は、まずテンションを張るために 1.0（通常速度）を返す
  */
@@ -345,15 +375,13 @@ export function calculateReelSpeedMultiplier(
   currentLength: number | undefined,
   steering: Pick<
     RigidSteeringConfig,
-    | "maxUpwardBankDeg"
-    | "bankFullElevationDeg"
     | "centrifugalReferenceAccel"
     | "centrifugalMinRadius"
     | "minReelSpeedMultiplier"
     | "slackDeadzone"
   >,
 ): number {
-  const basis = computeBankedPlaneBasis(player.location, anchor, steering);
+  const basis = computeSteeringBasis(player.location, anchor);
   if (!basis) return 1.0;
 
   // ロープがたるんでいる間は通常速度で巻き取る
@@ -365,28 +393,16 @@ export function calculateReelSpeedMultiplier(
   }
 
   const velocity = player.getVelocity();
-  const horizVelDotRight = Vector3Utils.dot(velocity, basis.rightDir);
-  const turnSign = horizVelDotRight >= 0 ? 1 : -1;
-
-  const cosPhi = Math.cos(basis.bankAngleRad);
-  const sinPhi = Math.sin(basis.bankAngleRad);
-
-  // 自動バンク平面上の接線方向単位ベクトル
-  const planeTangentDir: Vector3 = {
-    x: turnSign * cosPhi * basis.rightDir.x + sinPhi * basis.baseUpNormal.x,
-    y: turnSign * cosPhi * basis.rightDir.y + sinPhi * basis.baseUpNormal.y,
-    z: turnSign * cosPhi * basis.rightDir.z + sinPhi * basis.baseUpNormal.z,
-  };
-
-  // 平面上の接線方向への移動速度 v_t と遠心力 a_c = v_t² / max(r, r_min)
-  const tangentialSpeed = Math.abs(Vector3Utils.dot(velocity, planeTangentDir));
+  const horizTangentialSpeed = Math.abs(
+    Vector3Utils.dot(velocity, basis.rightDir),
+  );
   const effectiveRadius = Math.max(
-     EPSILON,
+    EPSILON,
     steering.centrifugalMinRadius,
     basis.distance,
   );
   const centrifugalAccel =
-    (tangentialSpeed * tangentialSpeed) / effectiveRadius;
+    (horizTangentialSpeed * horizTangentialSpeed) / effectiveRadius;
 
   const refAccel = Math.max(EPSILON, steering.centrifugalReferenceAccel);
   const centrifugalRatio = Math.min(1.0, centrifugalAccel / refAccel);

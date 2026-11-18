@@ -67,7 +67,7 @@ export function calculateRigidVelocity(
   const speed = Vector3Utils.magnitude(currentVel);
   const { physics, steering } = options;
 
-  // 1. 空中ジャンプ巻き取り中かつロープが張っている場合、自動バンク平面ステアリングを計算
+  // 1. 空中ジャンプ巻き取り中かつロープが張っている場合、ステアリングと3D遠心力を計算
   const isTaut = r >= ropeLength - physics.tautMargin;
   const isSteeringActive = !!(
     options.enableSteering &&
@@ -78,65 +78,90 @@ export function calculateRigidVelocity(
   const steerResult = isSteeringActive
     ? calculateRigidSteering(player, anchor, steering)
     : null;
-  const isSteeringApplied = !!(steerResult && steerResult.steerRatio > 0);
-
-  // 横旋回比率に応じて重力を軽減（最大旋回時でも minGravityRatio 分の重力は残す）
-  const minGravityRatio = Math.max(
-    0,
-    Math.min(1, steering.minGravityRatio),
+  const isSteeringApplied = !!(
+    steerResult &&
+    (steerResult.steerRatio > 0 || steerResult.centrifugal3DRatio > 0)
   );
-  const effectiveGravity = isSteeringApplied
-    ? MINECRAFT_GRAVITY *
-      (1 - steerResult.steerRatio * (1 - minGravityRatio))
-    : MINECRAFT_GRAVITY;
+
+  // 3D遠心力比率に応じて重力を打ち消す（遠距離・低速時は通常重力で落下）
+  const c3D = steerResult ? steerResult.centrifugal3DRatio : 0;
+  const maxGravityCancel = Math.max(
+    0,
+    Math.min(1, steering.maxGravityCancelRatio),
+  );
+  const effectiveGravity =
+    MINECRAFT_GRAVITY * (1 - c3D * maxGravityCancel);
+
+  // 3D遠心力比率に応じて接線速度の空気抵抗を軽減し、ベクトルの長さを維持しやすくする
+  const baseDragXZ = getAirDrag(speed);
+  const effectiveDragXZ = baseDragXZ + (1.0 - baseDragXZ) * c3D;
 
   // 2. 環境抵抗（空気抵抗）と調整後重力を適用した予測速度
   let vPred = predictTickPhysics({
     velocity: currentVel,
-    dragXZ: getAirDrag(speed),
+    dragXZ: effectiveDragXZ,
     gravity: effectiveGravity,
   });
 
   if (isSteeringApplied && steerResult) {
-    // 自動バンク平面より下向きに落ちる速度成分（vNp < 0）のみを減衰し、上向き慣性は維持
-    const vNp = Vector3Utils.dot(vPred, steerResult.planeNormal);
-    if (vNp < 0 && steering.planeDownwardDamping > 0) {
-      const damp =
-        vNp *
-        Math.min(1, steering.planeDownwardDamping) *
-        steerResult.steerRatio;
-      vPred = Vector3Utils.subtract(
-        vPred,
-        Vector3Utils.scale(steerResult.planeNormal, damp),
-      );
-    }
-
-    // 離散Tickでの円弧移動によって外向き（normal方向）へ逃げた接線速度成分を回収し、
-    // 回転を続けるごとに接線回転速度が落ちず連続的に加速し続けるようにする
-    const currentVt = Vector3Utils.dot(vPred, steerResult.tangentDir);
-    let baseVt = currentVt;
-    if (currentVt > 0) {
+    // 離散Tickでの円弧移動によって外向き（normal方向）へ逃げた接線速度成分を回収
+    const currentLat = Vector3Utils.dot(vPred, steerResult.lateralDir);
+    let baseLat = currentLat;
+    if (currentLat > 0 && steerResult.steerRatio > 0) {
       const vnBefore = Vector3Utils.dot(vPred, normal);
       if (vnBefore > 0) {
-        const maxCurveOutward = (currentVt * currentVt) / Math.max(r, 1.5);
+        const maxCurveOutward = (currentLat * currentLat) / Math.max(r, 1.5);
         const curveOutward = Math.min(vnBefore, maxCurveOutward);
-        const arcSpeed = Math.hypot(currentVt, curveOutward);
-        baseVt =
-          currentVt + (arcSpeed - currentVt) * steerResult.steerRatio;
+        const arcSpeed = Math.hypot(currentLat, curveOutward);
+        baseLat =
+          currentLat + (arcSpeed - currentLat) * steerResult.steerRatio;
       }
     }
 
-    // 接線方向の回転速度に対して直接加速度を加算（巻き取りの内向き速度と干渉させずに maxSteeringSpeed で上限管理）
-    const targetVt = Math.min(
-      physics.maxSteeringSpeed,
-      baseVt + steerResult.tangentialAccel,
-    );
-    const deltaVt = targetVt - currentVt;
-    if (deltaVt !== 0) {
+    // 水平接線方向へステアリング加速度を加算
+    const targetLat =
+      steerResult.tangentialAccel > 0
+        ? Math.min(
+            physics.maxSteeringSpeed,
+            baseLat + steerResult.tangentialAccel,
+          )
+        : baseLat;
+    const deltaLat = targetLat - currentLat;
+    if (deltaLat !== 0) {
       vPred = Vector3Utils.add(
         vPred,
-        Vector3Utils.scale(steerResult.tangentDir, deltaVt),
+        Vector3Utils.scale(steerResult.lateralDir, deltaLat),
       );
+    }
+
+    // 接線平面（lateralDir, upNormal）上の速度ベクトルの長さを維持しつつ上方向へ回転
+    const vLat = Vector3Utils.dot(vPred, steerResult.lateralDir);
+    const vUp = Vector3Utils.dot(vPred, steerResult.upNormal);
+    if (vLat > EPSILON && c3D > 0) {
+      const planeSpeed = Math.min(
+        physics.maxSteeringSpeed,
+        Math.hypot(vLat, vUp),
+      );
+      const currentTiltRad = Math.atan2(vUp, vLat);
+      const maxTiltRad = (steering.maxUpwardTiltDeg * Math.PI) / 180;
+      const desiredTiltRad = steerResult.isBelowAnchor
+        ? Math.max(currentTiltRad, steerResult.targetTiltRad)
+        : Math.max(0, Math.min(maxTiltRad, currentTiltRad));
+
+      if (desiredTiltRad > currentTiltRad) {
+        const rate = Math.max(0, Math.min(1, steering.tiltRatePerTick)) * c3D;
+        const nextTiltRad =
+          currentTiltRad + (desiredTiltRad - currentTiltRad) * rate;
+        const nextLat = planeSpeed * Math.cos(nextTiltRad);
+        const nextUp = planeSpeed * Math.sin(nextTiltRad);
+        vPred = Vector3Utils.add(
+          vPred,
+          Vector3Utils.add(
+            Vector3Utils.scale(steerResult.lateralDir, nextLat - vLat),
+            Vector3Utils.scale(steerResult.upNormal, nextUp - vUp),
+          ),
+        );
+      }
     }
   }
 
