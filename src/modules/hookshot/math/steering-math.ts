@@ -35,8 +35,12 @@ export interface RigidSteeringConfig {
   tiltFullDistance: number;
   /** 1Tickあたりの接線速度ベクトルの回転追従率 (0.0〜1.0) */
   tiltRatePerTick: number;
-  /** 横遠心力による巻き取り減速が最大に達する基準遠心加速度 (blocks/tick²) */
+  /** 遠心力による巻き取り減速が最大に達する基準遠心加速度 (blocks/tick²) */
   centrifugalReferenceAccel: number;
+  /** 巻き取り減速の遠心力計算における横方向（R軸）速度2乗の重み */
+  reelCentrifugalHorizWeight: number;
+  /** 巻き取り減速の遠心力計算における縦方向（N0軸）速度2乗の重み */
+  reelCentrifugalVertWeight: number;
   /** 遠心力計算時の最小半径クランプ (blocks) */
   centrifugalMinRadius: number;
   /** 横遠心力最大時の巻き取り速度の最小倍率 (0.0以上, 例: 0.25) */
@@ -363,9 +367,10 @@ export function calculateRigidSteering(
 }
 
 /**
- * 水平横方向（R軸）の接線速度による遠心力に基づいてロープ短縮速度の補正倍率を計算します。
+ * 水平横方向（R軸）および縦方向（N0軸）の重み付き接線速度による遠心力に基づいて
+ * ロープ短縮速度の補正倍率を計算します。
  *
- * - 横方向の遠心力 (v_horiz² / max(r, centrifugalMinRadius)) が強いほど巻き取り速度が低下
+ * - 重み付き遠心力 ((w_h * v_horiz² + w_v * v_vert²) / max(r, centrifugalMinRadius)) が強いほど巻き取り速度が低下
  * - 巻き取り速度は minReelSpeedMultiplier（0以上）まで低下し、負の値にはならない
  * - ロープがたるんでいる（slack）間は、まずテンションを張るために 1.0（通常速度）を返す
  */
@@ -376,6 +381,8 @@ export function calculateReelSpeedMultiplier(
   steering: Pick<
     RigidSteeringConfig,
     | "centrifugalReferenceAccel"
+    | "reelCentrifugalHorizWeight"
+    | "reelCentrifugalVertWeight"
     | "centrifugalMinRadius"
     | "minReelSpeedMultiplier"
     | "slackDeadzone"
@@ -393,16 +400,22 @@ export function calculateReelSpeedMultiplier(
   }
 
   const velocity = player.getVelocity();
-  const horizTangentialSpeed = Math.abs(
-    Vector3Utils.dot(velocity, basis.rightDir),
-  );
+  const horizTangentialSpeed = Vector3Utils.dot(velocity, basis.rightDir);
+  const vertTangentialSpeed = Vector3Utils.dot(velocity, basis.baseUpNormal);
+  const weightedSpeedSq =
+    Math.max(0, steering.reelCentrifugalHorizWeight) *
+      horizTangentialSpeed *
+      horizTangentialSpeed +
+    Math.max(0, steering.reelCentrifugalVertWeight) *
+      vertTangentialSpeed *
+      vertTangentialSpeed;
+
   const effectiveRadius = Math.max(
     EPSILON,
     steering.centrifugalMinRadius,
     basis.distance,
   );
-  const centrifugalAccel =
-    (horizTangentialSpeed * horizTangentialSpeed) / effectiveRadius;
+  const centrifugalAccel = weightedSpeedSq / effectiveRadius;
 
   const refAccel = Math.max(EPSILON, steering.centrifugalReferenceAccel);
   const centrifugalRatio = Math.min(1.0, centrifugalAccel / refAccel);

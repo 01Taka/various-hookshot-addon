@@ -1334,7 +1334,7 @@ export class HookshotSystem {
     let delta = baseSpeed + initialStep;
 
     // 視線ステアリング対応フックショットでエアロベスト装備中に短縮（巻き取り）する場合、
-    // 水平横方向の接線移動速度（横遠心力）が強いほど短縮速度を低下させる
+    // 横・縦の重み付き接線移動速度（遠心力）が強いほど短縮速度を低下させる
     if (
       mode === "shorten" &&
       def.id === "rigid" &&
