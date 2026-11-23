@@ -22,7 +22,9 @@ import { HookRenderManager, LineRenderer, WireStyle } from "../render";
 import { PostFlightSystem } from "../post-flight";
 import { isElasticAirChainActive, markElasticAirLaunch } from "./definitions";
 import {
+  calculateAboveAnchorDecayFactor,
   calculateReelSpeedMultiplier,
+  calculateRigidSteering,
   canUseGazeSteering,
 } from "./math/steering-math";
 import {
@@ -142,6 +144,31 @@ export class HookshotSystem {
     }
     if (def.id === "spring" && state.hookshotId === "spring") {
       return def.formatDistanceUi(player, state, distance);
+    }
+    if (
+      def.id === "rigid" &&
+      state.hookshotId === "rigid" &&
+      canUseGazeSteering(player)
+    ) {
+      const decayFactor = calculateAboveAnchorDecayFactor(
+        state.aboveAnchorTicks ?? 0,
+        def.steering,
+      );
+      const decayPercent = Math.round((1 - decayFactor) * 100);
+
+      const steerResult = calculateRigidSteering(
+        player,
+        state.anchor,
+        def.steering,
+      );
+      const maxTiltRad = (def.steering.maxUpwardTiltDeg * Math.PI) / 180;
+      const rawEffectRatio =
+        maxTiltRad > EPSILON
+          ? Math.min(1, steerResult.targetTiltRad / maxTiltRad)
+          : 0;
+      const effectPercent = Math.round(rawEffectRatio * decayFactor * 100);
+
+      return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m | 減衰:${decayPercent}% 効果:${effectPercent}%`;
     }
     return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`;
   }
