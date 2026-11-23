@@ -109,7 +109,7 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     tiltHalfDistance: 20,
     tiltFullDistance: 12,
     tiltRatePerTick: 0.25,
-    aboveAnchorHoldTicks: 10,
+    aboveAnchorHoldTicks: 0,
     aboveAnchorDecayTicks: 20,
     centrifugalReferenceAccel: 0.28,
     reelCentrifugalHorizWeight: 1.0,
