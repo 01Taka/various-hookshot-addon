@@ -5,7 +5,6 @@ import { PostFlightSystem } from "../../post-flight";
 import {
   EPSILON,
   INPUT_DEADZONE,
-  PLAYER_CHEST_HEIGHT_OFFSET,
 } from "../constants";
 
 export interface RigidSteeringConfig {
@@ -21,8 +20,6 @@ export interface RigidSteeringConfig {
   steerFadeEndDeg: number;
   /** A/D入力優先に切り替わる移動入力の左右角度しきい値 (度) */
   adPriorityAngleDeg: number;
-  /** 3D遠心力最大時の重力打ち消し比率 (0.0〜1.0, 例: 0.9 = 最大90%打ち消し) */
-  maxGravityCancelRatio: number;
   /** 3D遠心力が最大基準に達する遠心加速度 (blocks/tick²) */
   centrifugal3DReferenceAccel: number;
   /** 近づく＋下側で接線ベクトルを上向きに回転させる最大角度 (度) */
@@ -35,9 +32,7 @@ export interface RigidSteeringConfig {
   tiltFullDistance: number;
   /** 1Tickあたりの接線速度ベクトルの回転追従率 (0.0〜1.0) */
   tiltRatePerTick: number;
-  /** アンカーより上に到達してから回転変更効果を100%維持するTick数 */
-  aboveAnchorHoldTicks: number;
-  /** 上記維持後に回転変更効果が0%へ減衰するまでのTick数 */
+  /** アンカーより上に到達してから回転変更効果が0%へ減衰するまでのTick数 */
   aboveAnchorDecayTicks: number;
   /** 遠心力による巻き取り減速が最大に達する基準遠心加速度 (blocks/tick²) */
   centrifugalReferenceAccel: number;
@@ -109,24 +104,16 @@ export function canUseGazeSteering(player: Player): boolean {
 
 /**
  * アンカーより上に滞在した累計Tick数から、回転方向変更効果の減衰係数 (0.0 〜 1.0) を計算します。
- * - aboveAnchorHoldTicks まで: 1.0 (100%維持)
- * - その後 aboveAnchorDecayTicks かけて 1.0 → 0.0 へ線形減衰
+ * - aboveAnchorDecayTicks かけて 1.0 → 0.0 へ線形減衰
  */
 export function calculateAboveAnchorDecayFactor(
   aboveAnchorTicks: number,
-  steering: Pick<
-    RigidSteeringConfig,
-    "aboveAnchorHoldTicks" | "aboveAnchorDecayTicks"
-  >,
+  steering: Pick<RigidSteeringConfig, "aboveAnchorDecayTicks">,
 ): number {
-  if (aboveAnchorTicks <= steering.aboveAnchorHoldTicks) {
-    return 1.0;
-  }
   if (steering.aboveAnchorDecayTicks <= EPSILON) {
     return 0.0;
   }
-  const elapsed = aboveAnchorTicks - steering.aboveAnchorHoldTicks;
-  return Math.max(0.0, 1.0 - elapsed / steering.aboveAnchorDecayTicks);
+  return Math.max(0.0, 1.0 - aboveAnchorTicks / steering.aboveAnchorDecayTicks);
 }
 
 /**
@@ -140,14 +127,6 @@ export function getDistanceRotationFactor(
     return 1.0;
   }
   return referenceSwingDistance / distance;
-}
-
-/**
- * プレイヤーの胸の位置を取得します。
- */
-export function getPlayerChestLocation(player: Player): Vector3 {
-  const pos = player.location;
-  return { x: pos.x, y: pos.y + PLAYER_CHEST_HEIGHT_OFFSET, z: pos.z };
 }
 
 /**

@@ -1,6 +1,5 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
-import { MINECRAFT_GRAVITY } from "addon-utils";
 import { EPSILON, RADIAL_CORRECTION_GAIN } from "../constants";
 import {
   convertTargetVelocityToImpulse,
@@ -86,24 +85,16 @@ export function calculateRigidVelocity(
     (steerResult.steerRatio > 0 || steerResult.centrifugal3DRatio > 0)
   );
 
-  // 3D遠心力比率に応じて重力を打ち消す（遠距離・低速時は通常重力で落下）
   const c3D = steerResult ? steerResult.centrifugal3DRatio : 0;
-  const maxGravityCancel = Math.max(
-    0,
-    Math.min(1, steering.maxGravityCancelRatio),
-  );
-  const effectiveGravity =
-    MINECRAFT_GRAVITY * (1 - c3D * maxGravityCancel);
 
   // 3D遠心力比率に応じて接線速度の空気抵抗を軽減し、ベクトルの長さを維持しやすくする
   const baseDragXZ = getAirDrag(speed);
   const effectiveDragXZ = baseDragXZ + (1.0 - baseDragXZ) * c3D;
 
-  // 2. 環境抵抗（空気抵抗）と調整後重力を適用した予測速度
+  // 2. 環境抵抗（空気抵抗）と標準重力を適用した予測速度
   let vPred = predictTickPhysics({
     velocity: currentVel,
     dragXZ: effectiveDragXZ,
-    gravity: effectiveGravity,
   });
 
   if (isSteeringApplied && steerResult) {
