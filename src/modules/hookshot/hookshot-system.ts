@@ -1643,9 +1643,7 @@ export class HookshotSystem {
           }
           const distance = Vector3Utils.distance(player.location, state.anchor);
           if (def.id === "rigid" && state.hookshotId === "rigid") {
-            const maxAboveTicks =
-              def.steering.aboveAnchorHoldTicks +
-              def.steering.aboveAnchorDecayTicks;
+            const maxAboveTicks = def.steering.aboveAnchorDecayTicks;
             const currentAboveTicks = state.aboveAnchorTicks ?? 0;
             if (
               player.location.y >= state.anchor.y &&
