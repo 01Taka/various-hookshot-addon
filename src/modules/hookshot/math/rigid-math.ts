@@ -10,6 +10,7 @@ import {
   predictTickPhysics,
 } from "./physics-utils";
 import {
+  calculateAboveAnchorDecayFactor,
   calculatePendulumPumpAcceleration,
   calculateRigidSteering,
   RigidSteeringConfig,
@@ -37,6 +38,8 @@ export interface RigidHookshotOptions {
   isReelingIn?: boolean;
   /** 視線ステアリング推進力を有効にするかどうか */
   enableSteering?: boolean;
+  /** アンカーより上に滞在した累計Tick数 */
+  aboveAnchorTicks?: number;
   /** Baumgarte 位置誤差安定化係数 */
   baumgarteFactor: number;
   /** 剛体ロープ物理パラメータ */
@@ -135,23 +138,32 @@ export function calculateRigidVelocity(
     }
 
     // 接線平面（lateralDir, upNormal）上の速度ベクトルの長さを維持しつつ上方向へ回転
+    // ※ アンカーより上（!isBelowAnchor）では下向き落下速度を無理に水平へ戻さない。
+    //    また一度アンカーより上へ出て減衰した後は、下へ戻っても回転変更効果は回復しない。
+    const aboveAnchorDecayFactor = calculateAboveAnchorDecayFactor(
+      options.aboveAnchorTicks ?? 0,
+      steering,
+    );
     const vLat = Vector3Utils.dot(vPred, steerResult.lateralDir);
     const vUp = Vector3Utils.dot(vPred, steerResult.upNormal);
-    if (vLat > EPSILON && c3D > 0) {
+    if (
+      steerResult.isBelowAnchor &&
+      aboveAnchorDecayFactor > 0 &&
+      vLat > EPSILON &&
+      c3D > 0
+    ) {
       const planeSpeed = Math.min(
         physics.maxSteeringSpeed,
         Math.hypot(vLat, vUp),
       );
       const currentTiltRad = Math.atan2(vUp, vLat);
-      const maxTiltRad = (steering.maxUpwardTiltDeg * Math.PI) / 180;
-      const desiredTiltRad = steerResult.isBelowAnchor
-        ? Math.max(currentTiltRad, steerResult.targetTiltRad)
-        : Math.max(0, Math.min(maxTiltRad, currentTiltRad));
-
-      if (desiredTiltRad > currentTiltRad) {
-        const rate = Math.max(0, Math.min(1, steering.tiltRatePerTick)) * c3D;
+      if (steerResult.targetTiltRad > currentTiltRad) {
+        const rate =
+          Math.max(0, Math.min(1, steering.tiltRatePerTick)) *
+          c3D *
+          aboveAnchorDecayFactor;
         const nextTiltRad =
-          currentTiltRad + (desiredTiltRad - currentTiltRad) * rate;
+          currentTiltRad + (steerResult.targetTiltRad - currentTiltRad) * rate;
         const nextLat = planeSpeed * Math.cos(nextTiltRad);
         const nextUp = planeSpeed * Math.sin(nextTiltRad);
         vPred = Vector3Utils.add(

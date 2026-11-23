@@ -1615,6 +1615,19 @@ export class HookshotSystem {
             PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
           }
           const distance = Vector3Utils.distance(player.location, state.anchor);
+          if (def.id === "rigid" && state.hookshotId === "rigid") {
+            const maxAboveTicks =
+              def.steering.aboveAnchorHoldTicks +
+              def.steering.aboveAnchorDecayTicks;
+            const currentAboveTicks = state.aboveAnchorTicks ?? 0;
+            if (
+              player.location.y >= state.anchor.y &&
+              currentAboveTicks < maxAboveTicks
+            ) {
+              state.aboveAnchorTicks = currentAboveTicks + 1;
+              PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+            }
+          }
           this.updateAutoTakeUp(player, state, def, distance, activeReelMode);
           this.updateAutoExtendToMin(player, state, def);
 

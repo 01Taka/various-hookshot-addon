@@ -19,6 +19,8 @@ export interface RigidHookshotState
   autoTakeUpRemainingTicks?: number;
   /** 巻き取り中に速度低下で停止している連続Tick数 */
   stallReelTicks?: number;
+  /** アンカーより上に滞在した累計Tick数（そのフック中は回復しない） */
+  aboveAnchorTicks?: number;
 }
 
 export interface RigidHookshotDefinition
@@ -107,6 +109,8 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     tiltHalfDistance: 20,
     tiltFullDistance: 12,
     tiltRatePerTick: 0.25,
+    aboveAnchorHoldTicks: 10,
+    aboveAnchorDecayTicks: 20,
     centrifugalReferenceAccel: 0.28,
     reelCentrifugalHorizWeight: 1.0,
     reelCentrifugalVertWeight: 0.3,
@@ -122,6 +126,7 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
       enableSteering: hasVest,
+      aboveAnchorTicks: state.aboveAnchorTicks,
       baumgarteFactor: baumgarteFactor ?? 0.15,
       physics,
       steering,

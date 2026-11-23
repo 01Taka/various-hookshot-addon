@@ -35,6 +35,10 @@ export interface RigidSteeringConfig {
   tiltFullDistance: number;
   /** 1Tickあたりの接線速度ベクトルの回転追従率 (0.0〜1.0) */
   tiltRatePerTick: number;
+  /** アンカーより上に到達してから回転変更効果を100%維持するTick数 */
+  aboveAnchorHoldTicks: number;
+  /** 上記維持後に回転変更効果が0%へ減衰するまでのTick数 */
+  aboveAnchorDecayTicks: number;
   /** 遠心力による巻き取り減速が最大に達する基準遠心加速度 (blocks/tick²) */
   centrifugalReferenceAccel: number;
   /** 巻き取り減速の遠心力計算における横方向（R軸）速度2乗の重み */
@@ -101,6 +105,28 @@ const HORIZ_SINGULARITY_FADE_DISTANCE = 2.0;
  */
 export function canUseGazeSteering(player: Player): boolean {
   return PostFlightSystem.getEquippedVestInfo(player) !== null;
+}
+
+/**
+ * アンカーより上に滞在した累計Tick数から、回転方向変更効果の減衰係数 (0.0 〜 1.0) を計算します。
+ * - aboveAnchorHoldTicks まで: 1.0 (100%維持)
+ * - その後 aboveAnchorDecayTicks かけて 1.0 → 0.0 へ線形減衰
+ */
+export function calculateAboveAnchorDecayFactor(
+  aboveAnchorTicks: number,
+  steering: Pick<
+    RigidSteeringConfig,
+    "aboveAnchorHoldTicks" | "aboveAnchorDecayTicks"
+  >,
+): number {
+  if (aboveAnchorTicks <= steering.aboveAnchorHoldTicks) {
+    return 1.0;
+  }
+  if (steering.aboveAnchorDecayTicks <= EPSILON) {
+    return 0.0;
+  }
+  const elapsed = aboveAnchorTicks - steering.aboveAnchorHoldTicks;
+  return Math.max(0.0, 1.0 - elapsed / steering.aboveAnchorDecayTicks);
 }
 
 /**
@@ -323,7 +349,7 @@ export function calculateRigidSteering(
   const isBelowAnchor = basis.elevationRad > 0;
   let targetTiltRad = 0;
   if (isBelowAnchor && centrifugal3DRatio > 0) {
-    const distDiff = Math.max(0, basis.distance - steering.tiltFullDistance);
+    const distDiff = Math.max(0, basis.horizDist - steering.tiltFullDistance);
     const distProximity =
       steering.tiltHalfDistance > EPSILON
         ? Math.pow(0.5, distDiff / steering.tiltHalfDistance)
