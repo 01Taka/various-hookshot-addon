@@ -29,8 +29,8 @@ export interface RigidSteeringConfig {
   maxUpwardTiltDeg: number;
   /** 上向き回転が最大に達するアンカー仰角 (度) */
   tiltFullElevationDeg: number;
-  /** 上向き回転が効き始める最大距離 (blocks) */
-  tiltStartDistance: number;
+  /** 上向き回転が遠距離へ減衰する半減距離 (blocks, tiltFullDistance からこの距離離れるごとに半分) */
+  tiltHalfDistance: number;
   /** 上向き回転が距離要因で最大に達する距離 (blocks) */
   tiltFullDistance: number;
   /** 1Tickあたりの接線速度ベクトルの回転追従率 (0.0〜1.0) */
@@ -239,7 +239,7 @@ export function calculateRigidSteering(
     | "centrifugalMinRadius"
     | "maxUpwardTiltDeg"
     | "tiltFullElevationDeg"
-    | "tiltStartDistance"
+    | "tiltHalfDistance"
     | "tiltFullDistance"
   >,
 ): RigidSteeringResult {
@@ -323,14 +323,13 @@ export function calculateRigidSteering(
   const isBelowAnchor = basis.elevationRad > 0;
   let targetTiltRad = 0;
   if (isBelowAnchor && centrifugal3DRatio > 0) {
-    const distSpan = Math.max(
-      EPSILON,
-      steering.tiltStartDistance - steering.tiltFullDistance,
-    );
-    const distProximity = Math.max(
-      0,
-      Math.min(1, (steering.tiltStartDistance - basis.distance) / distSpan),
-    );
+    const distDiff = Math.max(0, basis.distance - steering.tiltFullDistance);
+    const distProximity =
+      steering.tiltHalfDistance > EPSILON
+        ? Math.pow(0.5, distDiff / steering.tiltHalfDistance)
+        : distDiff <= 0
+          ? 1.0
+          : 0.0;
     const fullElevRad = (steering.tiltFullElevationDeg * Math.PI) / 180;
     const elevFactor =
       fullElevRad > EPSILON
