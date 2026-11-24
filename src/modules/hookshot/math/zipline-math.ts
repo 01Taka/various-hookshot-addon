@@ -17,6 +17,8 @@ export interface ZiplineRailPhysicsConfig {
   maxRailSpeed: number;
   /** プレイヤー胴からアンカーまでの最大許容距離 (blocks, 鎖4.0m + 許容2.0m = 6.0m) */
   maxAnchorDistance: number;
+  /** 地面踏ん張り判定で鎖が張ったとみなす胴〜アンカー距離 (blocks, デフォルト: 3.9) */
+  tautChainLength: number;
   /** プレイヤー足元から胴接続点までのYオフセット (blocks) */
   torsoHeightOffset: number;
   /** 最小停止速度閾値 (blocks/tick) */
@@ -32,6 +34,7 @@ export interface ZiplineRailStepInput {
   dimensionId: string;
   jumpPressed: boolean;
   sneakPressed: boolean;
+  isOnGround: boolean;
   playerLocation: Vector3;
   config: ZiplineRailPhysicsConfig;
 }
@@ -56,6 +59,7 @@ export function stepZiplineRailAnchor(
     dimensionId,
     jumpPressed,
     sneakPressed,
+    isOnGround,
     playerLocation,
     config,
   } = input;
@@ -111,10 +115,22 @@ export function stepZiplineRailAnchor(
   };
   const toAnchor = Vector3Utils.subtract(currentPos, torsoPos);
   const distToTorso = Vector3Utils.magnitude(toAnchor);
+  const outwardDot = Vector3Utils.dot(railDir, toAnchor);
+
+  // 地上踏ん張り: 地面に立っており無入力（自動滑走・惰性のみ）で鎖が張った状態なら、
+  // プレイヤーから離れる向きのアンカー移動を停止する
+  if (
+    isOnGround &&
+    !jumpPressed &&
+    !sneakPressed &&
+    distToTorso >= config.tautChainLength &&
+    v * outwardDot > 0
+  ) {
+    v = 0;
+  }
 
   if (distToTorso > config.maxAnchorDistance) {
     // railDir と toAnchor の内積が正なら、+progress 方向がプレイヤーから離れる向き
-    const outwardDot = Vector3Utils.dot(railDir, toAnchor);
     if (v * outwardDot > 0) {
       v = 0;
     }

@@ -58,6 +58,8 @@ export interface ZiplineHookshotDefinition
   };
   /** 吊り下げ鎖の固定長（足元基準, blocks） */
   hangingRopeLength: number;
+  /** 無入力（Jump/Shift未押下）時に鎖へ加えるたるみ余裕 (blocks) */
+  idleSlackOffset: number;
   /** 描画上の鎖長（胴基準, blocks） */
   visualChainLength: number;
   /** 着弾・解除・不発・滑走音設定 */
@@ -88,6 +90,7 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
   reelMode: "shorten",
   minRopeLength: 5.0,
   hangingRopeLength: 5.0,
+  idleSlackOffset: 0.3,
   visualChainLength: 4.0,
   baumgarteFactor: 0.42,
   groundCheck: {
@@ -115,6 +118,7 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
     brakeFriction: 0.2,
     maxRailSpeed: 2.2,
     maxAnchorDistance: 6.0,
+    tautChainLength: 3.9,
     torsoHeightOffset: 1.0,
     stopSpeedThreshold: 0.005,
   },

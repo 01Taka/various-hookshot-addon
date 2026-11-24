@@ -586,6 +586,10 @@ export class HookshotSystem {
       return false;
     }
 
+    const jumpConsumed =
+      isInputButtonPressed(player, "Jump") || player.isJumping;
+    const sneakConsumed = isSneakButtonPressed(player);
+
     const state: ZiplineHookshotState = {
       hookshotId: "zipline",
       slotIndex: player.selectedSlotIndex,
@@ -596,10 +600,11 @@ export class HookshotSystem {
         dimensionId: player.dimension.id,
       },
       normal,
-      currentLength: def.hangingRopeLength,
-      jumpConsumed:
-        isInputButtonPressed(player, "Jump") || player.isJumping,
-      sneakConsumed: isSneakButtonPressed(player),
+      currentLength:
+        def.hangingRopeLength +
+        (!jumpConsumed && !sneakConsumed ? def.idleSlackOffset : 0),
+      jumpConsumed,
+      sneakConsumed,
       railBase,
       endRailBase,
       railStart,
@@ -643,6 +648,7 @@ export class HookshotSystem {
       dimensionId: state.anchor.dimensionId,
       jumpPressed,
       sneakPressed,
+      isOnGround: player.isOnGround,
       playerLocation: player.location,
       config: def.railPhysics,
     });
@@ -650,6 +656,10 @@ export class HookshotSystem {
     state.railProgress = result.railProgress;
     state.railVelocity = result.railVelocity;
     state.anchor = result.anchor;
+    state.currentLength =
+      !jumpPressed && !sneakPressed
+        ? def.hangingRopeLength + def.idleSlackOffset
+        : def.hangingRopeLength;
 
     const absSpeed = Math.abs(state.railVelocity);
     if (absSpeed >= def.slideSound.minSpeed) {
@@ -2134,7 +2144,10 @@ export class HookshotSystem {
               startSupportBlock: state.startSupportBlock,
               endSupportBlock: state.endSupportBlock,
               anchor: state.anchor,
-              visualChainLength: def.visualChainLength,
+              visualChainLength: Math.max(
+                0.5,
+                state.currentLength - def.railPhysics.torsoHeightOffset,
+              ),
               torsoHeightOffset: def.railPhysics.torsoHeightOffset,
               chainStyle: def.wireStyle,
             });
