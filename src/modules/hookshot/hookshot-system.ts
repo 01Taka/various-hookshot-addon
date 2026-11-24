@@ -605,8 +605,9 @@ export class HookshotSystem {
       },
       normal,
       currentLength:
-        def.hangingRopeLength +
-        (!jumpConsumed && !sneakConsumed ? def.idleSlackOffset : 0),
+        !jumpConsumed && !sneakConsumed
+          ? def.hangingRopeLength + def.idleSlackOffset
+          : def.hangingRopeLength - def.activePullOffset,
       jumpConsumed,
       sneakConsumed,
       railBase,
@@ -664,7 +665,7 @@ export class HookshotSystem {
     state.currentLength =
       !jumpPressed && !sneakPressed
         ? def.hangingRopeLength + def.idleSlackOffset
-        : def.hangingRopeLength;
+        : def.hangingRopeLength - def.activePullOffset;
 
     const absSpeed = Math.abs(state.railVelocity);
     if (absSpeed >= def.slideSound.minSpeed) {
