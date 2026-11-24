@@ -173,7 +173,7 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
         ? physics.swingPumpAccelVest
         : physics.swingPumpAccelNormal,
       anchorVelocity,
-      swingDamping: 0.1,
+      swingDamping: 0,
     });
   },
 };
