@@ -1,3 +1,4 @@
+import { BlockOutlineStyle } from "./block-outline-renderer";
 import { WireStyle } from "./types";
 
 /**
@@ -114,4 +115,15 @@ export const ZIPLINE_WIRE_STYLE: WireStyle = {
   shapeMode: "sag",
   anchorParticleId: "various_hookshot_addon:wire_rigid",
   amplitude: 0.35,
+};
+
+/**
+ * ジップライン支持ブロック囲み枠線のスタイル
+ */
+export const ZIPLINE_SUPPORT_OUTLINE_STYLE: BlockOutlineStyle = {
+  particleId: "various_hookshot_addon:block_outline",
+  stepDistance: 0.25,
+  padding: 0.03,
+  particleSize: 0.08,
+  color: { r: 1.0, g: 0.75, b: 0.22, a: 0.9 },
 };

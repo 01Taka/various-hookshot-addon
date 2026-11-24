@@ -1,4 +1,5 @@
 import { Player, Vector3 } from "@minecraft/server";
+import { BlockOutlineRenderer } from "./block-outline-renderer";
 import { LineRenderer } from "./line-renderer";
 import { WireStyle } from "./types";
 import {
@@ -8,6 +9,7 @@ import {
   SPRING_WIRE_STYLE,
   ZIPLINE_PILLAR_STYLE,
   ZIPLINE_RAIL_STYLE,
+  ZIPLINE_SUPPORT_OUTLINE_STYLE,
   ZIPLINE_WIRE_STYLE,
 } from "./wire-styles";
 
@@ -83,6 +85,8 @@ export class HookRenderManager {
       endRailBase?: Vector3;
       railStart: Vector3;
       railEnd: Vector3;
+      startSupportBlock: Vector3;
+      endSupportBlock: Vector3;
       anchor: Vector3;
       visualChainLength: number;
       torsoHeightOffset: number;
@@ -94,6 +98,13 @@ export class HookRenderManager {
     const dimension = player.dimension;
     const dimensionId = dimension.id;
     let total = 0;
+
+    // 0. 支持ブロック（始点・終点）の枠線ハイライト
+    total += BlockOutlineRenderer.drawBlockOutlines(
+      dimension,
+      [params.startSupportBlock, params.endSupportBlock],
+      ZIPLINE_SUPPORT_OUTLINE_STYLE,
+    );
 
     // 1. 土台＋支柱（始点地面〜支柱頂点）
     total += LineRenderer.drawWire(dimension, {

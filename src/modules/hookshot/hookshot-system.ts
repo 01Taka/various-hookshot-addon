@@ -2131,6 +2131,8 @@ export class HookshotSystem {
               endRailBase: state.endRailBase,
               railStart: state.railStart,
               railEnd: state.railEnd,
+              startSupportBlock: state.startSupportBlock,
+              endSupportBlock: state.endSupportBlock,
               anchor: state.anchor,
               visualChainLength: def.visualChainLength,
               torsoHeightOffset: def.railPhysics.torsoHeightOffset,
