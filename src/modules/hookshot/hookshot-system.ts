@@ -651,18 +651,27 @@ export class HookshotSystem {
     }
 
     let facingSign: 1 | -1 = state.facingDirectionSign ?? 1;
-    if (state.railLength > 0.0001) {
+    // Jump / Shift を離している間だけ視線に合わせて正面向きを更新し、押下中は向きをロックする
+    if (!jumpPressed && !sneakPressed && state.railLength > 0.0001) {
       try {
         const viewDir = player.getViewDirection();
-        const railDir = Vector3Utils.scale(
-          Vector3Utils.subtract(state.railEnd, state.railStart),
-          1 / state.railLength,
-        );
-        const viewDot = Vector3Utils.dot(viewDir, railDir);
-        if (viewDot >= 0.2) {
-          facingSign = 1;
-        } else if (viewDot <= -0.2) {
-          facingSign = -1;
+        const horizViewLen = Math.hypot(viewDir.x, viewDir.z);
+        if (horizViewLen >= 0.35) {
+          const railDir = Vector3Utils.scale(
+            Vector3Utils.subtract(state.railEnd, state.railStart),
+            1 / state.railLength,
+          );
+          const horizRailLen = Math.hypot(railDir.x, railDir.z);
+          const dirDot =
+            horizRailLen >= 0.2
+              ? (viewDir.x * railDir.x + viewDir.z * railDir.z) /
+                (horizViewLen * horizRailLen)
+              : Vector3Utils.dot(viewDir, railDir);
+          if (dirDot >= 0.2) {
+            facingSign = 1;
+          } else if (dirDot <= -0.2) {
+            facingSign = -1;
+          }
         }
       } catch {
         // 視線取得失敗時は前回の向きを維持
