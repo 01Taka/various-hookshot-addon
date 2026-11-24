@@ -6,6 +6,9 @@ import {
   RIGID_WIRE_STYLE,
   ROD_WIRE_STYLE,
   SPRING_WIRE_STYLE,
+  ZIPLINE_PILLAR_STYLE,
+  ZIPLINE_RAIL_STYLE,
+  ZIPLINE_WIRE_STYLE,
 } from "./wire-styles";
 
 const DEFAULT_STYLES_BY_ID: Record<string, WireStyle> = {
@@ -13,6 +16,7 @@ const DEFAULT_STYLES_BY_ID: Record<string, WireStyle> = {
   rigid: RIGID_WIRE_STYLE,
   rod: ROD_WIRE_STYLE,
   spring: SPRING_WIRE_STYLE,
+  zipline: ZIPLINE_WIRE_STYLE,
 };
 
 export class HookRenderManager {
@@ -67,5 +71,59 @@ export class HookRenderManager {
       extraCharge,
       fixedThicknessScore,
     );
+  }
+
+  /**
+   * ジップライン専用の3要素（土台＋支柱、レール、吊り下げ鎖）を描画します。
+   */
+  public static renderZipline(
+    player: Player,
+    params: {
+      railBase: Vector3;
+      railStart: Vector3;
+      railEnd: Vector3;
+      anchor: Vector3;
+      visualChainLength: number;
+      torsoHeightOffset: number;
+      chainStyle?: WireStyle;
+    },
+  ): number {
+    if (!player.isValid) return 0;
+
+    const dimension = player.dimension;
+    const dimensionId = dimension.id;
+    let total = 0;
+
+    // 1. 土台＋支柱（地面〜支柱頂点）
+    total += LineRenderer.drawWire(dimension, {
+      dimensionId,
+      start: params.railBase,
+      end: params.railStart,
+      style: ZIPLINE_PILLAR_STYLE,
+    });
+
+    // 2. レール（支柱頂点〜着弾終点）
+    total += LineRenderer.drawWire(dimension, {
+      dimensionId,
+      start: params.railStart,
+      end: params.railEnd,
+      style: ZIPLINE_RAIL_STYLE,
+    });
+
+    // 3. 吊り下げ鎖（可動アンカー〜プレイヤー胴）
+    const torsoPos: Vector3 = {
+      x: player.location.x,
+      y: player.location.y + params.torsoHeightOffset,
+      z: player.location.z,
+    };
+    total += LineRenderer.drawWire(dimension, {
+      dimensionId,
+      start: torsoPos,
+      end: params.anchor,
+      currentLength: params.visualChainLength,
+      style: params.chainStyle ?? ZIPLINE_WIRE_STYLE,
+    });
+
+    return total;
   }
 }

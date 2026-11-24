@@ -84,3 +84,34 @@ export const BAMBOO_WIRE_STYLE: WireStyle = {
   anchorParticleId: "various_hookshot_addon:wire_bamboo",
   amplitude: 0.85,
 };
+
+/**
+ * ジップライン支柱（木製フェンス／杭）のワイヤースタイル
+ */
+export const ZIPLINE_PILLAR_STYLE: WireStyle = {
+  particleId: "various_hookshot_addon:wire_zipline_pillar",
+  stepDistance: 0.45,
+  shapeMode: "straight",
+  anchorParticleId: "various_hookshot_addon:wire_zipline_pillar",
+};
+
+/**
+ * ジップラインレール（始点〜終点の張り糸）のワイヤースタイル
+ */
+export const ZIPLINE_RAIL_STYLE: WireStyle = {
+  particleId: "various_hookshot_addon:wire_rigid",
+  stepDistance: 1.0,
+  shapeMode: "straight",
+  anchorParticleId: "various_hookshot_addon:wire_rigid",
+};
+
+/**
+ * ジップライン吊り下げ鎖のワイヤースタイル
+ */
+export const ZIPLINE_WIRE_STYLE: WireStyle = {
+  particleId: "various_hookshot_addon:wire_rigid",
+  stepDistance: 0.55,
+  shapeMode: "sag",
+  anchorParticleId: "various_hookshot_addon:wire_rigid",
+  amplitude: 0.35,
+};

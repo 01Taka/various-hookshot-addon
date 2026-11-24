@@ -1,0 +1,158 @@
+import { Vector3 } from "@minecraft/server";
+import { ZIPLINE_WIRE_STYLE } from "../../render";
+import { RigidPhysicsConfig } from "../math/rigid-math";
+import { canUseGazeSteering, RigidSteeringConfig } from "../math/steering-math";
+import {
+  calculateZiplineHookshot,
+  ZiplineRailPhysicsConfig,
+} from "../math/zipline-math";
+import { BaseHookshotDefinition, BaseHookshotState } from "../types";
+
+export const ZIPLINE_HOOKSHOT_ID = "zipline";
+export const ZIPLINE_ITEM_ID = "various_hookshot_addon:zipline_hookshot";
+
+export interface ZiplineHookshotState
+  extends BaseHookshotState<typeof ZIPLINE_HOOKSHOT_ID> {
+  /** 支柱の地面側ベース座標 */
+  railBase: Vector3;
+  /** レールの始点（支柱頂点）座標 */
+  railStart: Vector3;
+  /** レールの終点（着弾オフセット後）座標 */
+  railEnd: Vector3;
+  /** レールの全長 (blocks) */
+  railLength: number;
+  /** 始点からの現在進行距離 (0 〜 railLength, blocks) */
+  railProgress: number;
+  /** レール上の現在速度 (blocks/tick, 正=終点方向, 負=始点方向) */
+  railVelocity: number;
+  /** 滑走効果音の直近再生Tick */
+  lastSlideSoundTick?: number;
+}
+
+export interface ZiplineHookshotDefinition
+  extends BaseHookshotDefinition<
+    typeof ZIPLINE_HOOKSHOT_ID,
+    ZiplineHookshotState
+  > {
+  /** 足元4点レイキャストによる発射判定・支柱設定 */
+  groundCheck: {
+    /** 足元中心からのXZオフセット幅 (blocks) */
+    halfWidth: number;
+    /** 下向きレイキャストの最大距離 (blocks) */
+    maxDownDistance: number;
+    /** 支柱の高さ (blocks) */
+    pillarHeight: number;
+    /** 天井ブロックとの最小クリアランス (blocks) */
+    ceilingClearance: number;
+    /** 着弾面の法線方向への手前オフセット量 (blocks) */
+    endNormalOffset: number;
+    /** 生成可能な最小レール長 (blocks) */
+    minRailLength: number;
+  };
+  /** 吊り下げ鎖の固定長（足元基準, blocks） */
+  hangingRopeLength: number;
+  /** 描画上の鎖長（胴基準, blocks） */
+  visualChainLength: number;
+  /** 着弾・解除・不発・滑走音設定 */
+  hitSoundId: string;
+  missSoundId: string;
+  detachSoundId: string;
+  slideSound: {
+    soundId: string;
+    intervalTicks: number;
+    minSpeed: number;
+  };
+  /** レール上の1次元アンカー移動物理パラメータ */
+  railPhysics: ZiplineRailPhysicsConfig;
+  /** 吊り下げ剛体ロープの物理パラメータ */
+  physics: RigidPhysicsConfig;
+  /** 振り子ポンプ用の最小ステアリングパラメータ */
+  steering: RigidSteeringConfig;
+}
+
+export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
+  id: ZIPLINE_HOOKSHOT_ID,
+  itemTypeId: ZIPLINE_ITEM_ID,
+  maxDistance: 150,
+  reel: {
+    mode: "continuous",
+    speed: 0,
+  },
+  reelMode: "shorten",
+  minRopeLength: 5.0,
+  hangingRopeLength: 5.0,
+  visualChainLength: 4.0,
+  baumgarteFactor: 0.18,
+  groundCheck: {
+    halfWidth: 0.5,
+    maxDownDistance: 5.0,
+    pillarHeight: 5.0,
+    ceilingClearance: 0.3,
+    endNormalOffset: 1.25,
+    minRailLength: 3.0,
+  },
+  shotSoundId: "crossbow.shoot",
+  hitSoundId: "place.chain",
+  missSoundId: "dig.chain",
+  detachSoundId: "dig.chain",
+  slideSound: {
+    soundId: "step.chain",
+    intervalTicks: 4,
+    minSpeed: 0.15,
+  },
+  wireStyle: ZIPLINE_WIRE_STYLE,
+  railPhysics: {
+    inputAccel: 0.08,
+    railGravity: 0.092,
+    friction: 0.06,
+    brakeFriction: 0.2,
+    maxRailSpeed: 2.2,
+    maxAnchorDistance: 6.0,
+    torsoHeightOffset: 1.0,
+    stopSpeedThreshold: 0.005,
+  },
+  physics: {
+    tautMargin: 0.25,
+    innerSwingMargin: 2.0,
+    innerBaumgarteFactor: 0.08,
+    inwardEscapeThreshold: 0.45,
+    maxSteeringSpeed: 2.2,
+    swingPumpAccelNormal: 0.015,
+    swingPumpAccelVest: 0.04,
+  },
+  steering: {
+    steerAccel: 0.065,
+    referenceSwingDistance: 30,
+    fullSteerAngleDeg: 45,
+    steerFadeStartDeg: 90,
+    steerFadeEndDeg: 110,
+    adPriorityAngleDeg: 30,
+    centrifugal3DReferenceAccel: 0.14,
+    maxUpwardTiltDeg: 45,
+    tiltFullElevationDeg: 30,
+    tiltHalfDistance: 20,
+    tiltFullDistance: 12,
+    tiltRatePerTick: 0.25,
+    aboveAnchorDecayTicks: 20,
+    centrifugalReferenceAccel: 0.28,
+    reelCentrifugalHorizWeight: 1.0,
+    reelCentrifugalVertWeight: 0.3,
+    centrifugalMinRadius: 8.0,
+    minReelSpeedMultiplier: 0.25,
+    slackDeadzone: 0.5,
+    pumpLowSpeedStart: 0.05,
+    pumpLowSpeedEnd: 0.25,
+  },
+  calculateImpulse: (player, state) => {
+    const hasVest = canUseGazeSteering(player);
+    const { physics, steering, baumgarteFactor } = ziplineHookshotDefinition;
+    return calculateZiplineHookshot(player, state.anchor, state.currentLength, {
+      baumgarteFactor: baumgarteFactor ?? 0.18,
+      physics,
+      steering,
+      swingPumpAccel: hasVest
+        ? physics.swingPumpAccelVest
+        : physics.swingPumpAccelNormal,
+    });
+  },
+};

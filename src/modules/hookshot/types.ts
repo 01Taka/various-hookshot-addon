@@ -20,8 +20,18 @@ import type {
   SpringHookshotDefinition,
   SpringHookshotState,
 } from "./definitions/spring-hookshot";
+import type {
+  ZiplineHookshotDefinition,
+  ZiplineHookshotState,
+} from "./definitions/zipline-hookshot";
 
-export type HookshotId = "bamboo" | "elastic" | "rigid" | "rod" | "spring";
+export type HookshotId =
+  | "bamboo"
+  | "elastic"
+  | "rigid"
+  | "rod"
+  | "spring"
+  | "zipline";
 
 export type AnchorPosition = Vector3 & { dimensionId: string };
 
@@ -245,11 +255,13 @@ export type HookshotState =
   | ElasticHookshotState
   | RigidHookshotState
   | RodHookshotState
-  | SpringHookshotState;
+  | SpringHookshotState
+  | ZiplineHookshotState;
 
 export type HookshotDefinition =
   | BambooHookshotDefinition
   | ElasticHookshotDefinition
   | RigidHookshotDefinition
   | RodHookshotDefinition
-  | SpringHookshotDefinition;
+  | SpringHookshotDefinition
+  | ZiplineHookshotDefinition;

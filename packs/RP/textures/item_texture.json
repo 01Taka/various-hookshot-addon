@@ -23,6 +23,9 @@
     "spring_hookshot": {
       "textures": "textures/items/spring_hookshot"
     },
+    "zipline_hookshot": {
+      "textures": "textures/items/zipline_hookshot"
+    },
     "burst_charge": {
       "textures": "textures/items/burst_charge"
     }

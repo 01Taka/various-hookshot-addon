@@ -1,0 +1,39 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "various_hookshot_addon:zipline_hookshot"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      " SP",
+      "SS ",
+      "FC "
+    ],
+    "key": {
+      "P": {
+        "item": "minecraft:iron_spear"
+      },
+      "S": {
+        "item": "minecraft:string"
+      },
+      "F": {
+        "tag": "minecraft:wooden_fences"
+      },
+      "C": {
+        "item": "minecraft:iron_chain"
+      }
+    },
+    "unlock": [
+      {
+        "item": "minecraft:iron_spear"
+      },
+      {
+        "item": "minecraft:iron_chain"
+      }
+    ],
+    "result": {
+      "item": "various_hookshot_addon:zipline_hookshot"
+    }
+  }
+}

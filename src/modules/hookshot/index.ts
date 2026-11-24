@@ -6,6 +6,7 @@ import { elasticHookshotDefinition } from "./definitions/elastic-hookshot";
 import { rigidHookshotDefinition } from "./definitions/rigid-hookshot";
 import { rodHookshotDefinition } from "./definitions/rod-hookshot";
 import { springHookshotDefinition } from "./definitions/spring-hookshot";
+import { ziplineHookshotDefinition } from "./definitions/zipline-hookshot";
 import { HookshotSystem } from "./hookshot-system";
 
 export * from "./constants";
@@ -18,10 +19,11 @@ export * from "./math/rigid-math";
 export * from "./math/rod-math";
 export * from "./math/spring-math";
 export * from "./math/steering-math";
+export * from "./math/zipline-math";
 export * from "./math/physics-utils";
 
 /**
- * 通常フックショットシステムを標準定義（リード、糸、棒、スライムボール、竹）とともに初期化します。
+ * 通常フックショットシステムを標準定義（リード、糸、棒、スライムボール、竹、ジップライン）とともに初期化します。
  */
 export function initHookshotSystem(): void {
   initBambooHookshotTracking();
@@ -30,5 +32,6 @@ export function initHookshotSystem(): void {
   HookshotSystem.register(rigidHookshotDefinition);
   HookshotSystem.register(rodHookshotDefinition);
   HookshotSystem.register(springHookshotDefinition);
+  HookshotSystem.register(ziplineHookshotDefinition);
   HookshotSystem.init();
 }

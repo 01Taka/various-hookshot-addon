@@ -20,7 +20,13 @@ import {
 } from "addon-utils";
 import { HookRenderManager, LineRenderer, WireStyle } from "../render";
 import { PostFlightSystem } from "../post-flight";
-import { isElasticAirChainActive, markElasticAirLaunch } from "./definitions";
+import {
+  isElasticAirChainActive,
+  markElasticAirLaunch,
+  ZiplineHookshotDefinition,
+  ZiplineHookshotState,
+} from "./definitions";
+import { stepZiplineRailAnchor } from "./math/zipline-math";
 import {
   calculateAboveAnchorDecayFactor,
   calculateReelSpeedMultiplier,
@@ -119,6 +125,11 @@ export class HookshotSystem {
           return def.calculateImpulse(player, state);
         }
         break;
+      case "zipline":
+        if (state.hookshotId === "zipline") {
+          return def.calculateImpulse(player, state);
+        }
+        break;
     }
     return { x: 0, y: 0, z: 0 };
   }
@@ -144,6 +155,11 @@ export class HookshotSystem {
     }
     if (def.id === "spring" && state.hookshotId === "spring") {
       return def.formatDistanceUi(player, state, distance);
+    }
+    if (def.id === "zipline" && state.hookshotId === "zipline") {
+      const remaining = Math.max(0, state.railLength - state.railProgress);
+      const railSpeed = Math.abs(state.railVelocity) * TICKS_PER_SECOND;
+      return `残 ${remaining.toFixed(1)}m / ${state.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
     }
     if (
       def.id === "rigid" &&
@@ -283,6 +299,11 @@ export class HookshotSystem {
    * フックを発射・接続します。
    */
   public static shot(player: Player, def: HookshotDefinition): boolean {
+    if (def.id === "zipline") {
+      this.clearPendingRaycast(player);
+      return this.shotZipline(player, def);
+    }
+
     if ("airProbing" in def) {
       this.clearPendingRaycast(player);
       this.enterProbingState(player, def);
@@ -340,7 +361,188 @@ export class HookshotSystem {
         return { hookshotId: "rod", ...common };
       case "spring":
         return { hookshotId: "spring", ...common };
+      case "zipline":
+        return {
+          hookshotId: "zipline",
+          ...common,
+          railBase: { ...anchor },
+          railStart: { ...anchor },
+          railEnd: { ...anchor },
+          railLength: 0,
+          railProgress: 0,
+          railVelocity: 0,
+        };
     }
+  }
+
+  private static shotZipline(
+    player: Player,
+    def: ZiplineHookshotDefinition,
+  ): boolean {
+    const loc = player.location;
+    const { halfWidth, maxDownDistance, pillarHeight, ceilingClearance } =
+      def.groundCheck;
+
+    const offsets = [
+      { dx: -halfWidth, dz: -halfWidth },
+      { dx: halfWidth, dz: -halfWidth },
+      { dx: -halfWidth, dz: halfWidth },
+      { dx: halfWidth, dz: halfWidth },
+    ];
+
+    const rayOptions = {
+      maxDistance: maxDownDistance + 0.1,
+      includeLiquidBlocks: false,
+      includePassableBlocks: false,
+    };
+
+    const groundYs: number[] = [];
+    for (const { dx, dz } of offsets) {
+      const origin: Vector3 = {
+        x: loc.x + dx,
+        y: loc.y + 0.1,
+        z: loc.z + dz,
+      };
+      const downHit = player.dimension.getBlockFromRay(
+        origin,
+        { x: 0, y: -1, z: 0 },
+        rayOptions,
+      );
+      if (downHit) {
+        groundYs.push(downHit.block.y + downHit.faceLocation.y);
+      }
+    }
+
+    if (groundYs.length === 0) {
+      this.playSoundSafe(player, def.missSoundId);
+      return false;
+    }
+
+    const maxGroundY = Math.max(...groundYs);
+    let pillarTopY = maxGroundY + pillarHeight;
+
+    // 天井チェック: 支柱が頭上のブロックにめり込まないよう手前まで下げる
+    const ceilingHit = player.dimension.getBlockFromRay(
+      { x: loc.x, y: maxGroundY + 0.5, z: loc.z },
+      { x: 0, y: 1, z: 0 },
+      {
+        maxDistance: pillarHeight,
+        includeLiquidBlocks: false,
+        includePassableBlocks: false,
+      },
+    );
+    if (ceilingHit) {
+      const ceilingY = ceilingHit.block.y + ceilingHit.faceLocation.y;
+      pillarTopY = Math.max(
+        maxGroundY + 0.5,
+        Math.min(pillarTopY, ceilingY - ceilingClearance),
+      );
+    }
+
+    const hit = player.getBlockFromViewDirection({
+      maxDistance: def.maxDistance,
+      includeLiquidBlocks: false,
+      includePassableBlocks: false,
+    });
+    if (!hit) {
+      this.playSoundSafe(player, def.missSoundId);
+      return false;
+    }
+
+    const normal = getDirectionVector(hit.face);
+    const hitAnchor = this.calculateAnchorPosition(
+      player.dimension.id,
+      player.getHeadLocation(),
+      player.getViewDirection(),
+      hit,
+      normal,
+    );
+    const railEnd = Vector3Utils.add(
+      hitAnchor,
+      Vector3Utils.scale(normal, def.groundCheck.endNormalOffset),
+    );
+    const railBase: Vector3 = { x: loc.x, y: maxGroundY, z: loc.z };
+    const railStart: Vector3 = { x: loc.x, y: pillarTopY, z: loc.z };
+    const railLength = Vector3Utils.distance(railStart, railEnd);
+
+    if (railLength < def.groundCheck.minRailLength) {
+      this.playSoundSafe(player, def.missSoundId);
+      return false;
+    }
+
+    const state: ZiplineHookshotState = {
+      hookshotId: "zipline",
+      slotIndex: player.selectedSlotIndex,
+      anchor: {
+        x: railStart.x,
+        y: railStart.y,
+        z: railStart.z,
+        dimensionId: player.dimension.id,
+      },
+      normal,
+      currentLength: def.hangingRopeLength,
+      jumpConsumed:
+        isInputButtonPressed(player, "Jump") || player.isJumping,
+      sneakConsumed: isSneakButtonPressed(player),
+      railBase,
+      railStart,
+      railEnd,
+      railLength,
+      railProgress: 0,
+      railVelocity: 0,
+    };
+
+    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+    this.playSoundSafe(player, def.shotSoundId);
+    this.playSoundSafe(player, def.hitSoundId);
+    return true;
+  }
+
+  private static updateZiplineAnchor(
+    player: Player,
+    state: ZiplineHookshotState,
+    def: ZiplineHookshotDefinition,
+  ): void {
+    if (!player.isValid) return;
+
+    let jumpPressed = false;
+    let sneakPressed = false;
+    try {
+      jumpPressed =
+        isInputButtonPressed(player, "Jump") || player.isJumping;
+      sneakPressed = isSneakButtonPressed(player);
+    } catch {
+      return;
+    }
+
+    const result = stepZiplineRailAnchor({
+      railStart: state.railStart,
+      railEnd: state.railEnd,
+      railLength: state.railLength,
+      railProgress: state.railProgress,
+      railVelocity: state.railVelocity,
+      dimensionId: state.anchor.dimensionId,
+      jumpPressed,
+      sneakPressed,
+      playerLocation: player.location,
+      config: def.railPhysics,
+    });
+
+    state.railProgress = result.railProgress;
+    state.railVelocity = result.railVelocity;
+    state.anchor = result.anchor;
+
+    const absSpeed = Math.abs(state.railVelocity);
+    if (absSpeed >= def.slideSound.minSpeed) {
+      const lastTick = state.lastSlideSoundTick ?? -def.slideSound.intervalTicks;
+      if (system.currentTick - lastTick >= def.slideSound.intervalTicks) {
+        const pitch = 0.85 + Math.min(0.6, absSpeed * 0.28);
+        this.playSoundSafe(player, def.slideSound.soundId, pitch);
+        state.lastSlideSoundTick = system.currentTick;
+      }
+    }
+
+    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
   }
 
   private static attachFromHit(
@@ -1619,9 +1821,16 @@ export class HookshotSystem {
           continue;
         }
 
-        // キー入力によるロープ長の変更（ジャンプ＝短縮、シフト＝伸長、押下時の瞬間変化対応）
+        // キー入力によるロープ長の変更（ジップラインは固定長のためレール上のアンカー移動を更新）
         const wasReelingIn = !!state.isReelingIn;
-        const activeReelMode = this.handleReelInput(player, state, def);
+        const activeReelMode =
+          def.id === "zipline" && state.hookshotId === "zipline"
+            ? null
+            : this.handleReelInput(player, state, def);
+
+        if (def.id === "zipline" && state.hookshotId === "zipline") {
+          this.updateZiplineAnchor(player, state, def);
+        }
 
         if (
           state.hookshotId === "rigid" &&
@@ -1789,19 +1998,31 @@ export class HookshotSystem {
             PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
           }
 
-          // ワイヤーの描画（定義側で getWireAxis が指定されている場合はその軸、無ければ state.normal）
-          const wireAxis = this.resolveWireAxis(def, state);
-          const extraCharge =
-            state.hookshotId === "elastic" ? state.extraCharge : undefined;
-          HookRenderManager.renderHookshot(
-            player,
-            state.anchor,
-            state.hookshotId,
-            def.wireStyle,
-            state.currentLength,
-            wireAxis,
-            extraCharge,
-          );
+          // ワイヤーの描画（ジップラインは支柱＋レール＋吊り下げ鎖の3要素を描画）
+          if (def.id === "zipline" && state.hookshotId === "zipline") {
+            HookRenderManager.renderZipline(player, {
+              railBase: state.railBase,
+              railStart: state.railStart,
+              railEnd: state.railEnd,
+              anchor: state.anchor,
+              visualChainLength: def.visualChainLength,
+              torsoHeightOffset: def.railPhysics.torsoHeightOffset,
+              chainStyle: def.wireStyle,
+            });
+          } else {
+            const wireAxis = this.resolveWireAxis(def, state);
+            const extraCharge =
+              state.hookshotId === "elastic" ? state.extraCharge : undefined;
+            HookRenderManager.renderHookshot(
+              player,
+              state.anchor,
+              state.hookshotId,
+              def.wireStyle,
+              state.currentLength,
+              wireAxis,
+              extraCharge,
+            );
+          }
         } else {
           // 構え中はしなり・たるみ無しの直線として描画
           HookRenderManager.renderHookshot(
