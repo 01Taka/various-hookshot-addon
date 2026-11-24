@@ -88,8 +88,6 @@ export interface ZiplineHookshotDefinition
     minAnchorVelY: number;
     /** 許容するプレイヤーY速度の下限 (blocks/tick) */
     minPlayerVelY: number;
-    /** 鎖が張っているとみなす距離マージン (blocks) */
-    tautMargin: number;
     /** 付与に必要な連続条件達成Tick数 */
     requiredConsecutiveTicks: number;
     /** 低速落下再付与までのクールタイム (ticks) */
@@ -138,9 +136,8 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
   fallProtection: {
     minAnchorVelY: -0.4,
     minPlayerVelY: -0.45,
-    tautMargin: 0.5,
     requiredConsecutiveTicks: 5,
-    cooldownTicks: 10,
+    cooldownTicks: 20,
   },
   wireStyle: ZIPLINE_WIRE_STYLE,
   railPhysics: {

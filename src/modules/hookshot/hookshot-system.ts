@@ -728,12 +728,11 @@ export class HookshotSystem {
         ? ((state.railEnd.y - state.railStart.y) / state.railLength) *
           state.railVelocity
         : 0;
-    const distance = Vector3Utils.distance(player.location, state.anchor);
     const playerVelY = player.getVelocity().y;
 
     const isGentleDescent =
       !player.isOnGround &&
-      distance >= state.currentLength - fp.tautMargin &&
+      playerVelY < 0 &&
       anchorVelY >= fp.minAnchorVelY &&
       playerVelY >= fp.minPlayerVelY;
 
@@ -745,18 +744,22 @@ export class HookshotSystem {
     const consecutive = (state.gentleDescentTicks ?? 0) + 1;
     state.gentleDescentTicks = consecutive;
 
-    if (consecutive >= fp.requiredConsecutiveTicks) {
-      const lastTick = state.lastSlowFallTick ?? -fp.cooldownTicks;
-      if (system.currentTick - lastTick >= fp.cooldownTicks) {
-        try {
-          player.addEffect("slow_falling", 1, {
-            amplifier: 0,
-            showParticles: false,
-          });
-        } catch {}
-        state.lastSlowFallTick = system.currentTick;
-      }
+    if (consecutive < fp.requiredConsecutiveTicks) {
+      return;
     }
+
+    const lastTick = state.lastSlowFallTick ?? -fp.cooldownTicks;
+    if (system.currentTick - lastTick < fp.cooldownTicks) {
+      return;
+    }
+
+    try {
+      player.addEffect("slow_falling", 1, {
+        amplifier: 0,
+        showParticles: false,
+      });
+    } catch {}
+    state.lastSlowFallTick = system.currentTick;
   }
 
   private static attachFromHit(
