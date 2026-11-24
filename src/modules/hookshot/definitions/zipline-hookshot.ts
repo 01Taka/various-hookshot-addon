@@ -73,7 +73,7 @@ export interface ZiplineHookshotDefinition
 export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
   id: ZIPLINE_HOOKSHOT_ID,
   itemTypeId: ZIPLINE_ITEM_ID,
-  maxDistance: 150,
+  maxDistance: 300,
   reel: {
     mode: "continuous",
     speed: 0,

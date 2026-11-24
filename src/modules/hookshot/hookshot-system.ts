@@ -391,7 +391,7 @@ export class HookshotSystem {
     ];
 
     const rayOptions = {
-      maxDistance: maxDownDistance + 0.1,
+      maxDistance: maxDownDistance + 0.2,
       includeLiquidBlocks: false,
       includePassableBlocks: false,
     };
@@ -400,7 +400,7 @@ export class HookshotSystem {
     for (const { dx, dz } of offsets) {
       const origin: Vector3 = {
         x: loc.x + dx,
-        y: loc.y + 0.1,
+        y: loc.y + 0.2,
         z: loc.z + dz,
       };
       const downHit = player.dimension.getBlockFromRay(
