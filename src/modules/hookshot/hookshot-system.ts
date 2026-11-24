@@ -1,6 +1,8 @@
 import { Vector3Utils } from "@minecraft/math";
 import {
+  Block,
   BlockRaycastHit,
+  Dimension,
   EntityComponentTypes,
   EquipmentSlot,
   GameMode,
@@ -368,10 +370,62 @@ export class HookshotSystem {
           railBase: { ...anchor },
           railStart: { ...anchor },
           railEnd: { ...anchor },
+          startSupportBlock: { ...anchor },
+          endSupportBlock: { ...anchor },
           railLength: 0,
           railProgress: 0,
           railVelocity: 0,
         };
+    }
+  }
+
+  /**
+   * 支柱を立てる地面座標から、天井ブロックを考慮した支柱頂点Y座標を算出します。
+   */
+  private static resolvePillarTopY(
+    dimension: Dimension,
+    x: number,
+    groundY: number,
+    z: number,
+    pillarHeight: number,
+    ceilingClearance: number,
+  ): number {
+    let pillarTopY = groundY + pillarHeight;
+    const ceilingOriginY = groundY + 0.5;
+    const ceilingHit = dimension.getBlockFromRay(
+      { x, y: ceilingOriginY, z },
+      { x: 0, y: 1, z: 0 },
+      {
+        maxDistance: Math.max(0.5, pillarHeight - 0.5),
+        includeLiquidBlocks: false,
+        includePassableBlocks: false,
+      },
+    );
+    if (ceilingHit) {
+      const ceilNormal = getDirectionVector(ceilingHit.face);
+      const ceilingY = ceilingHit.block.y + 0.5 + ceilNormal.y * 0.5;
+      pillarTopY = Math.max(
+        groundY + 0.5,
+        Math.min(pillarTopY, ceilingY - ceilingClearance),
+      );
+    }
+    return pillarTopY;
+  }
+
+  /**
+   * 支持ブロックが破壊（空気・液体化）されているかを判定します。
+   * チャンク未ロード等でブロック取得に失敗した場合は false を返し誤解除を防ぎます。
+   */
+  private static isSupportBlockBroken(
+    dimension: Dimension,
+    blockPos: Vector3,
+  ): boolean {
+    try {
+      const block = dimension.getBlock(blockPos);
+      if (!block) return false;
+      return block.isAir || block.isLiquid;
+    } catch {
+      return false;
     }
   }
 
@@ -396,7 +450,7 @@ export class HookshotSystem {
       includePassableBlocks: false,
     };
 
-    const groundYs: number[] = [];
+    const groundHits: { block: Block; surfaceY: number; distSq: number }[] = [];
     for (const { dx, dz } of offsets) {
       const origin: Vector3 = {
         x: loc.x + dx,
@@ -411,37 +465,34 @@ export class HookshotSystem {
       if (downHit) {
         const hitNormal = getDirectionVector(downHit.face);
         const surfaceY = downHit.block.y + 0.5 + hitNormal.y * 0.5;
-        groundYs.push(surfaceY);
+        const cx = downHit.block.x + 0.5;
+        const cz = downHit.block.z + 0.5;
+        const distSq = (cx - loc.x) * (cx - loc.x) + (cz - loc.z) * (cz - loc.z);
+        groundHits.push({ block: downHit.block, surfaceY, distSq });
       }
     }
 
-    if (groundYs.length === 0) {
+    if (groundHits.length === 0) {
       this.playSoundSafe(player, def.missSoundId);
       return false;
     }
 
-    const maxGroundY = Math.max(...groundYs);
-    let pillarTopY = maxGroundY + pillarHeight;
+    // 最高点の地面のうち、プレイヤー中心 (loc.x, loc.z) に最も近いブロックを始点支持ブロックに選ぶ
+    const maxGroundY = Math.max(...groundHits.map((h) => h.surfaceY));
+    const bestStartHit = groundHits
+      .filter((h) => Math.abs(h.surfaceY - maxGroundY) < 0.001)
+      .reduce((best, cur) => (cur.distSq < best.distSq ? cur : best));
 
-    // 天井チェック: 支柱が頭上のブロックにめり込まないよう手前まで下げる
-    const ceilingOriginY = maxGroundY + 0.5;
-    const ceilingHit = player.dimension.getBlockFromRay(
-      { x: loc.x, y: ceilingOriginY, z: loc.z },
-      { x: 0, y: 1, z: 0 },
-      {
-        maxDistance: Math.max(0.5, pillarHeight - 0.5),
-        includeLiquidBlocks: false,
-        includePassableBlocks: false,
-      },
+    const startPillarX = bestStartHit.block.x + 0.5;
+    const startPillarZ = bestStartHit.block.z + 0.5;
+    const startPillarTopY = this.resolvePillarTopY(
+      player.dimension,
+      startPillarX,
+      maxGroundY,
+      startPillarZ,
+      pillarHeight,
+      ceilingClearance,
     );
-    if (ceilingHit) {
-      const ceilNormal = getDirectionVector(ceilingHit.face);
-      const ceilingY = ceilingHit.block.y + 0.5 + ceilNormal.y * 0.5;
-      pillarTopY = Math.max(
-        maxGroundY + 0.5,
-        Math.min(pillarTopY, ceilingY - ceilingClearance),
-      );
-    }
 
     const hit = player.getBlockFromViewDirection({
       maxDistance: def.maxDistance,
@@ -461,12 +512,73 @@ export class HookshotSystem {
       hit,
       normal,
     );
-    const railEnd = Vector3Utils.add(
-      hitAnchor,
-      Vector3Utils.scale(normal, def.groundCheck.endNormalOffset),
-    );
-    const railBase: Vector3 = { x: loc.x, y: maxGroundY, z: loc.z };
-    const railStart: Vector3 = { x: loc.x, y: pillarTopY, z: loc.z };
+
+    // 着弾点から法線方向へ 0.5m 手前の真下に 5.0m Ray を飛ばし、地面があれば終点支柱を立てる（天井面は除外）
+    let endRailBase: Vector3 | undefined;
+    let railEnd: Vector3;
+    let endSupportBlock: Vector3;
+
+    const endDownHit =
+      normal.y >= -0.2
+        ? player.dimension.getBlockFromRay(
+            Vector3Utils.add(hitAnchor, Vector3Utils.scale(normal, 0.5)),
+            { x: 0, y: -1, z: 0 },
+            {
+              maxDistance: maxDownDistance + 0.5,
+              includeLiquidBlocks: false,
+              includePassableBlocks: false,
+            },
+          )
+        : undefined;
+
+    if (endDownHit) {
+      const endGroundNormal = getDirectionVector(endDownHit.face);
+      const endGroundY =
+        endDownHit.block.y + 0.5 + endGroundNormal.y * 0.5;
+      const endPillarX = endDownHit.block.x + 0.5;
+      const endPillarZ = endDownHit.block.z + 0.5;
+      const endPillarTopY = this.resolvePillarTopY(
+        player.dimension,
+        endPillarX,
+        endGroundY,
+        endPillarZ,
+        pillarHeight,
+        ceilingClearance,
+      );
+      endRailBase = { x: endPillarX, y: endGroundY, z: endPillarZ };
+      railEnd = { x: endPillarX, y: endPillarTopY, z: endPillarZ };
+      endSupportBlock = {
+        x: endDownHit.block.x,
+        y: endDownHit.block.y,
+        z: endDownHit.block.z,
+      };
+    } else {
+      railEnd = Vector3Utils.add(
+        hitAnchor,
+        Vector3Utils.scale(normal, def.groundCheck.endNormalOffset),
+      );
+      endSupportBlock = {
+        x: hit.block.x,
+        y: hit.block.y,
+        z: hit.block.z,
+      };
+    }
+
+    const railBase: Vector3 = {
+      x: startPillarX,
+      y: maxGroundY,
+      z: startPillarZ,
+    };
+    const railStart: Vector3 = {
+      x: startPillarX,
+      y: startPillarTopY,
+      z: startPillarZ,
+    };
+    const startSupportBlock: Vector3 = {
+      x: bestStartHit.block.x,
+      y: bestStartHit.block.y,
+      z: bestStartHit.block.z,
+    };
     const railLength = Vector3Utils.distance(railStart, railEnd);
 
     if (railLength < def.groundCheck.minRailLength) {
@@ -489,8 +601,11 @@ export class HookshotSystem {
         isInputButtonPressed(player, "Jump") || player.isJumping,
       sneakConsumed: isSneakButtonPressed(player),
       railBase,
+      endRailBase,
       railStart,
       railEnd,
+      startSupportBlock,
+      endSupportBlock,
       railLength,
       railProgress: 0,
       railVelocity: 0,
@@ -1833,6 +1948,13 @@ export class HookshotSystem {
             : this.handleReelInput(player, state, def);
 
         if (def.id === "zipline" && state.hookshotId === "zipline") {
+          if (
+            this.isSupportBlockBroken(player.dimension, state.startSupportBlock) ||
+            this.isSupportBlockBroken(player.dimension, state.endSupportBlock)
+          ) {
+            this.unhook(player);
+            continue;
+          }
           this.updateZiplineAnchor(player, state, def);
         }
 
@@ -2006,6 +2128,7 @@ export class HookshotSystem {
           if (def.id === "zipline" && state.hookshotId === "zipline") {
             HookRenderManager.renderZipline(player, {
               railBase: state.railBase,
+              endRailBase: state.endRailBase,
               railStart: state.railStart,
               railEnd: state.railEnd,
               anchor: state.anchor,

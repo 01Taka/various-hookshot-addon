@@ -15,10 +15,16 @@ export interface ZiplineHookshotState
   extends BaseHookshotState<typeof ZIPLINE_HOOKSHOT_ID> {
   /** 支柱の地面側ベース座標 */
   railBase: Vector3;
+  /** 終点側支柱の地面側ベース座標（地面に支柱が立った場合のみ） */
+  endRailBase?: Vector3;
   /** レールの始点（支柱頂点）座標 */
   railStart: Vector3;
-  /** レールの終点（着弾オフセット後）座標 */
+  /** レールの終点（着弾オフセット後または終点支柱頂点）座標 */
   railEnd: Vector3;
+  /** 始点側を支えているブロック座標 */
+  startSupportBlock: Vector3;
+  /** 終点側を支えているブロック座標 */
+  endSupportBlock: Vector3;
   /** レールの全長 (blocks) */
   railLength: number;
   /** 始点からの現在進行距離 (0 〜 railLength, blocks) */

@@ -80,6 +80,7 @@ export class HookRenderManager {
     player: Player,
     params: {
       railBase: Vector3;
+      endRailBase?: Vector3;
       railStart: Vector3;
       railEnd: Vector3;
       anchor: Vector3;
@@ -94,13 +95,23 @@ export class HookRenderManager {
     const dimensionId = dimension.id;
     let total = 0;
 
-    // 1. 土台＋支柱（地面〜支柱頂点）
+    // 1. 土台＋支柱（始点地面〜支柱頂点）
     total += LineRenderer.drawWire(dimension, {
       dimensionId,
       start: params.railBase,
       end: params.railStart,
       style: ZIPLINE_PILLAR_STYLE,
     });
+
+    // 1b. 終点側支柱（終点地面に支柱が立った場合）
+    if (params.endRailBase) {
+      total += LineRenderer.drawWire(dimension, {
+        dimensionId,
+        start: params.endRailBase,
+        end: params.railEnd,
+        style: ZIPLINE_PILLAR_STYLE,
+      });
+    }
 
     // 2. レール（支柱頂点〜着弾終点）
     total += LineRenderer.drawWire(dimension, {
