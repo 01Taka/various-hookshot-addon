@@ -2078,11 +2078,46 @@ export class HookshotSystem {
           if (def.id === "rigid" && state.hookshotId === "rigid") {
             const maxAboveTicks = def.steering.aboveAnchorDecayTicks;
             const currentAboveTicks = state.aboveAnchorTicks ?? 0;
-            if (
-              player.location.y >= state.anchor.y &&
-              currentAboveTicks < maxAboveTicks
-            ) {
-              state.aboveAnchorTicks = currentAboveTicks + 1;
+            const currentBelowTicks = state.belowAnchorTicks ?? 0;
+            let ticksDirty = false;
+
+            if (player.location.y >= state.anchor.y) {
+              if (currentBelowTicks !== 0) {
+                state.belowAnchorTicks = 0;
+                ticksDirty = true;
+              }
+              if (currentAboveTicks < maxAboveTicks) {
+                state.aboveAnchorTicks = currentAboveTicks + 1;
+                ticksDirty = true;
+              }
+            } else if (currentAboveTicks > 0) {
+              const nextBelowTicks = currentBelowTicks + 1;
+              if (nextBelowTicks !== currentBelowTicks) {
+                state.belowAnchorTicks = nextBelowTicks;
+                ticksDirty = true;
+              }
+              const recoveryDelayTicks =
+                def.steering.belowAnchorRecoveryDelayTicks ?? 4;
+              const recoveryRate = def.steering.belowAnchorRecoveryRate ?? 1;
+              if (nextBelowTicks >= recoveryDelayTicks) {
+                const nextAboveTicks = Math.max(
+                  0,
+                  currentAboveTicks - recoveryRate,
+                );
+                if (nextAboveTicks !== currentAboveTicks) {
+                  state.aboveAnchorTicks = nextAboveTicks;
+                  if (nextAboveTicks === 0) {
+                    state.belowAnchorTicks = 0;
+                  }
+                  ticksDirty = true;
+                }
+              }
+            } else if (currentBelowTicks !== 0) {
+              state.belowAnchorTicks = 0;
+              ticksDirty = true;
+            }
+
+            if (ticksDirty) {
               PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
             }
           }

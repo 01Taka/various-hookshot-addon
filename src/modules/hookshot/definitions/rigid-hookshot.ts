@@ -19,8 +19,10 @@ export interface RigidHookshotState
   autoTakeUpRemainingTicks?: number;
   /** 巻き取り中に速度低下で停止している連続Tick数 */
   stallReelTicks?: number;
-  /** アンカーより上に滞在した累計Tick数（そのフック中は回復しない） */
+  /** アンカーより上に滞在して蓄積した減衰Tick数（アンカーより下で待機後に徐々に回復） */
   aboveAnchorTicks?: number;
+  /** アンカーより下に連続滞在しているTick数（回復待機カウント用） */
+  belowAnchorTicks?: number;
 }
 
 export interface RigidHookshotDefinition
@@ -111,6 +113,8 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     tiltFullDistance: 12,
     tiltRatePerTick: 0.25,
     aboveAnchorDecayTicks: 20,
+    belowAnchorRecoveryDelayTicks: 4,
+    belowAnchorRecoveryRate: 1,
     centrifugalReferenceAccel: 0.28,
     reelCentrifugalHorizWeight: 1.0,
     reelCentrifugalVertWeight: 0.3,

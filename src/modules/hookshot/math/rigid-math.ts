@@ -154,7 +154,7 @@ export function calculateRigidVelocity(
 
     // 接線平面（lateralDir, upNormal）上の速度ベクトルの長さを維持しつつ上方向へ回転（ベスト装着時のみ）
     // ※ アンカーより上（!isBelowAnchor）では下向き落下速度を無理に水平へ戻さない。
-    //    また一度アンカーより上へ出て減衰した後は、下へ戻っても回転変更効果は回復しない。
+    //    アンカーより上にいる間は時間経過で減衰し、下へ戻ると待機時間後に徐々に回復する。
     const aboveAnchorDecayFactor = calculateAboveAnchorDecayFactor(
       options.aboveAnchorTicks ?? 0,
       steering,

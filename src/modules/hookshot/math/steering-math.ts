@@ -36,6 +36,10 @@ export interface RigidSteeringConfig {
   tiltRatePerTick: number;
   /** アンカーより上に到達してから回転変更効果が0%へ減衰するまでのTick数 */
   aboveAnchorDecayTicks: number;
+  /** アンカーより下に戻ってから減衰回復が始まるまでの待機Tick数 (例: 4 = 0.2秒) */
+  belowAnchorRecoveryDelayTicks?: number;
+  /** 回復開始後の1Tickあたりの減衰Tick回復量 */
+  belowAnchorRecoveryRate?: number;
   /** 遠心力による巻き取り減速が最大に達する基準遠心加速度 (blocks/tick²) */
   centrifugalReferenceAccel: number;
   /** 巻き取り減速の遠心力計算における横方向（R軸）速度2乗の重み */
