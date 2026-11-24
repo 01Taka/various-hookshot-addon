@@ -159,12 +159,16 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
   calculateImpulse: (player, state) => {
     const hasVest = canUseGazeSteering(player);
     const { physics, steering, baumgarteFactor } = ziplineHookshotDefinition;
-    const anchorVelocity =
-      state.railLength > 0.0001 && state.railVelocity !== 0
+    const railDir =
+      state.railLength > 0.0001
         ? Vector3Utils.scale(
             Vector3Utils.subtract(state.railEnd, state.railStart),
-            state.railVelocity / state.railLength,
+            1 / state.railLength,
           )
+        : { x: 0, y: 0, z: 1 };
+    const anchorVelocity =
+      state.railVelocity !== 0
+        ? Vector3Utils.scale(railDir, state.railVelocity)
         : { x: 0, y: 0, z: 0 };
 
     return calculateZiplineHookshot(player, state.anchor, state.currentLength, {
@@ -174,8 +178,10 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
       swingPumpAccel: hasVest
         ? physics.swingPumpAccelVest
         : physics.swingPumpAccelNormal,
+      railDir,
       anchorVelocity,
-      swingDamping: 0,
+      parallelDamping: 0.14,
+      lateralDamping: 0.02,
     });
   },
 };

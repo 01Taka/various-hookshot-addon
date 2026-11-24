@@ -167,15 +167,20 @@ export interface ZiplineHookshotOptions {
   physics: RigidPhysicsConfig;
   steering: RigidSteeringConfig;
   swingPumpAccel: number;
+  /** レール方向（始点→終点）の単位ベクトル */
+  railDir: Vector3;
   /** アンカーの現在速度ベクトル (blocks/tick) */
   anchorVelocity: Vector3;
-  /** 水平方向の相対速度ダンピング率 (0.0〜1.0, デフォルト: 0.10) */
-  swingDamping?: number;
+  /** レール平行方向（前後揺れ）のダンピング率 (0.0〜1.0, デフォルト: 0.14) */
+  parallelDamping?: number;
+  /** レール垂直方向（左右スイング）のダンピング率 (0.0〜1.0, デフォルト: 0.02) */
+  lateralDamping?: number;
 }
 
 /**
  * ジップラインの吊り下げ鎖（足元基準 5.0m = 胴 4.0m）の剛体拘束インパルスを計算します。
- * 視線ステアリングの3D遠心力は使わず、通常の振り子スイング＋エアロベスト加速と軽めの常時ダンピングを適用します。
+ * 視線ステアリングの3D遠心力は使わず、通常の振り子スイング＋エアロベスト加速と
+ * レール平行方向（強め）／垂直方向（弱め）の分離ダンピングを適用します。
  */
 export function calculateZiplineHookshot(
   player: Player,
@@ -196,14 +201,39 @@ export function calculateZiplineHookshot(
     return { x: 0, y: 0, z: 0 };
   }
 
-  const damping = options.swingDamping ?? 0.1;
-  if (damping > 0 && !player.isOnGround) {
+  const parallelDamping = options.parallelDamping ?? 0.14;
+  const lateralDamping = options.lateralDamping ?? 0.02;
+  if ((parallelDamping > 0 || lateralDamping > 0) && !player.isOnGround) {
     const relX = targetVelocity.x - options.anchorVelocity.x;
     const relZ = targetVelocity.z - options.anchorVelocity.z;
+    const horizLen = Math.hypot(options.railDir.x, options.railDir.z);
+
+    if (horizLen > 0.0001) {
+      const dx = options.railDir.x / horizLen;
+      const dz = options.railDir.z / horizLen;
+      const relAlong = relX * dx + relZ * dz;
+      const alongX = dx * relAlong;
+      const alongZ = dz * relAlong;
+      const perpX = relX - alongX;
+      const perpZ = relZ - alongZ;
+
+      return convertTargetVelocityToImpulse(player, {
+        x:
+          options.anchorVelocity.x +
+          alongX * (1 - parallelDamping) +
+          perpX * (1 - lateralDamping),
+        y: targetVelocity.y,
+        z:
+          options.anchorVelocity.z +
+          alongZ * (1 - parallelDamping) +
+          perpZ * (1 - lateralDamping),
+      });
+    }
+
     return convertTargetVelocityToImpulse(player, {
-      x: targetVelocity.x - relX * damping,
+      x: targetVelocity.x - relX * parallelDamping,
       y: targetVelocity.y,
-      z: targetVelocity.z - relZ * damping,
+      z: targetVelocity.z - relZ * parallelDamping,
     });
   }
 
