@@ -91,11 +91,14 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     innerBaumgarteFactor: 0.08,
     inwardEscapeThreshold: 0.45,
     maxSteeringSpeed: 2.2,
+    maxSteeringSpeedNormal: 1.25,
+    reelGravityScaleVest: 0.8,
     swingPumpAccelNormal: 0.015,
     swingPumpAccelVest: 0.04,
   },
   steering: {
     steerAccel: 0.065,
+    steerAccelNormal: 0.025,
     referenceSwingDistance: 30,
     fullSteerAngleDeg: 45,
     steerFadeStartDeg: 90,
@@ -122,7 +125,8 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     const { physics, steering, baumgarteFactor } = rigidHookshotDefinition;
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
-      enableSteering: hasVest,
+      enableSteering: true,
+      hasAeroVest: hasVest,
       aboveAnchorTicks: state.aboveAnchorTicks,
       baumgarteFactor: baumgarteFactor ?? 0.15,
       physics,

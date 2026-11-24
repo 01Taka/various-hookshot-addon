@@ -8,8 +8,10 @@ import {
 } from "../constants";
 
 export interface RigidSteeringConfig {
-  /** 視線・A/D入力による水平接線方向ステアリング最大加速度 (blocks/tick²) */
+  /** 視線・A/D入力による水平接線方向ステアリング最大加速度（エアロベスト装着時, blocks/tick²） */
   steerAccel: number;
+  /** 視線・A/D入力による水平接線方向ステアリング最大加速度（エアロベスト未装着時, blocks/tick²） */
+  steerAccelNormal?: number;
   /** 最大回転パワーが得られる基準距離 (m) */
   referenceSwingDistance: number;
   /** A/D入力なし時に最大加速(100%)へ到達する水平視線角度 (度) */
@@ -235,6 +237,7 @@ export function calculateRigidSteering(
   steering: Pick<
     RigidSteeringConfig,
     | "steerAccel"
+    | "steerAccelNormal"
     | "referenceSwingDistance"
     | "fullSteerAngleDeg"
     | "steerFadeStartDeg"
@@ -247,6 +250,7 @@ export function calculateRigidSteering(
     | "tiltHalfDistance"
     | "tiltFullDistance"
   >,
+  hasAeroVest: boolean = true,
 ): RigidSteeringResult {
   const basis = computeSteeringBasis(player.location, anchor);
   if (!basis) {
@@ -349,23 +353,24 @@ export function calculateRigidSteering(
       basis.horizFactor;
   }
 
-  // 距離に応じた回転パワー減衰
+  // 距離に応じた回転パワー減衰（未装着時は控えめな横ステアリングのみ）
   const distFactor = getDistanceRotationFactor(
     basis.distance,
     steering.referenceSwingDistance,
   );
+  const baseSteerAccel = hasAeroVest
+    ? steering.steerAccel
+    : (steering.steerAccelNormal ?? steering.steerAccel);
   const effectiveAccel =
-    steerRatio > EPSILON
-      ? steering.steerAccel * distFactor * steerRatio
-      : 0;
+    steerRatio > EPSILON ? baseSteerAccel * distFactor * steerRatio : 0;
 
   return {
     lateralDir,
     upNormal: basis.baseUpNormal,
     tangentialAccel: effectiveAccel,
     steerRatio,
-    centrifugal3DRatio,
-    targetTiltRad,
+    centrifugal3DRatio: hasAeroVest ? centrifugal3DRatio : 0,
+    targetTiltRad: hasAeroVest ? targetTiltRad : 0,
     isBelowAnchor,
   };
 }

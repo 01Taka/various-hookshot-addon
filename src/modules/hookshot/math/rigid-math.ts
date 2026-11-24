@@ -1,5 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
+import { MINECRAFT_GRAVITY } from "addon-utils";
 import { EPSILON, RADIAL_CORRECTION_GAIN } from "../constants";
 import {
   convertTargetVelocityToImpulse,
@@ -24,8 +25,12 @@ export interface RigidPhysicsConfig {
   innerBaumgarteFactor: number;
   /** 内側スイング継続ゾーンから自由落下へ抜ける内向き速度閾値 (blocks/tick) */
   inwardEscapeThreshold: number;
-  /** ステアリング加速時の最高速度上限 (blocks/tick) */
+  /** ステアリング加速時の最高速度上限（エアロベスト装着時, blocks/tick） */
   maxSteeringSpeed: number;
+  /** ステアリング加速時の最高速度上限（エアロベスト未装着時, blocks/tick） */
+  maxSteeringSpeedNormal?: number;
+  /** エアロベスト装着かつ巻き取り中の重力倍率 (0.0〜1.0, 例: 0.8 = 20%軽減) */
+  reelGravityScaleVest?: number;
   /** 非巻き取り時の振り子スイング追加加速度（通常時, blocks/tick²） */
   swingPumpAccelNormal: number;
   /** 非巻き取り時の振り子スイング追加加速度（エアロベスト装備時, blocks/tick²） */
@@ -37,6 +42,8 @@ export interface RigidHookshotOptions {
   isReelingIn?: boolean;
   /** 視線ステアリング推進力を有効にするかどうか */
   enableSteering?: boolean;
+  /** エアロベスト系装備が有効かどうか（trueでフル旋回＋巻き取り中重力軽減） */
+  hasAeroVest?: boolean;
   /** アンカーより上に滞在した累計Tick数 */
   aboveAnchorTicks?: number;
   /** Baumgarte 位置誤差安定化係数 */
@@ -71,6 +78,8 @@ export function calculateRigidVelocity(
   const speed = Vector3Utils.magnitude(currentVel);
   const { physics, steering } = options;
 
+  const hasAeroVest = options.hasAeroVest ?? false;
+
   // 1. 空中ジャンプ巻き取り中かつロープが張っている場合、ステアリングと3D遠心力を計算
   const isTaut = r >= ropeLength - physics.tautMargin;
   const isSteeringActive = !!(
@@ -80,23 +89,36 @@ export function calculateRigidVelocity(
   );
 
   const steerResult = isSteeringActive
-    ? calculateRigidSteering(player, anchor, steering)
+    ? calculateRigidSteering(player, anchor, steering, hasAeroVest)
     : null;
   const isSteeringApplied = !!(
     steerResult &&
     (steerResult.steerRatio > 0 || steerResult.centrifugal3DRatio > 0)
   );
 
-  const c3D = steerResult ? steerResult.centrifugal3DRatio : 0;
+  const c3D = hasAeroVest && steerResult ? steerResult.centrifugal3DRatio : 0;
 
-  // 3D遠心力比率に応じて接線速度の空気抵抗を軽減し、ベクトルの長さを維持しやすくする
+  // エアロベスト装着時は巻き取り中（直線巻き取り含む）のみ重力を少し減らす
+  const gravityScale =
+    hasAeroVest && options.isReelingIn
+      ? Math.max(0, Math.min(1, physics.reelGravityScaleVest ?? 1.0))
+      : 1.0;
+  const isGravityReduced = gravityScale < 1.0 - EPSILON;
+  const effectiveGravity = MINECRAFT_GRAVITY * gravityScale;
+
+  // 3D遠心力比率に応じて接線速度の空気抵抗を軽減し、ベクトルの長さを維持しやすくする（ベスト装着時のみ）
   const baseDragXZ = getAirDrag(speed);
   const effectiveDragXZ = baseDragXZ + (1.0 - baseDragXZ) * c3D;
 
-  // 2. 環境抵抗（空気抵抗）と標準重力を適用した予測速度
+  const effectiveMaxSteeringSpeed = hasAeroVest
+    ? physics.maxSteeringSpeed
+    : (physics.maxSteeringSpeedNormal ?? physics.maxSteeringSpeed);
+
+  // 2. 環境抵抗（空気抵抗）と調整後重力を適用した予測速度
   let vPred = predictTickPhysics({
     velocity: currentVel,
     dragXZ: effectiveDragXZ,
+    gravity: effectiveGravity,
   });
 
   if (isSteeringApplied && steerResult) {
@@ -118,7 +140,7 @@ export function calculateRigidVelocity(
     const targetLat =
       steerResult.tangentialAccel > 0
         ? Math.min(
-            physics.maxSteeringSpeed,
+            effectiveMaxSteeringSpeed,
             baseLat + steerResult.tangentialAccel,
           )
         : baseLat;
@@ -130,7 +152,7 @@ export function calculateRigidVelocity(
       );
     }
 
-    // 接線平面（lateralDir, upNormal）上の速度ベクトルの長さを維持しつつ上方向へ回転
+    // 接線平面（lateralDir, upNormal）上の速度ベクトルの長さを維持しつつ上方向へ回転（ベスト装着時のみ）
     // ※ アンカーより上（!isBelowAnchor）では下向き落下速度を無理に水平へ戻さない。
     //    また一度アンカーより上へ出て減衰した後は、下へ戻っても回転変更効果は回復しない。
     const aboveAnchorDecayFactor = calculateAboveAnchorDecayFactor(
@@ -140,13 +162,14 @@ export function calculateRigidVelocity(
     const vLat = Vector3Utils.dot(vPred, steerResult.lateralDir);
     const vUp = Vector3Utils.dot(vPred, steerResult.upNormal);
     if (
+      hasAeroVest &&
       steerResult.isBelowAnchor &&
       aboveAnchorDecayFactor > 0 &&
       vLat > EPSILON &&
       c3D > 0
     ) {
       const planeSpeed = Math.min(
-        physics.maxSteeringSpeed,
+        effectiveMaxSteeringSpeed,
         Math.hypot(vLat, vUp),
       );
       const currentTiltRad = Math.atan2(vUp, vLat);
@@ -236,9 +259,9 @@ export function calculateRigidVelocity(
   }
 
   // 4. たるみ判定：次Tickの予測距離がロープ長以内であれば、外力不要（完全な自由落下）
-  // ※ステアリング推進力や振り子加速が加わっている場合は、接線速度を反映するため null ではなく目標速度を返す
+  // ※ステアリング推進力・振り子加速・巻き取り中の重力軽減が加わっている場合は目標速度を返す
   if (predDistance <= ropeLength) {
-    if (isSteeringApplied || isPumpApplied) {
+    if (isSteeringApplied || isPumpApplied || isGravityReduced) {
       return vPred;
     }
     return null;
