@@ -96,7 +96,7 @@ export function calculateRigidVelocity(
     (steerResult.steerRatio > 0 || steerResult.centrifugal3DRatio > 0)
   );
 
-  const c3D = hasAeroVest && steerResult ? steerResult.centrifugal3DRatio : 0;
+  const c3D = steerResult ? steerResult.centrifugal3DRatio : 0;
 
   // エアロベスト装着時は巻き取り中（直線巻き取り含む）のみ重力を少し減らす
   const gravityScale =
@@ -162,7 +162,6 @@ export function calculateRigidVelocity(
     const vLat = Vector3Utils.dot(vPred, steerResult.lateralDir);
     const vUp = Vector3Utils.dot(vPred, steerResult.upNormal);
     if (
-      hasAeroVest &&
       steerResult.isBelowAnchor &&
       aboveAnchorDecayFactor > 0 &&
       vLat > EPSILON &&

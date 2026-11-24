@@ -167,11 +167,7 @@ export class HookshotSystem {
       const railSpeed = Math.abs(state.railVelocity) * TICKS_PER_SECOND;
       return `残 ${remaining.toFixed(1)}m / ${state.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
     }
-    if (
-      def.id === "rigid" &&
-      state.hookshotId === "rigid" &&
-      canUseGazeSteering(player)
-    ) {
+    if (def.id === "rigid" && state.hookshotId === "rigid") {
       const decayFactor = calculateAboveAnchorDecayFactor(
         state.aboveAnchorTicks ?? 0,
         def.steering,
@@ -1779,13 +1775,12 @@ export class HookshotSystem {
     }
     let delta = baseSpeed + initialStep;
 
-    // 視線ステアリング対応フックショットでエアロベスト装備中に短縮（巻き取り）する場合、
+    // 視線ステアリング対応フックショットで短縮（巻き取り）する場合、
     // 横・縦の重み付き接線移動速度（遠心力）が強いほど短縮速度を低下させる
     if (
       mode === "shorten" &&
       def.id === "rigid" &&
-      def.enableGazeSteering &&
-      canUseGazeSteering(player)
+      def.enableGazeSteering
     ) {
       const multiplier = calculateReelSpeedMultiplier(
         player,

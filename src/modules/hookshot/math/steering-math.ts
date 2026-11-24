@@ -378,8 +378,8 @@ export function calculateRigidSteering(
     upNormal: basis.baseUpNormal,
     tangentialAccel: effectiveAccel,
     steerRatio,
-    centrifugal3DRatio: hasAeroVest ? centrifugal3DRatio : 0,
-    targetTiltRad: hasAeroVest ? targetTiltRad : 0,
+    centrifugal3DRatio,
+    targetTiltRad,
     isBelowAnchor,
   };
 }
