@@ -130,6 +130,7 @@ export class HookRenderManager {
       dimensionId,
       start: params.railStart,
       end: params.railEnd,
+      viewerPosition: player.location,
       style: ZIPLINE_RAIL_STYLE,
     });
 

@@ -61,12 +61,22 @@ export interface WireStyle {
   scoreDiffRange?: number;
   /** 絶対差ベースの非線形カーブ指数 (<1 で中央付近の変化を強調, 例: 0.65) */
   scoreDiffExponent?: number;
+  /** 視点（プレイヤー）からの距離に応じてステップ間隔を広げるか */
+  viewerStepScaling?: boolean;
+  /** ステップ間隔を広げ始める距離 (blocks, デフォルト: 5.0) */
+  viewerScaleStartDist?: number;
+  /** 最大倍率に到達する距離 (blocks, デフォルト: 40.0) */
+  viewerScaleEndDist?: number;
+  /** 遠方でのステップ間隔の最大倍率 (デフォルト: 2.5) */
+  viewerScaleMaxMultiplier?: number;
 }
 
 export interface WireRenderContext {
   dimensionId: string;
   start: Vector3;
   end: Vector3;
+  /** 距離可変ステップ計算用の基準位置（プレイヤー座標など） */
+  viewerPosition?: Vector3;
   /** 着弾面の法線ベクトル、または曲げバネ・しなりの基準軸ベクトル */
   normal?: Vector3;
   /** 現在のロープ設定長 (たるみ計算用) */

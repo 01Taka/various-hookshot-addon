@@ -214,6 +214,54 @@ export class LineRenderer {
       Math.abs(diff.y / dist) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
 
     const straightDir = Vector3Utils.scale(diff, 1 / dist);
+
+    // プレイヤーからの距離に応じた可変ステップ描画（直線モード用）
+    if (
+      style.viewerStepScaling &&
+      context.viewerPosition &&
+      style.shapeMode === "straight"
+    ) {
+      const startDist = style.viewerScaleStartDist ?? 5.0;
+      const endDist = style.viewerScaleEndDist ?? 40.0;
+      const maxMult = style.viewerScaleMaxMultiplier ?? 2.5;
+      const distRange = Math.max(0.001, endDist - startDist);
+      const viewer = context.viewerPosition;
+
+      let d = Math.max(0.1, step) * 0.5;
+      while (d < dist - 0.15 && spawnedCount < MAX_PARTICLES_PER_WIRE - 1) {
+        const px = start.x + straightDir.x * d;
+        const py = start.y + straightDir.y * d;
+        const pz = start.z + straightDir.z * d;
+        this.spawnParticleSafe(
+          dimension,
+          style.particleId,
+          { x: px, y: py, z: pz },
+          wireMolangVars,
+        );
+        spawnedCount++;
+
+        const vDist = Math.hypot(
+          px - viewer.x,
+          py - viewer.y,
+          pz - viewer.z,
+        );
+        const ratio = Math.min(Math.max((vDist - startDist) / distRange, 0), 1);
+        const localStep = Math.max(0.1, step * (1 + (maxMult - 1) * ratio));
+        d += localStep;
+      }
+
+      if (style.anchorParticleId) {
+        this.spawnParticleSafe(
+          dimension,
+          style.anchorParticleId,
+          end,
+          wireMolangVars,
+        );
+        spawnedCount++;
+      }
+      return spawnedCount;
+    }
+
     let uFixed: Vector3 = { x: 0, y: 0, z: 0 };
     let vFixed: Vector3 = { x: 0, y: 0, z: 0 };
     if (!isBendingSpring && (isSpring || particlesPerSlice > 1)) {

@@ -104,6 +104,10 @@ export const ZIPLINE_RAIL_STYLE: WireStyle = {
   stepDistance: 1.0,
   shapeMode: "straight",
   anchorParticleId: "various_hookshot_addon:wire_rigid",
+  viewerStepScaling: true,
+  viewerScaleStartDist: 5.0,
+  viewerScaleEndDist: 40.0,
+  viewerScaleMaxMultiplier: 2.5,
 };
 
 /**
