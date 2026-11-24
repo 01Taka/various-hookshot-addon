@@ -409,7 +409,9 @@ export class HookshotSystem {
         rayOptions,
       );
       if (downHit) {
-        groundYs.push(downHit.block.y + downHit.faceLocation.y);
+        const hitNormal = getDirectionVector(downHit.face);
+        const surfaceY = downHit.block.y + 0.5 + hitNormal.y * 0.5;
+        groundYs.push(surfaceY);
       }
     }
 
@@ -422,17 +424,19 @@ export class HookshotSystem {
     let pillarTopY = maxGroundY + pillarHeight;
 
     // 天井チェック: 支柱が頭上のブロックにめり込まないよう手前まで下げる
+    const ceilingOriginY = maxGroundY + 0.5;
     const ceilingHit = player.dimension.getBlockFromRay(
-      { x: loc.x, y: maxGroundY + 0.5, z: loc.z },
+      { x: loc.x, y: ceilingOriginY, z: loc.z },
       { x: 0, y: 1, z: 0 },
       {
-        maxDistance: pillarHeight,
+        maxDistance: Math.max(0.5, pillarHeight - 0.5),
         includeLiquidBlocks: false,
         includePassableBlocks: false,
       },
     );
     if (ceilingHit) {
-      const ceilingY = ceilingHit.block.y + ceilingHit.faceLocation.y;
+      const ceilNormal = getDirectionVector(ceilingHit.face);
+      const ceilingY = ceilingHit.block.y + 0.5 + ceilNormal.y * 0.5;
       pillarTopY = Math.max(
         maxGroundY + 0.5,
         Math.min(pillarTopY, ceilingY - ceilingClearance),
