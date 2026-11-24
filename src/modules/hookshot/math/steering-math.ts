@@ -24,6 +24,8 @@ export interface RigidSteeringConfig {
   adPriorityAngleDeg: number;
   /** 3D遠心力が最大基準に達する遠心加速度 (blocks/tick²) */
   centrifugal3DReferenceAccel: number;
+  /** 3D遠心力計算時に下向き接線速度 (vUp < 0) へ掛ける寄与倍率 (0.0〜1.0, 例: 0.25) */
+  centrifugal3DDownwardScale?: number;
   /** 近づく＋下側で接線ベクトルを上向きに回転させる最大角度 (度) */
   maxUpwardTiltDeg: number;
   /** 上向き回転が最大に達するアンカー仰角 (度) */
@@ -248,6 +250,7 @@ export function calculateRigidSteering(
     | "steerFadeEndDeg"
     | "adPriorityAngleDeg"
     | "centrifugal3DReferenceAccel"
+    | "centrifugal3DDownwardScale"
     | "centrifugalMinRadius"
     | "maxUpwardTiltDeg"
     | "tiltFullElevationDeg"
@@ -314,21 +317,23 @@ export function calculateRigidSteering(
 
   const lateralDir = Vector3Utils.scale(basis.rightDir, turnSign);
 
-  // 3D 接線速度ベクトル v_t3D の大きさと 3D 遠心力比率 (0.0 〜 1.0)
+  // 3D 接線速度ベクトル成分と 3D 遠心力比率 (0.0 〜 1.0)
+  // ※ 落下中の下向き速度 (vUp < 0) だけで即座に高度維持されないよう、下向き成分の寄与を弱める
   const velocity = player.getVelocity();
-  const vRadial = Vector3Utils.dot(velocity, basis.toAnchorDir);
-  const vTangent3D = Vector3Utils.subtract(
-    velocity,
-    Vector3Utils.scale(basis.toAnchorDir, vRadial),
+  const vHoriz = Vector3Utils.dot(velocity, basis.rightDir);
+  const vVert = Vector3Utils.dot(velocity, basis.baseUpNormal);
+  const downwardScale = Math.max(
+    0,
+    Math.min(1, steering.centrifugal3DDownwardScale ?? 1.0),
   );
-  const tangentialSpeed3D = Vector3Utils.magnitude(vTangent3D);
+  const effectiveVert = vVert < 0 ? vVert * downwardScale : vVert;
+  const tangentialSpeedSq3D = vHoriz * vHoriz + effectiveVert * effectiveVert;
   const effectiveRadius = Math.max(
     EPSILON,
     steering.centrifugalMinRadius,
     basis.distance,
   );
-  const centrifugalAccel3D =
-    (tangentialSpeed3D * tangentialSpeed3D) / effectiveRadius;
+  const centrifugalAccel3D = tangentialSpeedSq3D / effectiveRadius;
   const refAccel3D = Math.max(EPSILON, steering.centrifugal3DReferenceAccel);
   const centrifugal3DRatio = Math.min(1.0, centrifugalAccel3D / refAccel3D);
 
