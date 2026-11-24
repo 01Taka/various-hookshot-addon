@@ -146,6 +146,17 @@ export class HookRenderManager {
       style: params.chainStyle ?? ZIPLINE_WIRE_STYLE,
     });
 
+    // 4. メインの紐とチェーンの接続点（暗いグレーの滑車パーティクル）
+    try {
+      dimension.spawnParticle(
+        "various_hookshot_addon:zipline_anchor",
+        params.anchor,
+      );
+      total++;
+    } catch {
+      // 未ロードチャンク等でのエラー抑止
+    }
+
     return total;
   }
 }

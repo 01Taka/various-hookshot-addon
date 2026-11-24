@@ -118,12 +118,12 @@ export const ZIPLINE_WIRE_STYLE: WireStyle = {
 };
 
 /**
- * ジップライン支持ブロック囲み枠線のスタイル
+ * ジップライン支持ブロック囲み枠線のスタイル（柵と同じ木色）
  */
 export const ZIPLINE_SUPPORT_OUTLINE_STYLE: BlockOutlineStyle = {
   particleId: "various_hookshot_addon:block_outline",
   stepDistance: 0.25,
   padding: 0.03,
   particleSize: 0.08,
-  color: { r: 1.0, g: 0.75, b: 0.22, a: 0.9 },
+  color: { r: 0.58, g: 0.4, b: 0.22, a: 0.95 },
 };
