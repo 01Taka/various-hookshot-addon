@@ -39,6 +39,10 @@ export interface ZiplineHookshotState
   facingDirectionSign?: 1 | -1;
   /** 滑走効果音の直近再生Tick */
   lastSlideSoundTick?: number;
+  /** 緩やか降下条件を連続で満たしているTick数 */
+  gentleDescentTicks?: number;
+  /** 直近で1tick低速落下を付与したTick */
+  lastSlowFallTick?: number;
 }
 
 export interface ZiplineHookshotDefinition
@@ -77,6 +81,19 @@ export interface ZiplineHookshotDefinition
     soundId: string;
     intervalTicks: number;
     minSpeed: number;
+  };
+  /** 緩やかな降下時の累積落下ダメージ防止設定 */
+  fallProtection: {
+    /** 許容するアンカーY速度の下限 (blocks/tick) */
+    minAnchorVelY: number;
+    /** 許容するプレイヤーY速度の下限 (blocks/tick) */
+    minPlayerVelY: number;
+    /** 鎖が張っているとみなす距離マージン (blocks) */
+    tautMargin: number;
+    /** 付与に必要な連続条件達成Tick数 */
+    requiredConsecutiveTicks: number;
+    /** 低速落下再付与までのクールタイム (ticks) */
+    cooldownTicks: number;
   };
   /** レール上の1次元アンカー移動物理パラメータ */
   railPhysics: ZiplineRailPhysicsConfig;
@@ -117,6 +134,13 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
     soundId: "step.chain",
     intervalTicks: 4,
     minSpeed: 0.15,
+  },
+  fallProtection: {
+    minAnchorVelY: -0.4,
+    minPlayerVelY: -0.45,
+    tautMargin: 0.5,
+    requiredConsecutiveTicks: 5,
+    cooldownTicks: 10,
   },
   wireStyle: ZIPLINE_WIRE_STYLE,
   railPhysics: {

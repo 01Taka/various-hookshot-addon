@@ -712,7 +712,51 @@ export class HookshotSystem {
       }
     }
 
+    this.updateZiplineFallProtection(player, state, def);
+
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
+  }
+
+  private static updateZiplineFallProtection(
+    player: Player,
+    state: ZiplineHookshotState,
+    def: ZiplineHookshotDefinition,
+  ): void {
+    const fp = def.fallProtection;
+    const anchorVelY =
+      state.railLength > 0.0001
+        ? ((state.railEnd.y - state.railStart.y) / state.railLength) *
+          state.railVelocity
+        : 0;
+    const distance = Vector3Utils.distance(player.location, state.anchor);
+    const playerVelY = player.getVelocity().y;
+
+    const isGentleDescent =
+      !player.isOnGround &&
+      distance >= state.currentLength - fp.tautMargin &&
+      anchorVelY >= fp.minAnchorVelY &&
+      playerVelY >= fp.minPlayerVelY;
+
+    if (!isGentleDescent) {
+      state.gentleDescentTicks = 0;
+      return;
+    }
+
+    const consecutive = (state.gentleDescentTicks ?? 0) + 1;
+    state.gentleDescentTicks = consecutive;
+
+    if (consecutive >= fp.requiredConsecutiveTicks) {
+      const lastTick = state.lastSlowFallTick ?? -fp.cooldownTicks;
+      if (system.currentTick - lastTick >= fp.cooldownTicks) {
+        try {
+          player.addEffect("slow_falling", 1, {
+            amplifier: 0,
+            showParticles: false,
+          });
+        } catch {}
+        state.lastSlowFallTick = system.currentTick;
+      }
+    }
   }
 
   private static attachFromHit(
