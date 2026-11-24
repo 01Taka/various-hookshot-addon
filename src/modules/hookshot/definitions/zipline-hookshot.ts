@@ -16,8 +16,10 @@ export interface ZiplineHookshotState
   extends BaseHookshotState<typeof ZIPLINE_HOOKSHOT_ID> {
   /** 支柱の地面側ベース座標 */
   railBase: Vector3;
-  /** 終点側支柱の地面側ベース座標（地面に支柱が立った場合のみ） */
+  /** 終点側支柱の地面側／壁面側ベース座標 */
   endRailBase?: Vector3;
+  /** 終点側支柱の先端座標（省略時は railEnd を使用） */
+  endRailTop?: Vector3;
   /** レールの始点（支柱頂点）座標 */
   railStart: Vector3;
   /** レールの終点（着弾オフセット後または終点支柱頂点）座標 */
@@ -98,7 +100,7 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
     maxDownDistance: 5.0,
     pillarHeight: 5.0,
     ceilingClearance: 0.3,
-    endNormalOffset: 1.25,
+    endNormalOffset: 1.0,
     minRailLength: 3.0,
   },
   shotSoundId: "crossbow.shoot",

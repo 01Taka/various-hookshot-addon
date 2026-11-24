@@ -83,6 +83,7 @@ export class HookRenderManager {
     params: {
       railBase: Vector3;
       endRailBase?: Vector3;
+      endRailTop?: Vector3;
       railStart: Vector3;
       railEnd: Vector3;
       startSupportBlock: Vector3;
@@ -114,12 +115,12 @@ export class HookRenderManager {
       style: ZIPLINE_PILLAR_STYLE,
     });
 
-    // 1b. 終点側支柱（終点地面に支柱が立った場合）
+    // 1b. 終点側支柱（終点地面に支柱が立った場合、または壁・天井の0.5m杭）
     if (params.endRailBase) {
       total += LineRenderer.drawWire(dimension, {
         dimensionId,
         start: params.endRailBase,
-        end: params.railEnd,
+        end: params.endRailTop ?? params.railEnd,
         style: ZIPLINE_PILLAR_STYLE,
       });
     }

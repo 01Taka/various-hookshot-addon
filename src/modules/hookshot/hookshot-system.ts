@@ -505,23 +505,22 @@ export class HookshotSystem {
     }
 
     const normal = getDirectionVector(hit.face);
-    const hitAnchor = this.calculateAnchorPosition(
-      player.dimension.id,
-      player.getHeadLocation(),
-      player.getViewDirection(),
-      hit,
-      normal,
-    );
+    const hitFaceCenter: Vector3 = {
+      x: hit.block.x + 0.5 + normal.x * 0.5,
+      y: hit.block.y + 0.5 + normal.y * 0.5,
+      z: hit.block.z + 0.5 + normal.z * 0.5,
+    };
 
-    // 着弾点から法線方向へ 0.5m 手前の真下に 5.0m Ray を飛ばし、地面があれば終点支柱を立てる（天井面は除外）
+    // 着弾ブロック面中心から法線方向へ 0.5m 手前の真下に 5.0m Ray を飛ばし、地面があれば終点支柱を立てる（天井面は除外）
     let endRailBase: Vector3 | undefined;
+    let endRailTop: Vector3 | undefined;
     let railEnd: Vector3;
     let endSupportBlock: Vector3;
 
     const endDownHit =
       normal.y >= -0.2
         ? player.dimension.getBlockFromRay(
-            Vector3Utils.add(hitAnchor, Vector3Utils.scale(normal, 0.5)),
+            Vector3Utils.add(hitFaceCenter, Vector3Utils.scale(normal, 0.5)),
             { x: 0, y: -1, z: 0 },
             {
               maxDistance: maxDownDistance + 0.5,
@@ -553,8 +552,13 @@ export class HookshotSystem {
         z: endDownHit.block.z,
       };
     } else {
+      endRailBase = hitFaceCenter;
+      endRailTop = Vector3Utils.add(
+        hitFaceCenter,
+        Vector3Utils.scale(normal, 0.5),
+      );
       railEnd = Vector3Utils.add(
-        hitAnchor,
+        hitFaceCenter,
         Vector3Utils.scale(normal, def.groundCheck.endNormalOffset),
       );
       endSupportBlock = {
@@ -607,6 +611,7 @@ export class HookshotSystem {
       sneakConsumed,
       railBase,
       endRailBase,
+      endRailTop,
       railStart,
       railEnd,
       startSupportBlock,
@@ -2139,6 +2144,7 @@ export class HookshotSystem {
             HookRenderManager.renderZipline(player, {
               railBase: state.railBase,
               endRailBase: state.endRailBase,
+              endRailTop: state.endRailTop,
               railStart: state.railStart,
               railEnd: state.railEnd,
               startSupportBlock: state.startSupportBlock,
