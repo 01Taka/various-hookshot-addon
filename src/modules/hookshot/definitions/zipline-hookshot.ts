@@ -1,3 +1,4 @@
+import { Vector3Utils } from "@minecraft/math";
 import { Vector3 } from "@minecraft/server";
 import { ZIPLINE_WIRE_STYLE } from "../../render";
 import { RigidPhysicsConfig } from "../math/rigid-math";
@@ -88,7 +89,7 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
   minRopeLength: 5.0,
   hangingRopeLength: 5.0,
   visualChainLength: 4.0,
-  baumgarteFactor: 0.18,
+  baumgarteFactor: 0.42,
   groundCheck: {
     halfWidth: 0.5,
     maxDownDistance: 5.0,
@@ -152,13 +153,23 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
   calculateImpulse: (player, state) => {
     const hasVest = canUseGazeSteering(player);
     const { physics, steering, baumgarteFactor } = ziplineHookshotDefinition;
+    const anchorVelocity =
+      state.railLength > 0.0001 && state.railVelocity !== 0
+        ? Vector3Utils.scale(
+            Vector3Utils.subtract(state.railEnd, state.railStart),
+            state.railVelocity / state.railLength,
+          )
+        : { x: 0, y: 0, z: 0 };
+
     return calculateZiplineHookshot(player, state.anchor, state.currentLength, {
-      baumgarteFactor: baumgarteFactor ?? 0.18,
+      baumgarteFactor: baumgarteFactor ?? 0.42,
       physics,
       steering,
       swingPumpAccel: hasVest
         ? physics.swingPumpAccelVest
         : physics.swingPumpAccelNormal,
+      anchorVelocity,
+      swingDamping: 0.1,
     });
   },
 };

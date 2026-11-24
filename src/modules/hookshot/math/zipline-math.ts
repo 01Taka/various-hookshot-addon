@@ -1,6 +1,7 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
-import { calculateRigidHookshot, RigidPhysicsConfig } from "./rigid-math";
+import { convertTargetVelocityToImpulse } from "./physics-utils";
+import { calculateRigidVelocity, RigidPhysicsConfig } from "./rigid-math";
 import { RigidSteeringConfig } from "./steering-math";
 
 export interface ZiplineRailPhysicsConfig {
@@ -150,11 +151,15 @@ export interface ZiplineHookshotOptions {
   physics: RigidPhysicsConfig;
   steering: RigidSteeringConfig;
   swingPumpAccel: number;
+  /** アンカーの現在速度ベクトル (blocks/tick) */
+  anchorVelocity: Vector3;
+  /** 水平方向の相対速度ダンピング率 (0.0〜1.0, デフォルト: 0.10) */
+  swingDamping?: number;
 }
 
 /**
  * ジップラインの吊り下げ鎖（足元基準 5.0m = 胴 4.0m）の剛体拘束インパルスを計算します。
- * 視線ステアリングの3D遠心力は使わず、通常の振り子スイング＋エアロベスト加速のみ有効にします。
+ * 視線ステアリングの3D遠心力は使わず、通常の振り子スイング＋エアロベスト加速と軽めの常時ダンピングを適用します。
  */
 export function calculateZiplineHookshot(
   player: Player,
@@ -162,7 +167,7 @@ export function calculateZiplineHookshot(
   ropeLength: number,
   options: ZiplineHookshotOptions,
 ): Vector3 {
-  return calculateRigidHookshot(player, anchor, ropeLength, {
+  const targetVelocity = calculateRigidVelocity(player, anchor, ropeLength, {
     isReelingIn: false,
     enableSteering: false,
     baumgarteFactor: options.baumgarteFactor,
@@ -170,4 +175,21 @@ export function calculateZiplineHookshot(
     steering: options.steering,
     swingPumpAccel: options.swingPumpAccel,
   });
+
+  if (!targetVelocity) {
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  const damping = options.swingDamping ?? 0.1;
+  if (damping > 0 && !player.isOnGround) {
+    const relX = targetVelocity.x - options.anchorVelocity.x;
+    const relZ = targetVelocity.z - options.anchorVelocity.z;
+    return convertTargetVelocityToImpulse(player, {
+      x: targetVelocity.x - relX * damping,
+      y: targetVelocity.y,
+      z: targetVelocity.z - relZ * damping,
+    });
+  }
+
+  return convertTargetVelocityToImpulse(player, targetVelocity);
 }
