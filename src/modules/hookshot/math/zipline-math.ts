@@ -178,6 +178,8 @@ export interface ZiplineHookshotOptions {
   parallelDamping?: number;
   /** レール垂直方向（左右スイング）のダンピング率 (0.0〜1.0, デフォルト: 0.02) */
   lateralDamping?: number;
+  /** true のときレールと平行なスイング加速成分を無効化する */
+  suppressParallelSwing?: boolean;
 }
 
 /**
@@ -198,6 +200,9 @@ export function calculateZiplineHookshot(
     physics: options.physics,
     steering: options.steering,
     swingPumpAccel: options.swingPumpAccel,
+    suppressPumpParallelDir: options.suppressParallelSwing
+      ? options.railDir
+      : undefined,
   });
 
   if (!targetVelocity) {

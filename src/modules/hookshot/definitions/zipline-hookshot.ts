@@ -1,5 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Vector3 } from "@minecraft/server";
+import { isInputButtonPressed, isSneakButtonPressed } from "addon-utils";
 import { ZIPLINE_WIRE_STYLE } from "../../render";
 import { RigidPhysicsConfig } from "../math/rigid-math";
 import { canUseGazeSteering, RigidSteeringConfig } from "../math/steering-math";
@@ -176,6 +177,16 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
         ? Vector3Utils.scale(railDir, state.railVelocity)
         : { x: 0, y: 0, z: 0 };
 
+    let isPropelling = false;
+    try {
+      isPropelling =
+        isInputButtonPressed(player, "Jump") ||
+        player.isJumping ||
+        isSneakButtonPressed(player);
+    } catch {
+      isPropelling = false;
+    }
+
     return calculateZiplineHookshot(player, state.anchor, state.currentLength, {
       baumgarteFactor: baumgarteFactor ?? 0.42,
       physics,
@@ -187,6 +198,7 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
       anchorVelocity,
       parallelDamping: 0.14,
       lateralDamping: 0.02,
+      suppressParallelSwing: isPropelling,
     });
   },
 };

@@ -47,6 +47,8 @@ export interface RigidHookshotOptions {
   steering: RigidSteeringConfig;
   /** 非巻き取り時の振り子スイング追加加速度 (blocks/tick²) */
   swingPumpAccel: number;
+  /** 指定時、振り子スイング加速からこの水平ベクトルと平行な成分を除去する */
+  suppressPumpParallelDir?: Vector3;
 }
 
 /**
@@ -189,7 +191,7 @@ export function calculateRigidVelocity(
     options.swingPumpAccel > 0 &&
     (isTaut || inInnerSwingZone)
   ) {
-    const pump = calculatePendulumPumpAcceleration(
+    let pump = calculatePendulumPumpAcceleration(
       player,
       normal,
       vPred,
@@ -197,6 +199,21 @@ export function calculateRigidVelocity(
       steering.pumpLowSpeedStart,
       steering.pumpLowSpeedEnd,
     );
+    if (options.suppressPumpParallelDir) {
+      const hx = options.suppressPumpParallelDir.x;
+      const hz = options.suppressPumpParallelDir.z;
+      const hLen = Math.hypot(hx, hz);
+      if (hLen > EPSILON) {
+        const ux = hx / hLen;
+        const uz = hz / hLen;
+        const parallel = pump.x * ux + pump.z * uz;
+        pump = {
+          x: pump.x - ux * parallel,
+          y: pump.y,
+          z: pump.z - uz * parallel,
+        };
+      }
+    }
     if (pump.x !== 0 || pump.y !== 0 || pump.z !== 0) {
       vPred = Vector3Utils.add(vPred, pump);
       isPumpApplied = true;
