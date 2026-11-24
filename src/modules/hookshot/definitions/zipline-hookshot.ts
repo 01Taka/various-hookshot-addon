@@ -108,7 +108,7 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
   },
   wireStyle: ZIPLINE_WIRE_STYLE,
   railPhysics: {
-    inputAccel: 0.08,
+    inputAccel: 0.104,
     railGravity: 0.092,
     friction: 0.06,
     brakeFriction: 0.2,
