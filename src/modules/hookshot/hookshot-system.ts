@@ -159,7 +159,11 @@ export class HookshotSystem {
       return def.formatDistanceUi(player, state, distance);
     }
     if (def.id === "zipline" && state.hookshotId === "zipline") {
-      const remaining = Math.max(0, state.railLength - state.railProgress);
+      const sign = state.facingDirectionSign ?? 1;
+      const remaining = Math.max(
+        0,
+        sign >= 0 ? state.railLength - state.railProgress : state.railProgress,
+      );
       const railSpeed = Math.abs(state.railVelocity) * TICKS_PER_SECOND;
       return `残 ${remaining.toFixed(1)}m / ${state.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
     }
@@ -620,6 +624,7 @@ export class HookshotSystem {
       railLength,
       railProgress: 0,
       railVelocity: 0,
+      facingDirectionSign: 1,
     };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
@@ -645,6 +650,26 @@ export class HookshotSystem {
       return;
     }
 
+    let facingSign: 1 | -1 = state.facingDirectionSign ?? 1;
+    if (state.railLength > 0.0001) {
+      try {
+        const viewDir = player.getViewDirection();
+        const railDir = Vector3Utils.scale(
+          Vector3Utils.subtract(state.railEnd, state.railStart),
+          1 / state.railLength,
+        );
+        const viewDot = Vector3Utils.dot(viewDir, railDir);
+        if (viewDot >= 0.2) {
+          facingSign = 1;
+        } else if (viewDot <= -0.2) {
+          facingSign = -1;
+        }
+      } catch {
+        // 視線取得失敗時は前回の向きを維持
+      }
+    }
+    state.facingDirectionSign = facingSign;
+
     const result = stepZiplineRailAnchor({
       railStart: state.railStart,
       railEnd: state.railEnd,
@@ -654,6 +679,7 @@ export class HookshotSystem {
       dimensionId: state.anchor.dimensionId,
       jumpPressed,
       sneakPressed,
+      inputDirectionSign: facingSign,
       isOnGround: player.isOnGround,
       playerLocation: player.location,
       config: def.railPhysics,

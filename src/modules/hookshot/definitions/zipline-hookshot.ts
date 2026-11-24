@@ -34,6 +34,8 @@ export interface ZiplineHookshotState
   railProgress: number;
   /** レール上の現在速度 (blocks/tick, 正=終点方向, 負=始点方向) */
   railVelocity: number;
+  /** 視線に基づく現在の正面進行符号 (+1: 終点方向, -1: 始点方向) */
+  facingDirectionSign?: 1 | -1;
   /** 滑走効果音の直近再生Tick */
   lastSlideSoundTick?: number;
 }

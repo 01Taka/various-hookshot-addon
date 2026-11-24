@@ -34,6 +34,8 @@ export interface ZiplineRailStepInput {
   dimensionId: string;
   jumpPressed: boolean;
   sneakPressed: boolean;
+  /** 視線に基づく正面進行符号 (+1: 終点方向, -1: 始点方向) */
+  inputDirectionSign: 1 | -1;
   isOnGround: boolean;
   playerLocation: Vector3;
   config: ZiplineRailPhysicsConfig;
@@ -59,6 +61,7 @@ export function stepZiplineRailAnchor(
     dimensionId,
     jumpPressed,
     sneakPressed,
+    inputDirectionSign,
     isOnGround,
     playerLocation,
     config,
@@ -79,8 +82,8 @@ export function stepZiplineRailAnchor(
   const isBraking = jumpPressed && sneakPressed;
   let inputAccel = 0;
   if (!isBraking) {
-    if (jumpPressed) inputAccel += config.inputAccel;
-    if (sneakPressed) inputAccel -= config.inputAccel;
+    if (jumpPressed) inputAccel += config.inputAccel * inputDirectionSign;
+    if (sneakPressed) inputAccel -= config.inputAccel * inputDirectionSign;
   }
 
   const mu = isBraking ? config.brakeFriction : config.friction;
