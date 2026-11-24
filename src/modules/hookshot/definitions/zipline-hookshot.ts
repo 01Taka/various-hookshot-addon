@@ -137,7 +137,7 @@ export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
     minAnchorVelY: -0.4,
     minPlayerVelY: -0.45,
     requiredConsecutiveTicks: 5,
-    cooldownTicks: 20,
+    cooldownTicks: 16,
   },
   wireStyle: ZIPLINE_WIRE_STYLE,
   railPhysics: {
