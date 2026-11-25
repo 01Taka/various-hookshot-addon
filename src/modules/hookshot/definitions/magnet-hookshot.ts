@@ -2,7 +2,7 @@ import { Vector3 } from "@minecraft/server";
 import { MAGNET_GUIDE_WIRE_STYLE } from "../../render";
 import {
   calculateMagnetHookshot,
-  MagnetForceMode,
+  MagnetInputMode,
   MagnetNode,
   MagnetPhysicsConfig,
 } from "../math/magnet-math";
@@ -43,16 +43,16 @@ export function isMetallicMagnetBlock(typeId: string): boolean {
 
 export interface MagnetHookshotState
   extends BaseHookshotState<typeof MAGNET_HOOKSHOT_ID> {
-  /** 現在磁化されているブロック一覧（最大3個, FIFO） */
+  /** 現在磁化されているブロック一覧（足元反発・視線先吸着） */
   nodes: MagnetNode[];
-  /** 現在発動中の磁力モード */
-  activeMode: MagnetForceMode;
+  /** 現在発動中の入力モード ("none" / "normal"=Jump / "inverted"=Shift) */
+  activeMode: MagnetInputMode;
   /** 着地後、初回起動（遅延あり＋初動ブースト）が未消化かどうか */
   isFirstActivationPending: boolean;
-  /** 初回起動または空中で一度地面から離れたか（地上ブースト直後の即リセット防止） */
+  /** 初回起動または空中で一度地面から離れたか */
   hasLeftGroundSinceActivation: boolean;
   /** 初回起動チャージ中に入力しているモード */
-  chargeInputMode: MagnetForceMode;
+  chargeInputMode: MagnetInputMode;
   /** 初回起動チャージの連続入力Tick数 */
   chargeTicks: number;
   /** 今Tickで初回ブーストを発動するか */
@@ -66,8 +66,8 @@ export interface MagnetHookshotDefinition
     typeof MAGNET_HOOKSHOT_ID,
     MagnetHookshotState
   > {
-  /** 最大同時磁化ブロック数 */
-  maxNodes: number;
+  /** 足元下向きレイキャストの最大射程 (blocks) */
+  footRayDistance: number;
   /** 磁化ブロックから自動消滅する離脱距離 (blocks) */
   maxDetachDistance: number;
   /** 着弾（磁化成功）時の効果音ID */
@@ -91,7 +91,7 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
   id: MAGNET_HOOKSHOT_ID,
   itemTypeId: MAGNET_ITEM_ID,
   maxDistance: 200,
-  maxNodes: 3,
+  footRayDistance: 50,
   maxDetachDistance: 250,
   reel: {
     mode: "continuous",

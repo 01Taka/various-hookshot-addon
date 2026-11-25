@@ -8,7 +8,8 @@ import {
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../constants";
 import { getDirectionAndDistance, predictTickPhysics } from "./physics-utils";
 
-export type MagnetForceMode = "none" | "attract" | "repel";
+export type MagnetPolarity = "attract" | "repel";
+export type MagnetInputMode = "none" | "normal" | "inverted";
 
 export interface MagnetNode {
   /** 磁化対象ブロックの整数座標 */
@@ -17,6 +18,8 @@ export interface MagnetNode {
   center: Vector3;
   /** 配置されたディメンションID */
   dimensionId: string;
+  /** 磁石の初期極性 ("attract": 吸着 / "repel": 反発) */
+  polarity: MagnetPolarity;
   /** 金属・磁性体ブロックによるボーナス対象かどうか */
   isMetallic: boolean;
   /** 磁力倍率 (通常: 1.0, 金属: 1.4) */
@@ -49,6 +52,18 @@ export interface MagnetPhysicsConfig {
 }
 
 /**
+ * 磁石の極性と現在の入力モード（通常=Jump / 反転=Shift）から実効符号（+1: 吸着, -1: 反発）を返します。
+ */
+export function getEffectiveMagnetSign(
+  polarity: MagnetPolarity,
+  mode: MagnetInputMode,
+): 1 | -1 | 0 {
+  if (mode === "none") return 0;
+  const baseSign = polarity === "attract" ? 1 : -1;
+  return mode === "normal" ? baseSign : (-baseSign as 1 | -1);
+}
+
+/**
  * 距離減衰スケールを計算します: (r0 / max(r, r0))^p
  */
 export function calculateMagnetDistanceScale(
@@ -78,7 +93,7 @@ export function getMagnetMaxSpeed(
 export function calculateMagnetHookshot(
   player: Player,
   nodes: MagnetNode[],
-  mode: MagnetForceMode,
+  mode: MagnetInputMode,
   isBoostTick: boolean,
   config: MagnetPhysicsConfig,
 ): Vector3 {
@@ -92,10 +107,12 @@ export function calculateMagnetHookshot(
     z: player.location.z,
   };
 
-  const sign = mode === "attract" ? 1 : -1;
   let sumAccel: Vector3 = { x: 0, y: 0, z: 0 };
 
   for (const node of nodes) {
+    const sign = getEffectiveMagnetSign(node.polarity, mode);
+    if (sign === 0) continue;
+
     const { dir, distance } = getDirectionAndDistance(chestPos, node.center);
     if (distance < EPSILON) continue;
 
@@ -137,7 +154,11 @@ export function calculateMagnetHookshot(
   let targetVel = Vector3Utils.add(predictedVel, sumAccel);
 
   // 地上で初回ブースト発動時は地面摩擦に負けないよう最小上向きリフトを保証
-  if (isBoostTick && player.isOnGround && targetVel.y < config.initialBoostGroundLiftY) {
+  if (
+    isBoostTick &&
+    player.isOnGround &&
+    targetVel.y < config.initialBoostGroundLiftY
+  ) {
     targetVel = {
       ...targetVel,
       y: config.initialBoostGroundLiftY,
