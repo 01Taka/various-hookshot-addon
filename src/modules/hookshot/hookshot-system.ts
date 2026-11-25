@@ -1597,15 +1597,6 @@ export class HookshotSystem {
         this.playSoundSafe(player, def.activeSound.soundId, pitch);
         state.lastActiveSoundTick = system.currentTick;
       }
-
-      if (!player.isOnGround) {
-        try {
-          player.addEffect("slow_falling", 1, {
-            amplifier: 0,
-            showParticles: false,
-          });
-        } catch {}
-      }
     }
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
