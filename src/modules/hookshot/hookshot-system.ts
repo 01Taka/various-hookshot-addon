@@ -1546,11 +1546,11 @@ export class HookshotSystem {
       desiredMode = "repel";
     }
 
-    // 一度空中に浮いた後に再着地した時点で初回状態にリセット
-    if (!player.isOnGround) {
-      state.hasLeftGroundSinceActivation = true;
-    } else if (
-      state.hasLeftGroundSinceActivation &&
+    // 地面に立っている かつ シフトもジャンプも押されていない場合に初回状態へリセット
+    if (
+      player.isOnGround &&
+      !jumpPressed &&
+      !sneakPressed &&
       !state.isFirstActivationPending
     ) {
       state.isFirstActivationPending = true;
