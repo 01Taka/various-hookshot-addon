@@ -8,96 +8,64 @@ import {
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../constants";
 import { getDirectionAndDistance, predictTickPhysics } from "./physics-utils";
 
-export type MagnetPolarity = "attract" | "repel";
-export type MagnetInputMode = "none" | "normal" | "inverted";
-
-export interface MagnetNode {
-  /** 磁化対象ブロックの整数座標 */
-  blockPos: Vector3;
-  /** 磁化対象ブロックの中心座標 */
-  center: Vector3;
-  /** 配置されたディメンションID */
-  dimensionId: string;
-  /** 磁石の初期極性 ("attract": 吸着 / "repel": 反発) */
-  polarity: MagnetPolarity;
-  /** 金属・磁性体ブロックによるボーナス対象かどうか */
-  isMetallic: boolean;
-  /** 磁力倍率 (通常: 1.0, 金属: 1.4) */
-  multiplier: number;
-}
+export type MagnetForceMode = "none" | "attract" | "repel";
 
 export interface MagnetPhysicsConfig {
-  /** 1個あたりの基本加速度 (blocks/tick^2) */
-  baseAccel: number;
+  /** 0m〜fullStrengthDistance における一定の最大加速度 (blocks/tick^2) */
+  maxAccel: number;
+  /** 最大加速度を維持する距離上限 (blocks, 30m) */
+  fullStrengthDistance: number;
+  /** 磁場が0になる最大距離 (blocks, 100m) */
+  zeroDistance: number;
   /** 初回起動ブースト時の加速度倍率 */
   initialBoostMultiplier: number;
   /** 地上から初回ブースト発動時に付与する最小上向きリフト (blocks/tick) */
   initialBoostGroundLiftY: number;
-  /** 距離減衰の基準最小距離 r0 (blocks) */
-  r0: number;
-  /** 距離減衰の指数 p (2.0 = 距離の二乗に反比例) */
-  decayExponent: number;
-  /** 合計加速度の上限 (blocks/tick^2) */
-  maxTotalAccel: number;
-  /** 1個配置時の最高速度上限 (blocks/tick) */
-  maxSpeedSingle: number;
-  /** 2個配置時の最高速度上限 (blocks/tick) */
-  maxSpeedDouble: number;
-  /** 3個配置時の最高速度上限 (blocks/tick) */
-  maxSpeedTriple: number;
+  /** 引き寄せ時の磁気吸着ロック半径 (blocks, 1.5〜2.0m) */
+  attractLockRadius: number;
+  /** 引き寄せ時の最大移動速度 (blocks/tick) */
+  maxSpeed: number;
+  /** 反発時の接線方向（横滑り）速度保持率 */
+  repelTangentRetention: number;
+  /** 反発時の動径（法線）方向ダンピング（バネ跳ね防止） */
+  repelRadialDamping: number;
   /** 初回起動までの連続入力必要Tick数 (5〜6 ticks = 0.25〜0.3秒) */
   startupDelayTicks: number;
-  /** 金属・磁性体ブロックの磁力倍率 */
-  metallicMultiplier: number;
 }
 
 /**
- * 磁石の極性と現在の入力モード（通常=Jump / 反転=Shift）から実効符号（+1: 吸着, -1: 反発）を返します。
+ * 距離 r に応じた磁場の強さ A(r) (blocks/tick^2) を返します。
+ * - 0 〜 fullStrengthDistance (30m): maxAccel 一定
+ * - fullStrengthDistance 〜 zeroDistance (100m): 1.0 → 0.0 へ滑らかに減衰 (smoothstep)
+ * - zeroDistance 以上: 0
  */
-export function getEffectiveMagnetSign(
-  polarity: MagnetPolarity,
-  mode: MagnetInputMode,
-): 1 | -1 | 0 {
-  if (mode === "none") return 0;
-  const baseSign = polarity === "attract" ? 1 : -1;
-  return mode === "normal" ? baseSign : (-baseSign as 1 | -1);
-}
-
-/**
- * 距離減衰スケールを計算します: (r0 / max(r, r0))^p
- */
-export function calculateMagnetDistanceScale(
+export function calculateMagneticFieldStrength(
   distance: number,
-  r0: number,
-  decayExponent: number,
-): number {
-  const clampedR = Math.max(distance, Math.max(r0, EPSILON));
-  return Math.pow(r0 / clampedR, decayExponent);
-}
-
-/**
- * 配置数に応じた最高速度上限を取得します。
- */
-export function getMagnetMaxSpeed(
-  nodeCount: number,
   config: MagnetPhysicsConfig,
 ): number {
-  if (nodeCount <= 1) return config.maxSpeedSingle;
-  if (nodeCount === 2) return config.maxSpeedDouble;
-  return config.maxSpeedTriple;
+  if (distance <= config.fullStrengthDistance) {
+    return config.maxAccel;
+  }
+  if (distance >= config.zeroDistance) {
+    return 0;
+  }
+  const span = Math.max(config.zeroDistance - config.fullStrengthDistance, EPSILON);
+  const t = (distance - config.fullStrengthDistance) / span;
+  const smooth = 1 - t * t * (3 - 2 * t);
+  return config.maxAccel * smooth;
 }
 
 /**
- * 配置中の全磁化ブロックからの合力ベクトルを計算し、プレイヤーへのインパルスを返します。
+ * 磁場の強さ A(r) に基づき、引き寄せ（磁気吸着ロック）または反発（磁気浮上＋無摩擦横滑り）のインパルスを計算します。
  */
 export function calculateMagnetHookshot(
   player: Player,
-  nodes: MagnetNode[],
-  mode: MagnetInputMode,
+  anchor: Vector3,
+  mode: MagnetForceMode,
   isBoostTick: boolean,
   config: MagnetPhysicsConfig,
 ): Vector3 {
-  if (mode === "none" || nodes.length === 0) {
+  if (mode === "none") {
     return { x: 0, y: 0, z: 0 };
   }
 
@@ -107,36 +75,9 @@ export function calculateMagnetHookshot(
     z: player.location.z,
   };
 
-  let sumAccel: Vector3 = { x: 0, y: 0, z: 0 };
-
-  for (const node of nodes) {
-    const sign = getEffectiveMagnetSign(node.polarity, mode);
-    if (sign === 0) continue;
-
-    const { dir, distance } = getDirectionAndDistance(chestPos, node.center);
-    if (distance < EPSILON) continue;
-
-    const distScale = calculateMagnetDistanceScale(
-      distance,
-      config.r0,
-      config.decayExponent,
-    );
-    const accelMag = config.baseAccel * node.multiplier * distScale * sign;
-    sumAccel = Vector3Utils.add(sumAccel, Vector3Utils.scale(dir, accelMag));
-  }
-
+  const { dir, distance } = getDirectionAndDistance(chestPos, anchor);
+  const fieldAccel = calculateMagneticFieldStrength(distance, config);
   const boostScale = isBoostTick ? config.initialBoostMultiplier : 1.0;
-  sumAccel = Vector3Utils.scale(sumAccel, boostScale);
-
-  const maxAccel = config.maxTotalAccel * boostScale;
-  const accelMag = Vector3Utils.magnitude(sumAccel);
-  if (accelMag > maxAccel && accelMag > EPSILON) {
-    sumAccel = Vector3Utils.scale(sumAccel, maxAccel / accelMag);
-  }
-
-  if (accelMag < EPSILON && !isBoostTick) {
-    return { x: 0, y: 0, z: 0 };
-  }
 
   const currentVel = player.getVelocity();
   const dragY = player.isOnGround
@@ -151,7 +92,63 @@ export function calculateMagnetHookshot(
     dragXZ,
   });
 
-  let targetVel = Vector3Utils.add(predictedVel, sumAccel);
+  let targetVel: Vector3;
+
+  if (mode === "attract") {
+    // 引き寄せ（Shift）: 吸い込み → 磁気吸着ロック
+    if (distance <= config.attractLockRadius) {
+      // 至近距離では強い減衰をかけて通り過ぎずに壁・天井へピタッと吸着・静止
+      const pullSpeed = distance > 0.35 ? Math.min(distance * 0.18, 0.22) : 0;
+      const desiredLockVel = Vector3Utils.scale(dir, pullSpeed);
+      targetVel = Vector3Utils.add(
+        Vector3Utils.scale(currentVel, 0.2),
+        Vector3Utils.scale(desiredLockVel, 0.8),
+      );
+    } else {
+      if (fieldAccel <= EPSILON && !isBoostTick) {
+        return { x: 0, y: 0, z: 0 };
+      }
+      const accel = fieldAccel * boostScale;
+      targetVel = Vector3Utils.add(predictedVel, Vector3Utils.scale(dir, accel));
+
+      // ロック半径手前での高速突入時は減衰してオーバーシュートを防止
+      if (distance < config.attractLockRadius + 2.5 && !isBoostTick) {
+        const inwardSpeed = Vector3Utils.dot(targetVel, dir);
+        const maxApproachSpeed = Math.max(0.25, (distance - config.attractLockRadius) * 0.35 + 0.25);
+        if (inwardSpeed > maxApproachSpeed) {
+          targetVel = Vector3Utils.subtract(
+            targetVel,
+            Vector3Utils.scale(dir, inwardSpeed - maxApproachSpeed),
+          );
+        }
+      }
+    }
+  } else {
+    // 反発（Jump）: 弾き出し ＋ 磁気浮上 ＋ 無摩擦横滑り
+    if (fieldAccel <= EPSILON && !isBoostTick) {
+      return { x: 0, y: 0, z: 0 };
+    }
+    const outDir =
+      distance >= EPSILON ? Vector3Utils.scale(dir, -1) : { x: 0, y: 1, z: 0 };
+
+    const curRadial = Vector3Utils.dot(currentVel, outDir);
+    const curTangent = Vector3Utils.subtract(
+      currentVel,
+      Vector3Utils.scale(outDir, curRadial),
+    );
+
+    const predRadial = Vector3Utils.dot(predictedVel, outDir);
+    const radialDamping = isBoostTick ? 1.0 : config.repelRadialDamping;
+    const nextRadial = predRadial * radialDamping + fieldAccel * boostScale;
+
+    // 接線方向の抵抗を抑えて滑らかな横滑りを実現
+    const nextTangent = Vector3Utils.scale(curTangent, config.repelTangentRetention);
+
+    targetVel = Vector3Utils.add(
+      nextTangent,
+      Vector3Utils.scale(outDir, nextRadial),
+    );
+  }
 
   // 地上で初回ブースト発動時は地面摩擦に負けないよう最小上向きリフトを保証
   if (
@@ -165,10 +162,9 @@ export function calculateMagnetHookshot(
     };
   }
 
-  const maxSpeed = getMagnetMaxSpeed(nodes.length, config);
-  const targetSpeed = Vector3Utils.magnitude(targetVel);
-  if (targetSpeed > maxSpeed && targetSpeed > EPSILON) {
-    targetVel = Vector3Utils.scale(targetVel, maxSpeed / targetSpeed);
+  const speed = Vector3Utils.magnitude(targetVel);
+  if (speed > config.maxSpeed && speed > EPSILON) {
+    targetVel = Vector3Utils.scale(targetVel, config.maxSpeed / speed);
   }
 
   return calculateVelocityImpulse({

@@ -2,8 +2,7 @@ import { Vector3 } from "@minecraft/server";
 import { MAGNET_GUIDE_WIRE_STYLE } from "../../render";
 import {
   calculateMagnetHookshot,
-  MagnetInputMode,
-  MagnetNode,
+  MagnetForceMode,
   MagnetPhysicsConfig,
 } from "../math/magnet-math";
 import { BaseHookshotDefinition, BaseHookshotState } from "../types";
@@ -11,48 +10,16 @@ import { BaseHookshotDefinition, BaseHookshotState } from "../types";
 export const MAGNET_HOOKSHOT_ID = "magnet";
 export const MAGNET_ITEM_ID = "various_hookshot_addon:magnet_hookshot";
 
-/** 金属・磁性体ブロックボーナス（1.4倍）の対象ブロックID一覧 */
-export const METALLIC_MAGNET_BLOCK_IDS = new Set<string>([
-  "minecraft:iron_block",
-  "minecraft:raw_iron_block",
-  "minecraft:iron_ore",
-  "minecraft:deepslate_iron_ore",
-  "minecraft:iron_bars",
-  "minecraft:iron_door",
-  "minecraft:iron_trapdoor",
-  "minecraft:heavy_weighted_pressure_plate",
-  "minecraft:chain",
-  "minecraft:iron_chain",
-  "minecraft:hopper",
-  "minecraft:anvil",
-  "minecraft:chipped_anvil",
-  "minecraft:damaged_anvil",
-  "minecraft:lodestone",
-  "minecraft:netherite_block",
-  "minecraft:ancient_debris",
-  "minecraft:cauldron",
-  "minecraft:rail",
-  "minecraft:powered_rail",
-  "minecraft:detector_rail",
-  "minecraft:activator_rail",
-]);
-
-export function isMetallicMagnetBlock(typeId: string): boolean {
-  return METALLIC_MAGNET_BLOCK_IDS.has(typeId);
-}
-
 export interface MagnetHookshotState
   extends BaseHookshotState<typeof MAGNET_HOOKSHOT_ID> {
-  /** 現在磁化されているブロック一覧（足元反発・視線先吸着） */
-  nodes: MagnetNode[];
-  /** 現在発動中の入力モード ("none" / "normal"=Jump / "inverted"=Shift) */
-  activeMode: MagnetInputMode;
+  /** 磁化されているブロックの整数座標 */
+  blockPos: Vector3;
+  /** 現在発動中の磁力モード ("none" / "attract"=Shift / "repel"=Jump) */
+  activeMode: MagnetForceMode;
   /** 着地後、初回起動（遅延あり＋初動ブースト）が未消化かどうか */
   isFirstActivationPending: boolean;
-  /** 初回起動または空中で一度地面から離れたか */
-  hasLeftGroundSinceActivation: boolean;
   /** 初回起動チャージ中に入力しているモード */
-  chargeInputMode: MagnetInputMode;
+  chargeInputMode: MagnetForceMode;
   /** 初回起動チャージの連続入力Tick数 */
   chargeTicks: number;
   /** 今Tickで初回ブーストを発動するか */
@@ -66,15 +33,13 @@ export interface MagnetHookshotDefinition
     typeof MAGNET_HOOKSHOT_ID,
     MagnetHookshotState
   > {
-  /** 足元下向きレイキャストの最大射程 (blocks) */
-  footRayDistance: number;
   /** 磁化ブロックから自動消滅する離脱距離 (blocks) */
   maxDetachDistance: number;
   /** 着弾（磁化成功）時の効果音ID */
   hitSoundId: string;
   /** 不発（空撃ち）時の効果音ID */
   missSoundId: string;
-  /** 全解除時の効果音ID */
+  /** 解除時の効果音ID */
   detachSoundId: string;
   /** チャージ完了（初動ブースト）時の効果音ID */
   boostSoundId: string;
@@ -90,9 +55,8 @@ export interface MagnetHookshotDefinition
 export const magnetHookshotDefinition: MagnetHookshotDefinition = {
   id: MAGNET_HOOKSHOT_ID,
   itemTypeId: MAGNET_ITEM_ID,
-  maxDistance: 200,
-  footRayDistance: 50,
-  maxDetachDistance: 250,
+  maxDistance: 100,
+  maxDetachDistance: 200,
   reel: {
     mode: "continuous",
     speed: 0,
@@ -110,22 +74,21 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     intervalTicks: 10,
   },
   physics: {
-    baseAccel: 0.45,
-    initialBoostMultiplier: 2.6,
-    initialBoostGroundLiftY: 0.24,
-    r0: 30.0,
-    decayExponent: 2.0,
-    maxTotalAccel: 0.75,
-    maxSpeedSingle: 1.85,
-    maxSpeedDouble: 2.35,
-    maxSpeedTriple: 2.8,
+    maxAccel: 0.14,
+    fullStrengthDistance: 30,
+    zeroDistance: 100,
+    initialBoostMultiplier: 3.2,
+    initialBoostGroundLiftY: 0.26,
+    attractLockRadius: 1.8,
+    maxSpeed: 2.2,
+    repelTangentRetention: 0.99,
+    repelRadialDamping: 0.9,
     startupDelayTicks: 5,
-    metallicMultiplier: 1.4,
   },
   calculateImpulse: (player, state): Vector3 => {
     return calculateMagnetHookshot(
       player,
-      state.nodes,
+      state.anchor,
       state.activeMode,
       state.boostPendingTick,
       magnetHookshotDefinition.physics,

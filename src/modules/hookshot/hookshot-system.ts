@@ -34,7 +34,6 @@ import {
 import { PostFlightSystem } from "../post-flight";
 import {
   isElasticAirChainActive,
-  isMetallicMagnetBlock,
   MagnetHookshotDefinition,
   MagnetHookshotState,
   markElasticAirLaunch,
@@ -42,9 +41,8 @@ import {
   ZiplineHookshotState,
 } from "./definitions";
 import {
-  getEffectiveMagnetSign,
-  MagnetInputMode,
-  MagnetNode,
+  calculateMagneticFieldStrength,
+  MagnetForceMode,
 } from "./math/magnet-math";
 import { stepZiplineRailAnchor } from "./math/zipline-math";
 import {
@@ -191,22 +189,20 @@ export class HookshotSystem {
       return `残 ${remaining.toFixed(1)}m / ${state.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
     }
     if (def.id === "magnet" && state.hookshotId === "magnet") {
-      const hasAttract = state.nodes.some((n) => n.polarity === "attract");
-      const hasRepel = state.nodes.some((n) => n.polarity === "repel");
-      const poleLabel =
-        hasAttract && hasRepel
-          ? "[吸+反]"
-          : hasAttract
-            ? "[吸のみ]"
-            : "[反のみ]";
-      const metallicCount = state.nodes.filter((n) => n.isMetallic).length;
-      const metallicText =
-        metallicCount > 0 ? ` (金属×${metallicCount})` : "";
+      const fieldStrength = calculateMagneticFieldStrength(
+        distance,
+        def.physics,
+      );
+      const fieldRatio =
+        def.physics.maxAccel > 0
+          ? Math.round((fieldStrength / def.physics.maxAccel) * 100)
+          : 0;
       let modeText: string;
-      if (state.activeMode === "normal") {
-        modeText = "起動(Jump)";
-      } else if (state.activeMode === "inverted") {
-        modeText = "反転(Shift)";
+      if (state.activeMode === "attract") {
+        modeText =
+          distance <= def.physics.attractLockRadius ? "吸着ロック" : "吸引(Shift)";
+      } else if (state.activeMode === "repel") {
+        modeText = "反発(Jump)";
       } else if (state.chargeInputMode !== "none") {
         modeText = `チャージ ${state.chargeTicks}/${def.physics.startupDelayTicks}`;
       } else if (state.isFirstActivationPending) {
@@ -214,7 +210,7 @@ export class HookshotSystem {
       } else {
         modeText = "空中即応";
       }
-      return `${poleLabel}${metallicText} | ${modeText}`;
+      return `${distance.toFixed(1)}m (磁場 ${fieldRatio}%) | ${modeText}`;
     }
     if (def.id === "rigid" && state.hookshotId === "rigid") {
       const decayFactor = calculateAboveAnchorDecayFactor(
@@ -417,10 +413,13 @@ export class HookshotSystem {
         return {
           hookshotId: "magnet",
           ...common,
-          nodes: [],
+          blockPos: {
+            x: Math.floor(anchor.x),
+            y: Math.floor(anchor.y),
+            z: Math.floor(anchor.z),
+          },
           activeMode: "none",
           isFirstActivationPending: true,
-          hasLeftGroundSinceActivation: !player.isOnGround,
           chargeInputMode: "none",
           chargeTicks: 0,
           boostPendingTick: false,
@@ -1405,9 +1404,9 @@ export class HookshotSystem {
    * フックのトグル処理（排他制御対応）
    */
   /**
-   * マグネットフックの同時配置を処理します。
-   * - 足元下向き 50m 以内のヒットブロック → 反発磁石
-   * - 視線の先 200m 以内のヒットブロック → 吸着磁石
+   * マグネットフックの単一ブロック磁化・撃ち直しを処理します。
+   * - 新規配置時: 視線の先 100m 以内のブロックを磁化（空撃ち時は不発）
+   * - 再射撃時: 別ブロックに当たれば即撃ち直し、同じブロックまたは空撃ちで解除
    */
   private static shotMagnet(
     player: Player,
@@ -1415,93 +1414,77 @@ export class HookshotSystem {
   ): boolean {
     if (!player.isValid) return false;
 
-    const nodes: MagnetNode[] = [];
-    const dimensionId = player.dimension.id;
+    const currentState = this.getActiveState(player);
+    const isAlreadyActive =
+      currentState !== null && currentState.hookshotId === "magnet";
 
-    // 1. 足元下向きレイキャスト（最大50m）→ 反発磁石
+    let hit: BlockRaycastHit | undefined;
     try {
-      const footOrigin: Vector3 = {
-        x: player.location.x,
-        y: player.location.y + 0.1,
-        z: player.location.z,
-      };
-      const footHit = player.dimension.getBlockFromRay(
-        footOrigin,
-        { x: 0, y: -1, z: 0 },
-        {
-          maxDistance: def.footRayDistance,
-          includeLiquidBlocks: false,
-          includePassableBlocks: false,
-        },
-      );
-      if (footHit) {
-        const bx = Math.floor(footHit.block.x);
-        const by = Math.floor(footHit.block.y);
-        const bz = Math.floor(footHit.block.z);
-        const isMetallic = isMetallicMagnetBlock(footHit.block.typeId);
-        nodes.push({
-          blockPos: { x: bx, y: by, z: bz },
-          center: { x: bx + 0.5, y: by + 0.5, z: bz + 0.5 },
-          dimensionId,
-          polarity: "repel",
-          isMetallic,
-          multiplier: isMetallic ? def.physics.metallicMultiplier : 1.0,
-        });
-      }
-    } catch {}
-
-    // 2. 視線の先レイキャスト（最大200m）→ 吸着磁石
-    try {
-      const gazeHit = player.getBlockFromViewDirection({
+      hit = player.getBlockFromViewDirection({
         maxDistance: def.maxDistance,
         includeLiquidBlocks: false,
         includePassableBlocks: false,
       });
-      if (gazeHit) {
-        const bx = Math.floor(gazeHit.block.x);
-        const by = Math.floor(gazeHit.block.y);
-        const bz = Math.floor(gazeHit.block.z);
-        const isMetallic = isMetallicMagnetBlock(gazeHit.block.typeId);
-        nodes.push({
-          blockPos: { x: bx, y: by, z: bz },
-          center: { x: bx + 0.5, y: by + 0.5, z: bz + 0.5 },
-          dimensionId,
-          polarity: "attract",
-          isMetallic,
-          multiplier: isMetallic ? def.physics.metallicMultiplier : 1.0,
-        });
-      }
-    } catch {}
+    } catch {
+      hit = undefined;
+    }
 
-    if (nodes.length === 0) {
+    if (!hit) {
+      if (isAlreadyActive) {
+        this.unhook(player);
+        return false;
+      }
       this.playSoundSafe(player, def.missSoundId);
       return false;
     }
 
-    const latest = nodes[nodes.length - 1];
-    const hasMetallic = nodes.some((n) => n.isMetallic);
-    const newState: MagnetHookshotState = {
-      hookshotId: "magnet",
-      slotIndex: player.selectedSlotIndex,
-      anchor: {
-        dimensionId,
-        ...latest.center,
-      },
-      currentLength: 0,
-      jumpConsumed: isInputButtonPressed(player, "Jump") || player.isJumping,
-      sneakConsumed: isSneakButtonPressed(player),
-      nodes,
-      activeMode: "none",
-      isFirstActivationPending: true,
-      hasLeftGroundSinceActivation: !player.isOnGround,
-      chargeInputMode: "none",
-      chargeTicks: 0,
-      boostPendingTick: false,
+    const bx = Math.floor(hit.block.x);
+    const by = Math.floor(hit.block.y);
+    const bz = Math.floor(hit.block.z);
+
+    // すでに配置中の同じブロックを撃った場合は解除
+    if (
+      isAlreadyActive &&
+      currentState.blockPos.x === bx &&
+      currentState.blockPos.y === by &&
+      currentState.blockPos.z === bz &&
+      currentState.anchor.dimensionId === player.dimension.id
+    ) {
+      this.unhook(player);
+      return false;
+    }
+
+    const blockPos: Vector3 = { x: bx, y: by, z: bz };
+    const center: Vector3 = { x: bx + 0.5, y: by + 0.5, z: bz + 0.5 };
+    const anchor: AnchorPosition = {
+      dimensionId: player.dimension.id,
+      ...center,
     };
+
+    const newState: MagnetHookshotState = isAlreadyActive
+      ? {
+          ...currentState,
+          anchor,
+          blockPos,
+        }
+      : {
+          hookshotId: "magnet",
+          slotIndex: player.selectedSlotIndex,
+          anchor,
+          blockPos,
+          currentLength: 0,
+          jumpConsumed: isInputButtonPressed(player, "Jump") || player.isJumping,
+          sneakConsumed: isSneakButtonPressed(player),
+          activeMode: "none",
+          isFirstActivationPending: true,
+          chargeInputMode: "none",
+          chargeTicks: 0,
+          boostPendingTick: false,
+        };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, newState);
     this.playSoundSafe(player, def.shotSoundId);
-    this.playSoundSafe(player, def.hitSoundId, hasMetallic ? 1.15 : 1.0);
+    this.playSoundSafe(player, def.hitSoundId);
     this.consumeHookshotDurability(player, def.itemTypeId, newState.slotIndex);
     return true;
   }
@@ -1520,33 +1503,23 @@ export class HookshotSystem {
   }
 
   /**
-   * マグネットフックの毎Tick状態更新（ノード検証・入力サイクル・初回ブースト・落下保護）を行います。
-   * 有効な磁化ブロックが0個になった場合は false を返します。
+   * マグネットフックの毎Tick状態更新（ブロック検証・入力サイクル・初回ブースト）を行います。
    */
   private static updateMagnetState(
     player: Player,
     state: MagnetHookshotState,
     def: MagnetHookshotDefinition,
   ): boolean {
-    const validNodes = state.nodes.filter((node) => {
-      if (node.dimensionId !== player.dimension.id) return false;
-      if (this.isMagnetBlockBroken(player.dimension, node.blockPos)) {
-        return false;
-      }
-      const dist = Vector3Utils.distance(player.location, node.center);
-      return dist <= def.maxDetachDistance;
-    });
-
-    if (validNodes.length === 0) {
+    if (state.anchor.dimensionId !== player.dimension.id) {
       return false;
     }
-
-    state.nodes = validNodes;
-    const latest = validNodes[validNodes.length - 1];
-    state.anchor = {
-      dimensionId: latest.dimensionId,
-      ...latest.center,
-    };
+    if (this.isMagnetBlockBroken(player.dimension, state.blockPos)) {
+      return false;
+    }
+    const dist = Vector3Utils.distance(player.location, state.anchor);
+    if (dist > def.maxDetachDistance) {
+      return false;
+    }
 
     let jumpPressed = false;
     let sneakPressed = false;
@@ -1558,13 +1531,13 @@ export class HookshotSystem {
       sneakPressed = false;
     }
 
-    let desiredMode: MagnetInputMode = "none";
+    let desiredMode: MagnetForceMode = "none";
     if (jumpPressed && sneakPressed) {
       desiredMode = "none";
-    } else if (jumpPressed) {
-      desiredMode = "normal";
     } else if (sneakPressed) {
-      desiredMode = "inverted";
+      desiredMode = "attract";
+    } else if (jumpPressed) {
+      desiredMode = "repel";
     }
 
     // 地面に立っている かつ シフトもジャンプも押されていない場合に初回状態へリセット
@@ -1575,7 +1548,6 @@ export class HookshotSystem {
       !state.isFirstActivationPending
     ) {
       state.isFirstActivationPending = true;
-      state.hasLeftGroundSinceActivation = false;
       state.chargeInputMode = "none";
       state.chargeTicks = 0;
     }
@@ -1597,7 +1569,6 @@ export class HookshotSystem {
 
       if (state.chargeTicks >= def.physics.startupDelayTicks) {
         state.isFirstActivationPending = false;
-        state.hasLeftGroundSinceActivation = !player.isOnGround;
         state.activeMode = desiredMode;
         state.boostPendingTick = true;
         state.chargeInputMode = "none";
@@ -1614,7 +1585,7 @@ export class HookshotSystem {
       const lastTick =
         state.lastActiveSoundTick ?? -def.activeSound.intervalTicks;
       if (system.currentTick - lastTick >= def.activeSound.intervalTicks) {
-        const pitch = state.activeMode === "normal" ? 1.15 : 0.85;
+        const pitch = state.activeMode === "attract" ? 1.15 : 0.85;
         this.playSoundSafe(player, def.activeSound.soundId, pitch);
         state.lastActiveSoundTick = system.currentTick;
       }
@@ -1628,34 +1599,27 @@ export class HookshotSystem {
     player: Player,
     state: MagnetHookshotState,
   ): void {
-    for (const node of state.nodes) {
-      const sign = getEffectiveMagnetSign(node.polarity, state.activeMode);
-      const wireStyle =
-        sign > 0
-          ? MAGNET_ATTRACT_WIRE_STYLE
-          : sign < 0
-            ? MAGNET_REPEL_WIRE_STYLE
-            : MAGNET_GUIDE_WIRE_STYLE;
+    const wireStyle =
+      state.activeMode === "attract"
+        ? MAGNET_ATTRACT_WIRE_STYLE
+        : state.activeMode === "repel"
+          ? MAGNET_REPEL_WIRE_STYLE
+          : MAGNET_GUIDE_WIRE_STYLE;
 
-      HookRenderManager.render(player, node.center, wireStyle);
-      BlockOutlineRenderer.drawBlockOutline(
-        player.dimension,
-        node.blockPos,
-        node.isMetallic
-          ? MAGNET_METALLIC_OUTLINE_STYLE
-          : MAGNET_NODE_OUTLINE_STYLE,
-      );
+    HookRenderManager.render(player, state.anchor, wireStyle);
+    BlockOutlineRenderer.drawBlockOutline(
+      player.dimension,
+      state.blockPos,
+      MAGNET_NODE_OUTLINE_STYLE,
+    );
 
-      if (system.currentTick % 4 === 0) {
-        try {
-          player.dimension.spawnParticle(
-            node.isMetallic
-              ? "various_hookshot_addon:magnet_charge_metallic"
-              : "various_hookshot_addon:magnet_charge",
-            node.center,
-          );
-        } catch {}
-      }
+    if (system.currentTick % 4 === 0) {
+      try {
+        player.dimension.spawnParticle(
+          "various_hookshot_addon:magnet_charge",
+          state.anchor,
+        );
+      } catch {}
     }
   }
 
@@ -1678,6 +1642,10 @@ export class HookshotSystem {
       }
       // 既に接続中のフックがある場合
       if (currentState.hookshotId === def.id) {
+        if (def.id === "magnet") {
+          this.shotMagnet(player, def);
+          return;
+        }
         // 同じフックショットなら解除（トグル動作）
         this.unhook(player);
         return;
