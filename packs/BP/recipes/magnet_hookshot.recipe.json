@@ -1,0 +1,36 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "various_hookshot_addon:magnet_hookshot"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "RRR",
+      "III",
+      " L "
+    ],
+    "key": {
+      "R": {
+        "item": "minecraft:redstone"
+      },
+      "I": {
+        "item": "minecraft:iron_ingot"
+      },
+      "L": {
+        "item": "minecraft:lodestone"
+      }
+    },
+    "unlock": [
+      {
+        "item": "minecraft:lodestone"
+      },
+      {
+        "item": "minecraft:redstone"
+      }
+    ],
+    "result": {
+      "item": "various_hookshot_addon:magnet_hookshot"
+    }
+  }
+}

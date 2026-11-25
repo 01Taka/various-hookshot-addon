@@ -131,3 +131,55 @@ export const ZIPLINE_SUPPORT_OUTLINE_STYLE: BlockOutlineStyle = {
   particleSize: 0.08,
   color: { r: 0.58, g: 0.4, b: 0.22, a: 0.95 },
 };
+
+/**
+ * マグネットフックの待機・チャージ中の磁力ガイド線（薄灰青）
+ */
+export const MAGNET_GUIDE_WIRE_STYLE: WireStyle = {
+  particleId: "various_hookshot_addon:wire_magnet_guide",
+  stepDistance: 1.1,
+  shapeMode: "straight",
+  anchorParticleId: "various_hookshot_addon:wire_magnet_guide",
+};
+
+/**
+ * マグネットフックの吸引中（Shift）の磁力線（青系）
+ */
+export const MAGNET_ATTRACT_WIRE_STYLE: WireStyle = {
+  particleId: "various_hookshot_addon:wire_magnet_attract",
+  stepDistance: 0.55,
+  shapeMode: "straight",
+  anchorParticleId: "various_hookshot_addon:wire_magnet_attract",
+};
+
+/**
+ * マグネットフックの反発中（Jump）の磁力線（赤系）
+ */
+export const MAGNET_REPEL_WIRE_STYLE: WireStyle = {
+  particleId: "various_hookshot_addon:wire_magnet_repel",
+  stepDistance: 0.55,
+  shapeMode: "straight",
+  anchorParticleId: "various_hookshot_addon:wire_magnet_repel",
+};
+
+/**
+ * マグネットフックの通常磁化ブロック囲み枠線（紫青系）
+ */
+export const MAGNET_NODE_OUTLINE_STYLE: BlockOutlineStyle = {
+  particleId: "various_hookshot_addon:block_outline",
+  stepDistance: 0.35,
+  padding: 0.04,
+  particleSize: 0.09,
+  color: { r: 0.35, g: 0.72, b: 1.0, a: 0.9 },
+};
+
+/**
+ * マグネットフックの金属ボーナス磁化ブロック囲み枠線（黄金＋電撃系）
+ */
+export const MAGNET_METALLIC_OUTLINE_STYLE: BlockOutlineStyle = {
+  particleId: "various_hookshot_addon:block_outline",
+  stepDistance: 0.25,
+  padding: 0.05,
+  particleSize: 0.12,
+  color: { r: 1.0, g: 0.82, b: 0.2, a: 0.98 },
+};

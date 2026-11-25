@@ -9,6 +9,10 @@ import type {
   ElasticHookshotState,
 } from "./definitions/elastic-hookshot";
 import type {
+  MagnetHookshotDefinition,
+  MagnetHookshotState,
+} from "./definitions/magnet-hookshot";
+import type {
   RigidHookshotDefinition,
   RigidHookshotState,
 } from "./definitions/rigid-hookshot";
@@ -28,6 +32,7 @@ import type {
 export type HookshotId =
   | "bamboo"
   | "elastic"
+  | "magnet"
   | "rigid"
   | "rod"
   | "spring"
@@ -253,6 +258,7 @@ export interface GazeSteeringCapable {
 export type HookshotState =
   | BambooHookshotState
   | ElasticHookshotState
+  | MagnetHookshotState
   | RigidHookshotState
   | RodHookshotState
   | SpringHookshotState
@@ -261,6 +267,7 @@ export type HookshotState =
 export type HookshotDefinition =
   | BambooHookshotDefinition
   | ElasticHookshotDefinition
+  | MagnetHookshotDefinition
   | RigidHookshotDefinition
   | RodHookshotDefinition
   | SpringHookshotDefinition

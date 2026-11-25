@@ -26,6 +26,9 @@
     "zipline_hookshot": {
       "textures": "textures/items/zipline_hookshot"
     },
+    "magnet_hookshot": {
+      "textures": "textures/items/magnet_hookshot"
+    },
     "burst_charge": {
       "textures": "textures/items/burst_charge"
     }

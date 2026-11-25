@@ -3,6 +3,7 @@ import {
   initBambooHookshotTracking,
 } from "./definitions/bamboo-hookshot";
 import { elasticHookshotDefinition } from "./definitions/elastic-hookshot";
+import { magnetHookshotDefinition } from "./definitions/magnet-hookshot";
 import { rigidHookshotDefinition } from "./definitions/rigid-hookshot";
 import { rodHookshotDefinition } from "./definitions/rod-hookshot";
 import { springHookshotDefinition } from "./definitions/spring-hookshot";
@@ -15,6 +16,7 @@ export * from "./hookshot-system";
 export * from "./definitions";
 export * from "./math/bamboo-math";
 export * from "./math/elastic-math";
+export * from "./math/magnet-math";
 export * from "./math/rigid-math";
 export * from "./math/rod-math";
 export * from "./math/spring-math";
@@ -29,6 +31,7 @@ export function initHookshotSystem(): void {
   initBambooHookshotTracking();
   HookshotSystem.register(bambooHookshotDefinition);
   HookshotSystem.register(elasticHookshotDefinition);
+  HookshotSystem.register(magnetHookshotDefinition);
   HookshotSystem.register(rigidHookshotDefinition);
   HookshotSystem.register(rodHookshotDefinition);
   HookshotSystem.register(springHookshotDefinition);
