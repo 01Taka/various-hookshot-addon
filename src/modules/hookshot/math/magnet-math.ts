@@ -32,7 +32,7 @@ export interface MagnetPhysicsConfig {
   initialBoostGroundLiftY: number;
   /** 距離減衰の基準最小距離 r0 (blocks) */
   r0: number;
-  /** 距離減衰の指数 p (0.6〜0.8) */
+  /** 距離減衰の指数 p (2.0 = 距離の二乗に反比例) */
   decayExponent: number;
   /** 合計加速度の上限 (blocks/tick^2) */
   maxTotalAccel: number;
