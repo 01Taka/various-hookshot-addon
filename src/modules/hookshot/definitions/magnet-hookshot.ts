@@ -90,9 +90,9 @@ export interface MagnetHookshotDefinition
 export const magnetHookshotDefinition: MagnetHookshotDefinition = {
   id: MAGNET_HOOKSHOT_ID,
   itemTypeId: MAGNET_ITEM_ID,
-  maxDistance: 120,
+  maxDistance: 200,
   maxNodes: 3,
-  maxDetachDistance: 200,
+  maxDetachDistance: 250,
   reel: {
     mode: "continuous",
     speed: 0,
@@ -110,12 +110,12 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     intervalTicks: 10,
   },
   physics: {
-    baseAccel: 0.25,
+    baseAccel: 0.45,
     initialBoostMultiplier: 2.6,
     initialBoostGroundLiftY: 0.24,
-    r0: 8.0,
+    r0: 30.0,
     decayExponent: 2.0,
-    maxTotalAccel: 0.65,
+    maxTotalAccel: 0.75,
     maxSpeedSingle: 1.85,
     maxSpeedDouble: 2.35,
     maxSpeedTriple: 2.8,
