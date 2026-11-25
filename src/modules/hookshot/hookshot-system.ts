@@ -197,19 +197,12 @@ export class HookshotSystem {
         def.physics.maxAccel > 0
           ? Math.round((fieldStrength / def.physics.maxAccel) * 100)
           : 0;
-      let modeText: string;
-      if (state.activeMode === "attract") {
-        modeText =
-          distance <= def.physics.attractLockRadius ? "吸着ロック" : "吸引(Shift)";
-      } else if (state.activeMode === "repel") {
-        modeText = "反発(Jump)";
-      } else if (state.chargeInputMode !== "none") {
-        modeText = `チャージ ${state.chargeTicks}/${def.physics.startupDelayTicks}`;
-      } else if (state.isFirstActivationPending) {
-        modeText = "初回ブースト待機";
-      } else {
-        modeText = "空中即応";
-      }
+      const modeText =
+        state.activeMode === "attract"
+          ? "吸引(Jump)"
+          : state.activeMode === "repel"
+            ? "反発(Shift)"
+            : "待機";
       return `${distance.toFixed(1)}m (磁場 ${fieldRatio}%) | ${modeText}`;
     }
     if (def.id === "rigid" && state.hookshotId === "rigid") {
@@ -419,10 +412,6 @@ export class HookshotSystem {
             z: Math.floor(anchor.z),
           },
           activeMode: "none",
-          isFirstActivationPending: true,
-          chargeInputMode: "none",
-          chargeTicks: 0,
-          boostPendingTick: false,
         };
       case "rigid":
         return { hookshotId: "rigid", ...common };
@@ -1476,10 +1465,6 @@ export class HookshotSystem {
           jumpConsumed: isInputButtonPressed(player, "Jump") || player.isJumping,
           sneakConsumed: isSneakButtonPressed(player),
           activeMode: "none",
-          isFirstActivationPending: true,
-          chargeInputMode: "none",
-          chargeTicks: 0,
-          boostPendingTick: false,
         };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, newState);
@@ -1534,52 +1519,13 @@ export class HookshotSystem {
     let desiredMode: MagnetForceMode = "none";
     if (jumpPressed && sneakPressed) {
       desiredMode = "none";
-    } else if (sneakPressed) {
-      desiredMode = "attract";
     } else if (jumpPressed) {
+      desiredMode = "attract";
+    } else if (sneakPressed) {
       desiredMode = "repel";
     }
 
-    // 地面に立っている かつ シフトもジャンプも押されていない場合に初回状態へリセット
-    if (
-      player.isOnGround &&
-      !jumpPressed &&
-      !sneakPressed &&
-      !state.isFirstActivationPending
-    ) {
-      state.isFirstActivationPending = true;
-      state.chargeInputMode = "none";
-      state.chargeTicks = 0;
-    }
-
-    state.boostPendingTick = false;
-
-    if (desiredMode === "none") {
-      state.activeMode = "none";
-      state.chargeInputMode = "none";
-      state.chargeTicks = 0;
-    } else if (state.isFirstActivationPending) {
-      if (state.chargeInputMode !== desiredMode) {
-        state.chargeInputMode = desiredMode;
-        state.chargeTicks = 1;
-        state.activeMode = "none";
-      } else {
-        state.chargeTicks += 1;
-      }
-
-      if (state.chargeTicks >= def.physics.startupDelayTicks) {
-        state.isFirstActivationPending = false;
-        state.activeMode = desiredMode;
-        state.boostPendingTick = true;
-        state.chargeInputMode = "none";
-        state.chargeTicks = 0;
-        this.playSoundSafe(player, def.boostSoundId, 1.3);
-      }
-    } else {
-      state.activeMode = desiredMode;
-      state.chargeInputMode = "none";
-      state.chargeTicks = 0;
-    }
+    state.activeMode = desiredMode;
 
     if (state.activeMode !== "none") {
       const lastTick =

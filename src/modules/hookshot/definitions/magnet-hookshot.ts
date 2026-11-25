@@ -14,16 +14,8 @@ export interface MagnetHookshotState
   extends BaseHookshotState<typeof MAGNET_HOOKSHOT_ID> {
   /** 磁化されているブロックの整数座標 */
   blockPos: Vector3;
-  /** 現在発動中の磁力モード ("none" / "attract"=Shift / "repel"=Jump) */
+  /** 現在発動中の磁力モード ("none" / "attract"=Jump / "repel"=Shift) */
   activeMode: MagnetForceMode;
-  /** 着地後、初回起動（遅延あり＋初動ブースト）が未消化かどうか */
-  isFirstActivationPending: boolean;
-  /** 初回起動チャージ中に入力しているモード */
-  chargeInputMode: MagnetForceMode;
-  /** 初回起動チャージの連続入力Tick数 */
-  chargeTicks: number;
-  /** 今Tickで初回ブーストを発動するか */
-  boostPendingTick: boolean;
   /** 動作音再生の直近Tick */
   lastActiveSoundTick?: number;
 }
@@ -41,8 +33,6 @@ export interface MagnetHookshotDefinition
   missSoundId: string;
   /** 解除時の効果音ID */
   detachSoundId: string;
-  /** チャージ完了（初動ブースト）時の効果音ID */
-  boostSoundId: string;
   /** 磁力稼働中のループ効果音設定 */
   activeSound: {
     soundId: string;
@@ -68,7 +58,6 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
   hitSoundId: "block.lodestone.place",
   missSoundId: "note.bass",
   detachSoundId: "beacon.deactivate",
-  boostSoundId: "beacon.power",
   activeSound: {
     soundId: "beacon.ambient",
     intervalTicks: 10,
@@ -77,20 +66,12 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     maxAccel: 0.14,
     fullStrengthDistance: 30,
     zeroDistance: 100,
-    initialBoostMultiplier: 3.2,
-    initialBoostGroundLiftY: 0.26,
-    attractLockRadius: 1.8,
-    maxSpeed: 2.2,
-    repelTangentRetention: 0.99,
-    repelRadialDamping: 0.9,
-    startupDelayTicks: 5,
   },
   calculateImpulse: (player, state): Vector3 => {
     return calculateMagnetHookshot(
       player,
       state.anchor,
       state.activeMode,
-      state.boostPendingTick,
       magnetHookshotDefinition.physics,
     );
   },
