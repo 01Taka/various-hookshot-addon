@@ -10,6 +10,7 @@ import {
 } from "./config";
 import {
   calculateMagnetEffectRatio,
+  calculateMagnetFixedStickLocation,
   resolveMagnetContactAxis,
 } from "./math";
 import {
@@ -98,11 +99,10 @@ function updateMagnetStickState(
   if (!shouldStick) return;
 
   state.isStuck = true;
-  state.stuckLocation = {
-    x: player.location.x,
-    y: player.location.y,
-    z: player.location.z,
-  };
+  state.stuckLocation = calculateMagnetFixedStickLocation(
+    state.anchor,
+    contactDir,
+  );
   playSound(player, MAGNET_STICK_SOUND_ID, 1.4);
 }
 

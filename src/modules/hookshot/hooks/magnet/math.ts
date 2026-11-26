@@ -70,6 +70,34 @@ export function resolveMagnetContactAxis(
 }
 
 /**
+ * 接触軸方向 (±X / ±Y / ±Z) に応じたアンカー相対の6パターン固定座標を算出します。
+ */
+export function calculateMagnetFixedStickLocation(
+  anchor: Vector3,
+  contactDir: Vector3,
+): Vector3 {
+  if (contactDir.x !== 0) {
+    return {
+      x: anchor.x - contactDir.x * 0.8,
+      y: anchor.y - 1.0,
+      z: anchor.z,
+    };
+  }
+  if (contactDir.z !== 0) {
+    return {
+      x: anchor.x,
+      y: anchor.y - 1.0,
+      z: anchor.z - contactDir.z * 0.8,
+    };
+  }
+  return {
+    x: anchor.x,
+    y: contactDir.y > 0 ? anchor.y - 2.32 : anchor.y + 0.5,
+    z: anchor.z,
+  };
+}
+
+/**
  * 距離ゾーン effectRatio(r) に基づき、マグネットフックの毎Tickインパルスを計算します。
  * - attract: 2m超は初速→加速の無重力補間、2m以内は1/3スケール、吸着固定中はゼロ速度維持
  * - repel: 初回バースト (1/r) ＋ 5tick後から持続反発 (1/r²)
