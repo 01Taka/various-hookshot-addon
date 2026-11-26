@@ -1,4 +1,4 @@
-import { InertiaFlightOptions } from "../inertia-flight";
+import { InertiaFlightOptions } from "../../inertia-flight";
 
 export const AERO_VEST_ITEM_ID = "various_hookshot_addon:aero_vest";
 export const PHANTOM_AERO_VEST_ITEM_ID =

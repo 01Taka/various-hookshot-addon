@@ -7,30 +7,30 @@ import {
   world,
 } from "@minecraft/server";
 import { getMainhandItem } from "addon-utils";
-import { HookshotSystem } from "../hookshot";
+import { HookshotSystem } from "../../hookshot";
 
-/** 爆発サポート用消費アイテムID */
-export const EXPLOSION_ITEM_ID = "various_hookshot_addon:burst_charge";
+/** バーストチャージ用消費アイテムID */
+export const BURST_CHARGE_ITEM_ID = "various_hookshot_addon:burst_charge";
 
 /** ネイティブクールダウンカテゴリ */
-export const EXPLOSION_COOLDOWN_CATEGORY = "burst_charge";
+export const BURST_CHARGE_COOLDOWN_CATEGORY = "burst_charge";
 
 /** 0.85秒のインターバル (Minecraftは20 ticks/秒 -> 17 ticks) */
-export const EXPLOSION_SUPPORT_COOLDOWN_TICKS = 17;
+export const BURST_CHARGE_COOLDOWN_TICKS = 17;
 
 /** 浮遊効果の持続時間 (0.1秒 = 2 ticks) */
-export const EXPLOSION_SUPPORT_LEVITATION_TICKS = 2;
+export const BURST_CHARGE_LEVITATION_TICKS = 2;
 
 /** 上方向のインパルス量 (blocks/tick) */
-export const EXPLOSION_SUPPORT_UPWARD_IMPULSE = 0.85;
+export const BURST_CHARGE_UPWARD_IMPULSE = 0.85;
 
 /**
- * 爆発サポートシステム
+ * バーストチャージシステム
  * - 単体使用: メインハンドにバーストチャージを持って右クリックで1個消費して発動
  * - オフハンド併用: オフハンドにバーストチャージを持ち、メインハンドにフックショットまたは素手で左クリックすると1個消費して発動
  * 1秒のクールダウン（インターバル）が適用されます。クリエイティブモードでは消費しません。
  */
-export class ExplosionSupportSystem {
+export class BurstChargeSystem {
   private static isInitialized = false;
 
   /**
@@ -51,12 +51,12 @@ export class ExplosionSupportSystem {
     world.afterEvents.itemUse.subscribe((event) => {
       const player = event.source;
       if (!player || player.typeId !== "minecraft:player") return;
-      if (event.itemStack.typeId !== EXPLOSION_ITEM_ID) return;
+      if (event.itemStack.typeId !== BURST_CHARGE_ITEM_ID) return;
 
-      this.tryTriggerExplosion(
+      this.tryTriggerBurst(
         player as Player,
         EquipmentSlot.Mainhand,
-        EXPLOSION_ITEM_ID,
+        BURST_CHARGE_ITEM_ID,
       );
     });
   }
@@ -71,7 +71,6 @@ export class ExplosionSupportSystem {
   ): void {
     if (!player.isValid) return;
 
-    // 左クリック（攻撃・空振り・ブロック採掘）以外のスイング（アイテム使用、設置、ドロップ等）は除外
     if (
       swingSource !== EntitySwingSource.Attack &&
       swingSource !== EntitySwingSource.Mine &&
@@ -83,32 +82,30 @@ export class ExplosionSupportSystem {
     const itemTypeId = heldItemTypeId ?? getMainhandItem(player)?.typeId;
     const isBareHand = !itemTypeId || itemTypeId === "minecraft:air";
 
-    // メインハンドが素手または登録済みのフックショットの場合のみ発動
     if (!isBareHand && !HookshotSystem.isHookshotItem(itemTypeId)) {
       return;
     }
 
-    // オフハンドにバーストチャージを所持している場合のみ発動
     const equippable = player.getComponent(EntityComponentTypes.Equippable);
     const offhandItem = equippable?.getEquipment(EquipmentSlot.Offhand);
-    if (!offhandItem || offhandItem.typeId !== EXPLOSION_ITEM_ID) {
+    if (!offhandItem || offhandItem.typeId !== BURST_CHARGE_ITEM_ID) {
       return;
     }
 
-    this.tryTriggerExplosion(player, EquipmentSlot.Offhand, EXPLOSION_ITEM_ID);
+    this.tryTriggerBurst(player, EquipmentSlot.Offhand, BURST_CHARGE_ITEM_ID);
   }
 
   /**
-   * クールダウン判定とアイテム消費を行い、爆発サポートを発動します
+   * クールダウン判定とアイテム消費を行い、バーストチャージを発動します
    */
-  private static tryTriggerExplosion(
+  private static tryTriggerBurst(
     player: Player,
     slot: EquipmentSlot,
     expectedItemTypeId: string,
   ): void {
     if (!player.isValid) return;
 
-    if (player.getItemCooldown(EXPLOSION_COOLDOWN_CATEGORY) > 0) {
+    if (player.getItemCooldown(BURST_CHARGE_COOLDOWN_CATEGORY) > 0) {
       return;
     }
 
@@ -122,16 +119,15 @@ export class ExplosionSupportSystem {
     }
 
     player.startItemCooldown(
-      EXPLOSION_COOLDOWN_CATEGORY,
-      EXPLOSION_SUPPORT_COOLDOWN_TICKS,
+      BURST_CHARGE_COOLDOWN_CATEGORY,
+      BURST_CHARGE_COOLDOWN_TICKS,
     );
 
-    this.executeExplosionSupport(player, consumeResult.remainingAmount);
+    this.executeBurst(player, consumeResult.remainingAmount);
   }
 
   /**
    * 指定スロットのアイテムを1個消費し、消費成否と消費後の残り個数を返します
-   * （クリエイティブモード時は消費せず残数を十分大きい値として返します）
    */
   private static consumeItemFromSlot(
     player: Player,
@@ -161,19 +157,14 @@ export class ExplosionSupportSystem {
   }
 
   /**
-   * 爆発サポートを実行
+   * バーストチャージを実行
    */
-  private static executeExplosionSupport(
-    player: Player,
-    remainingAmount: number,
-  ): void {
-    // 0. 爆発した瞬間にフックショットを解除
+  private static executeBurst(player: Player, remainingAmount: number): void {
     HookshotSystem.unhook(player);
 
     const loc = player.location;
     const dimension = player.dimension;
 
-    // 1. 足元に爆発パーティクルと爆発音を生成
     try {
       dimension.spawnParticle("minecraft:huge_explosion_emitter", loc);
       dimension.playSound("random.explode", loc, {
@@ -181,7 +172,6 @@ export class ExplosionSupportSystem {
         pitch: 1.2,
       });
 
-      // 残数3個以下で危険通知音を鳴らす（3→2→1でピッチ上昇、0で弾切れ音）
       if (remainingAmount === 0) {
         player.playSound("random.break", { volume: 1.0, pitch: 0.9 });
         player.playSound("note.bass", { volume: 1.0, pitch: 0.6 });
@@ -189,27 +179,19 @@ export class ExplosionSupportSystem {
         const pitch = 1.0 + (3 - remainingAmount) * 0.25;
         player.playSound("note.pling", { volume: 1.0, pitch });
       }
-    } catch {
-      // パーティクル・サウンド再生時のエラー抑止
-    }
+    } catch {}
 
-    // 2. y方向の速度を打ち消し、上方向のインパルスを付与
     try {
       const currentVelocity = player.getVelocity();
-      const impulseY = -currentVelocity.y + EXPLOSION_SUPPORT_UPWARD_IMPULSE;
+      const impulseY = -currentVelocity.y + BURST_CHARGE_UPWARD_IMPULSE;
       player.applyImpulse({ x: 0, y: impulseY, z: 0 });
-    } catch {
-      // applyImpulse 失敗時のフォールバック
-    }
+    } catch {}
 
-    // 3. 浮遊効果を0.1秒 (2 ticks) 付与して落下ダメージを無効化
     try {
-      player.addEffect("levitation", EXPLOSION_SUPPORT_LEVITATION_TICKS, {
+      player.addEffect("levitation", BURST_CHARGE_LEVITATION_TICKS, {
         amplifier: 0,
         showParticles: false,
       });
-    } catch {
-      // エフェクト付与失敗時のエラー抑止
-    }
+    } catch {}
   }
 }

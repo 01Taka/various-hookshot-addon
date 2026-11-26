@@ -12,7 +12,7 @@ import {
   getItemDurability,
   ItemDurability,
 } from "addon-utils";
-import { InertiaFlightOptions, InertiaFlightSystem } from "../inertia-flight";
+import { InertiaFlightOptions, InertiaFlightSystem } from "../../inertia-flight";
 import {
   AERO_VEST_DURABILITY_INTERVAL_TICKS,
   AERO_VEST_INERTIA_CONFIGS,

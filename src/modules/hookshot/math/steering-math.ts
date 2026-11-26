@@ -1,7 +1,7 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import { PlayerDirectionResolver } from "addon-utils";
-import { AeroVestSystem } from "../../aero-vest";
+import { AeroVestSystem } from "../../sub-items/aero-vest";
 import {
   EPSILON,
   INPUT_DEADZONE,
