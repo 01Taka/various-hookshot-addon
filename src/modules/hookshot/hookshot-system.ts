@@ -1540,14 +1540,35 @@ export class HookshotSystem {
     player: Player,
     state: MagnetHookshotState,
   ): void {
-    const guideParticleId = MAGNET_GUIDE_WIRE_STYLE.particleId;
+    const guideParticleId =
+      state.activeMode === "attract"
+        ? MAGNET_ATTRACT_WIRE_STYLE.particleId
+        : state.activeMode === "repel"
+          ? MAGNET_REPEL_WIRE_STYLE.particleId
+          : MAGNET_GUIDE_WIRE_STYLE.particleId;
     const playerSidePos = LineRenderer.getHandPosition(player);
+
     try {
       player.dimension.spawnParticle(guideParticleId, state.anchor);
     } catch {}
     try {
       player.dimension.spawnParticle(guideParticleId, playerSidePos);
     } catch {}
+
+    if (system.currentTick % 4 === 0) {
+      try {
+        player.dimension.spawnParticle(
+          "various_hookshot_addon:magnet_charge",
+          state.anchor,
+        );
+      } catch {}
+      try {
+        player.dimension.spawnParticle(
+          "various_hookshot_addon:magnet_charge",
+          playerSidePos,
+        );
+      } catch {}
+    }
   }
 
   public static toggleHook(player: Player, def: HookshotDefinition): void {
