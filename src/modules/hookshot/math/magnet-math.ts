@@ -21,6 +21,10 @@ export interface MagnetPhysicsConfig {
   attractAccel: number;
   /** 引き寄せの最高速度上限 (blocks/tick, 2倍 = 4.0) */
   attractMaxSpeed: number;
+  /** 至近距離減衰の開始半径 (blocks, 2.0m) */
+  attractNearRadius: number;
+  /** 至近距離（2m以内）での引き寄せ倍率 (1/3) */
+  attractNearScale: number;
   /** 反発開始時の爆発初速 (blocks/tick) */
   repelBurstSpeed: number;
   /** 反発長押し中に放出し続ける持続反発加速度 (blocks/tick^2) */
@@ -100,17 +104,22 @@ export function calculateMagnetHookshot(
   let targetVel: Vector3;
 
   if (mode === "attract") {
+    const nearScale =
+      distance <= config.attractNearRadius ? config.attractNearScale : 1.0;
+    const initialSpeed = config.attractInitialSpeed * nearScale;
+    const accel = config.attractAccel * nearScale;
+    const maxSpeed = config.attractMaxSpeed * nearScale;
+
     let desiredVel: Vector3;
     if (isEntryTick) {
-      // 開始瞬間: 初速（1.6 b/t）で発進
-      desiredVel = Vector3Utils.scale(dir, config.attractInitialSpeed);
+      // 開始瞬間: 初速（1.6 b/t, 2m以内は1/3）で発進
+      desiredVel = Vector3Utils.scale(dir, initialSpeed);
     } else {
-      // 2 Tick目以降: 加速度で上限（4.0 b/t）まで連続的に引き寄せ続ける
+      // 2 Tick目以降: 加速度で上限（4.0 b/t, 2m以内は1/3）まで連続的に引き寄せ続ける
       const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
       const nextSpeed = Math.min(
-        config.attractMaxSpeed,
-        Math.max(curDirSpeed, config.attractInitialSpeed) +
-          config.attractAccel,
+        maxSpeed,
+        Math.max(curDirSpeed, initialSpeed) + accel,
       );
       desiredVel = Vector3Utils.scale(dir, nextSpeed);
     }
@@ -119,20 +128,21 @@ export function calculateMagnetHookshot(
     const outDir =
       distance >= EPSILON ? Vector3Utils.scale(dir, -1) : { x: 0, y: 1, z: 0 };
     const clampedR = Math.max(distance, Math.max(config.repelRefDistance, EPSILON));
-    const inverseSquareScale = Math.pow(config.repelRefDistance / clampedR, 2);
-    const repelFactor = inverseSquareScale * effectRatio;
+    const inverseDistScale = config.repelRefDistance / clampedR;
 
     if (isEntryTick) {
-      // 開始瞬間: 距離の二乗に反比例した爆発初速で弾き出す
+      // 開始瞬間: 距離に反比例した爆発初速で弾き出す
+      const burstFactor = inverseDistScale * effectRatio;
       targetVel = Vector3Utils.add(
         predictedVel,
-        Vector3Utils.scale(outDir, config.repelBurstSpeed * repelFactor),
+        Vector3Utils.scale(outDir, config.repelBurstSpeed * burstFactor),
       );
     } else {
       // 持続: 距離の二乗に反比例した反発力を放出しつつ空気抵抗・重力で減衰させる
+      const sustainFactor = inverseDistScale * inverseDistScale * effectRatio;
       targetVel = Vector3Utils.add(
         predictedVel,
-        Vector3Utils.scale(outDir, config.repelSustainAccel * repelFactor),
+        Vector3Utils.scale(outDir, config.repelSustainAccel * sustainFactor),
       );
     }
   }

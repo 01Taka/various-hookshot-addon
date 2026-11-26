@@ -1412,7 +1412,11 @@ export class HookshotSystem {
     }
 
     if (!hit) {
-      this.playSoundSafe(player, def.missSoundId);
+      if (this.getActiveState(player)?.hookshotId === "magnet") {
+        this.unhook(player);
+      } else {
+        this.playSoundSafe(player, def.missSoundId);
+      }
       return false;
     }
 
