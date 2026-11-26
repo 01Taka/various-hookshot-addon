@@ -194,14 +194,3 @@ export const MAGNET_REPEL_OUTLINE_STYLE: BlockOutlineStyle = {
   particleSize: 0.09,
   color: { r: 1.0, g: 0.25, b: 0.25, a: 0.95 },
 };
-
-/**
- * マグネットフックの金属ボーナス磁化ブロック囲み枠線（黄金＋電撃系）
- */
-export const MAGNET_METALLIC_OUTLINE_STYLE: BlockOutlineStyle = {
-  particleId: "various_hookshot_addon:block_outline",
-  stepDistance: 0.25,
-  padding: 0.05,
-  particleSize: 0.12,
-  color: { r: 1.0, g: 0.82, b: 0.2, a: 0.98 },
-};

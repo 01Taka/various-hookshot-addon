@@ -15,23 +15,23 @@ export interface MagnetPhysicsConfig {
   fullEffectDistance: number;
   /** 減衰ゾーンの上限距離 / 効果0になる距離 (blocks, 80m) */
   zeroEffectDistance: number;
-  /** 引き寄せ開始時の初速 (blocks/tick, 0.8倍 = 1.6) */
+  /** 引き寄せ開始時の初速 (blocks/tick) */
   attractInitialSpeed: number;
   /** 引き寄せの加速度 (blocks/tick^2) */
   attractAccel: number;
-  /** 引き寄せの最高速度上限 (blocks/tick, 2倍 = 4.0) */
+  /** 引き寄せの最高速度上限 (blocks/tick) */
   attractMaxSpeed: number;
-  /** 至近距離減衰の開始半径 (blocks, 2.0m) */
+  /** 至近距離減衰の開始半径 (blocks) */
   attractNearRadius: number;
-  /** 至近距離（2m以内）での引き寄せ倍率 (1/3) */
+  /** 至近距離（2m以内）での引き寄せ倍率 */
   attractNearScale: number;
-  /** ゼロ速度インパルス固定を開始する半径 (blocks, 1.6m) */
+  /** ゼロ速度インパルス固定を開始する半径 (blocks) */
   attractStickRadius: number;
   /** 反発開始時の爆発初速 (blocks/tick) */
   repelBurstSpeed: number;
   /** 反発長押し中に放出し続ける持続反発加速度 (blocks/tick^2) */
   repelSustainAccel: number;
-  /** 反発の逆二乗減衰の基準最小距離 r0 (blocks) */
+  /** 反発の距離減衰基準距離 r0 (blocks) */
   repelRefDistance: number;
   /** 反発初回バーストのクールタイム (ticks) */
   repelBurstCooldownTicks: number;
@@ -41,11 +41,18 @@ export interface MagnetPhysicsConfig {
   repelSlowFallMinImpulseY: number;
 }
 
+export interface MagnetContactAxis {
+  /** 接触想定面に対して垂直な単位軸ベクトル (±X / ±Y / ±Z) */
+  dir: Vector3;
+  /** プレイヤー胸位置からその軸方向の当たり判定表面までの距離 (blocks) */
+  surfaceDist: number;
+}
+
 /**
  * 距離 r に応じた効果倍率 effectRatio(r) を返します。
- * - 0 〜 50m: 1.0
- * - 50 〜 80m: 1.0 → 0.0 へ滑らかに減衰 (smoothstep)
- * - 80m 以上: 0.0
+ * - 0 〜 fullEffectDistance (50m): 1.0
+ * - fullEffectDistance 〜 zeroEffectDistance (80m): 1.0 → 0.0 へ smoothstep 減衰
+ * - zeroEffectDistance 以上: 0.0
  */
 export function calculateMagnetEffectRatio(
   distance: number,
@@ -66,10 +73,66 @@ export function calculateMagnetEffectRatio(
 }
 
 /**
- * 距離ゾーン effectRatio(r) に基づき、
- * - attract: 初速 1.6 b/t から加速度 0.20 b/t² で最大 4.0 b/t まで加速＋吸着ロック
- * - repel: 開始時に爆発初速 3.2 b/t を与えつつ、持続的な反発力 0.12 b/t² を放出
- * のインパルスを計算します。
+ * プレイヤー胸位置からアンカー中心への差分から、接触が想定される面の垂直軸方向と表面距離を算出します。
+ */
+export function resolveMagnetContactAxis(
+  chestPos: Vector3,
+  anchor: Vector3,
+): MagnetContactAxis {
+  const toAnchor = Vector3Utils.subtract(anchor, chestPos);
+  const ax = Math.abs(toAnchor.x);
+  const ay = Math.abs(toAnchor.y);
+  const az = Math.abs(toAnchor.z);
+
+  if (ax >= ay && ax >= az) {
+    return {
+      dir: { x: Math.sign(toAnchor.x) || 1, y: 0, z: 0 },
+      surfaceDist: 0.3,
+    };
+  }
+  if (az >= ax && az >= ay) {
+    return {
+      dir: { x: 0, y: 0, z: Math.sign(toAnchor.z) || 1 },
+      surfaceDist: 0.3,
+    };
+  }
+  const signY = Math.sign(toAnchor.y) || 1;
+  return {
+    dir: { x: 0, y: signY, z: 0 },
+    surfaceDist: signY > 0 ? 0.8 : 1.0,
+  };
+}
+
+/**
+ * 吸着固定発動時にプレイヤーを配置するブロック真横のスナップ座標を算出します。
+ */
+export function calculateMagnetSnapLocation(
+  playerLocation: Vector3,
+  anchor: Vector3,
+  contactDir: Vector3,
+): Vector3 {
+  return {
+    x:
+      contactDir.x !== 0
+        ? anchor.x - contactDir.x * 0.82
+        : playerLocation.x,
+    y:
+      contactDir.y > 0
+        ? anchor.y - 2.32
+        : contactDir.y < 0
+          ? anchor.y + 0.5
+          : playerLocation.y,
+    z:
+      contactDir.z !== 0
+        ? anchor.z - contactDir.z * 0.82
+        : playerLocation.z,
+  };
+}
+
+/**
+ * 距離ゾーン effectRatio(r) に基づき、マグネットフックの毎Tickインパルスを計算します。
+ * - attract: 2m超は初速→加速の無重力補間、2m以内は1/3スケール、吸着固定中はゼロ速度維持
+ * - repel: 初回バースト (1/r) ＋ 5tick後から持続反発 (1/r²)
  */
 export function calculateMagnetHookshot(
   player: Player,
@@ -113,7 +176,6 @@ export function calculateMagnetHookshot(
 
   if (mode === "attract") {
     if (isStuck) {
-      // ゼロ速度インパルス固定: 現在速度と重力を打ち消して静止維持
       targetVel = { x: 0, y: 0, z: 0 };
     } else {
       const nearScale =
@@ -124,10 +186,8 @@ export function calculateMagnetHookshot(
 
       let desiredVel: Vector3;
       if (isEntryTick) {
-        // 開始瞬間: 初速（1.6 b/t, 2m以内は1/3）で発進
         desiredVel = Vector3Utils.scale(dir, initialSpeed);
       } else {
-        // 2 Tick目以降: 加速度で上限（3.0 b/t, 2m以内は1/3）まで連続的に引き寄せ続ける
         const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
         const nextSpeed = Math.min(
           maxSpeed,
@@ -144,14 +204,12 @@ export function calculateMagnetHookshot(
     const inverseDistScale = config.repelRefDistance / clampedR;
 
     if (isEntryTick) {
-      // 開始瞬間: 距離に反比例した爆発初速で弾き出す
       const burstFactor = inverseDistScale * effectRatio;
       targetVel = Vector3Utils.add(
         predictedVel,
         Vector3Utils.scale(outDir, config.repelBurstSpeed * burstFactor),
       );
     } else if (repelHoldTicks >= config.repelSustainDelayTicks) {
-      // 持続（5tick後から開始）: 距離の二乗に反比例した反発力を放出しつつ空気抵抗・重力で減衰させる
       const sustainFactor = inverseDistScale * inverseDistScale * effectRatio;
       targetVel = Vector3Utils.add(
         predictedVel,

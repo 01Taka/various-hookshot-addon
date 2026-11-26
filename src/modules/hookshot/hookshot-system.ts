@@ -8,7 +8,6 @@ import {
   GameMode,
   ItemComponentTypes,
   ItemStack,
-  MolangVariableMap,
   Player,
   system,
   Vector3,
@@ -21,31 +20,19 @@ import {
   isSneakButtonPressed,
   PlayerStateManager,
 } from "addon-utils";
-import {
-  BlockOutlineRenderer,
-  HookRenderManager,
-  LineRenderer,
-  MAGNET_ATTRACT_OUTLINE_STYLE,
-  MAGNET_ATTRACT_WIRE_STYLE,
-  MAGNET_GUIDE_WIRE_STYLE,
-  MAGNET_NODE_OUTLINE_STYLE,
-  MAGNET_REPEL_OUTLINE_STYLE,
-  MAGNET_REPEL_WIRE_STYLE,
-  WireStyle,
-} from "../render";
+import { HookRenderManager, LineRenderer, WireStyle } from "../render";
 import { PostFlightSystem } from "../post-flight";
 import {
+  createMagnetStateFromHit,
+  formatMagnetUiText,
   isElasticAirChainActive,
   MagnetHookshotDefinition,
-  MagnetHookshotState,
   markElasticAirLaunch,
+  renderMagnetHookshot,
+  stepMagnetState,
   ZiplineHookshotDefinition,
   ZiplineHookshotState,
 } from "./definitions";
-import {
-  calculateMagnetEffectRatio,
-  MagnetForceMode,
-} from "./math/magnet-math";
 import { stepZiplineRailAnchor } from "./math/zipline-math";
 import {
   calculateAboveAnchorDecayFactor,
@@ -191,19 +178,7 @@ export class HookshotSystem {
       return `残 ${remaining.toFixed(1)}m / ${state.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
     }
     if (def.id === "magnet" && state.hookshotId === "magnet") {
-      const effectRatio = calculateMagnetEffectRatio(distance, def.physics);
-      const effectPercent = Math.round(effectRatio * 100);
-      const modeText =
-        state.activeMode === "attract"
-          ? state.isStuck
-            ? "吸着固定(Shift)"
-            : "吸引(Shift)"
-          : state.activeMode === "repel"
-            ? "反発(Jump)"
-            : effectRatio <= 0
-              ? "待機ゾーン"
-              : "待機";
-      return `${distance.toFixed(1)}m (効果 ${effectPercent}%) | ${modeText}`;
+      return formatMagnetUiText(state, def, distance);
     }
     if (def.id === "rigid" && state.hookshotId === "rigid") {
       const decayFactor = calculateAboveAnchorDecayFactor(
@@ -1394,7 +1369,7 @@ export class HookshotSystem {
    */
   /**
    * マグネットフックの単一ブロック磁化を処理します。
-   * 視線の先 100m 以内のブロックを磁化します（空撃ち時は不発）。
+   * 視線の先 100m 以内のブロックを磁化します（接続中の空振り時は既存アンカーを解除）。
    */
   private static shotMagnet(
     player: Player,
@@ -1422,293 +1397,12 @@ export class HookshotSystem {
       return false;
     }
 
-    const bx = Math.floor(hit.block.x);
-    const by = Math.floor(hit.block.y);
-    const bz = Math.floor(hit.block.z);
-    const blockPos: Vector3 = { x: bx, y: by, z: bz };
-    const center: Vector3 = { x: bx + 0.5, y: by + 0.5, z: bz + 0.5 };
-    const anchor: AnchorPosition = {
-      dimensionId: player.dimension.id,
-      ...center,
-    };
-
-    const newState: MagnetHookshotState = {
-      hookshotId: "magnet",
-      slotIndex: player.selectedSlotIndex,
-      anchor,
-      blockPos,
-      currentLength: 0,
-      jumpConsumed: isInputButtonPressed(player, "Jump") || player.isJumping,
-      sneakConsumed: isSneakButtonPressed(player),
-      activeMode: "none",
-      canAutoDetachOnGround: false,
-    };
-
+    const newState = createMagnetStateFromHit(player, hit);
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, newState);
     this.playSoundSafe(player, def.shotSoundId);
     this.playSoundSafe(player, def.hitSoundId);
     this.consumeHookshotDurability(player, def.itemTypeId, newState.slotIndex);
     return true;
-  }
-
-  private static isMagnetBlockBroken(
-    dimension: Dimension,
-    blockPos: Vector3,
-  ): boolean {
-    try {
-      const block = dimension.getBlock(blockPos);
-      if (!block) return false; // チャンク未ロード時は即削除しない
-      return block.isAir || block.isLiquid;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * マグネットフックの毎Tick状態更新（ブロック検証・入力・吸着ロック音）を行います。
-   * 距離による自動解除は行いません（ブロック破壊・持ち替え・ディメンション移動でのみ解除）。
-   */
-  private static updateMagnetState(
-    player: Player,
-    state: MagnetHookshotState,
-    def: MagnetHookshotDefinition,
-  ): boolean {
-    if (state.anchor.dimensionId !== player.dimension.id) {
-      return false;
-    }
-    if (this.isMagnetBlockBroken(player.dimension, state.blockPos)) {
-      return false;
-    }
-
-    let jumpPressed = false;
-    let sneakPressed = false;
-    try {
-      jumpPressed = isInputButtonPressed(player, "Jump") || player.isJumping;
-      sneakPressed = isSneakButtonPressed(player);
-    } catch {
-      jumpPressed = false;
-      sneakPressed = false;
-    }
-
-    let desiredMode: MagnetForceMode = "none";
-    if (jumpPressed && sneakPressed) {
-      desiredMode = "none";
-    } else if (sneakPressed) {
-      desiredMode = "attract";
-    } else if (jumpPressed) {
-      desiredMode = "repel";
-    }
-
-    if (desiredMode !== "none") {
-      state.canAutoDetachOnGround = true;
-    } else if (state.canAutoDetachOnGround && player.isOnGround) {
-      return false;
-    }
-
-    const prevMode = state.activeMode;
-    state.activeMode = desiredMode;
-    if (desiredMode === "attract") {
-      state.isModeEntryTick = prevMode !== "attract";
-      state.repelHoldTicks = 0;
-    } else if (desiredMode === "repel") {
-      state.repelHoldTicks =
-        prevMode !== "repel" ? 0 : (state.repelHoldTicks ?? 0) + 1;
-      const cooldown = def.physics.repelBurstCooldownTicks;
-      const lastBurst = state.lastRepelBurstTick ?? -cooldown;
-      const canBurst =
-        prevMode !== "repel" && system.currentTick - lastBurst >= cooldown;
-      state.isModeEntryTick = canBurst;
-      if (canBurst) {
-        state.lastRepelBurstTick = system.currentTick;
-      }
-    } else {
-      state.isModeEntryTick = false;
-      state.repelHoldTicks = 0;
-    }
-
-    const chestPos: Vector3 = {
-      x: player.location.x,
-      y: player.location.y + 1.0,
-      z: player.location.z,
-    };
-    const dist = Vector3Utils.distance(chestPos, state.anchor);
-
-    if (state.activeMode === "attract") {
-      if (!state.isStuck && dist > EPSILON) {
-        let shouldStick = false;
-        const toAnchor = Vector3Utils.subtract(state.anchor, chestPos);
-        const ax = Math.abs(toAnchor.x);
-        const ay = Math.abs(toAnchor.y);
-        const az = Math.abs(toAnchor.z);
-
-        let contactDir: Vector3 = { x: 0, y: 1, z: 0 };
-        if (ax >= ay && ax >= az) {
-          contactDir = { x: Math.sign(toAnchor.x) || 1, y: 0, z: 0 };
-        } else if (az >= ax && az >= ay) {
-          contactDir = { x: 0, y: 0, z: Math.sign(toAnchor.z) || 1 };
-        } else {
-          contactDir = { x: 0, y: Math.sign(toAnchor.y) || 1, z: 0 };
-        }
-
-        try {
-          if (
-            Vector3Utils.distance(player.getHeadLocation(), state.anchor) <= 1.0
-          ) {
-            shouldStick = true;
-          }
-        } catch {}
-
-        if (!shouldStick && (ax > EPSILON || ay > EPSILON || az > EPSILON)) {
-          const surfaceDist =
-            contactDir.y !== 0 ? (contactDir.y > 0 ? 0.8 : 1.0) : 0.3;
-          try {
-            const stickHit = player.dimension.getBlockFromRay(
-              chestPos,
-              contactDir,
-              {
-                maxDistance: surfaceDist + 0.25,
-                includeLiquidBlocks: false,
-                includePassableBlocks: false,
-              },
-            );
-            if (
-              stickHit &&
-              Math.floor(stickHit.block.x) === state.blockPos.x &&
-              Math.floor(stickHit.block.y) === state.blockPos.y &&
-              Math.floor(stickHit.block.z) === state.blockPos.z
-            ) {
-              shouldStick = true;
-            }
-          } catch {}
-        }
-
-        if (shouldStick) {
-          const loc = player.location;
-          const snapLocation: Vector3 = {
-            x:
-              contactDir.x !== 0
-                ? state.anchor.x - contactDir.x * 0.82
-                : loc.x,
-            y:
-              contactDir.y > 0
-                ? state.anchor.y - 2.32
-                : contactDir.y < 0
-                  ? state.anchor.y + 0.5
-                  : loc.y,
-            z:
-              contactDir.z !== 0
-                ? state.anchor.z - contactDir.z * 0.82
-                : loc.z,
-          };
-          state.isStuck = true;
-          state.stuckLocation = snapLocation;
-          try {
-            player.teleport(snapLocation, {
-              rotation: player.getRotation(),
-              keepVelocity: false,
-            });
-          } catch {}
-          this.playSoundSafe(player, "random.click", 1.4);
-        }
-      } else if (state.isStuck && state.stuckLocation) {
-        if (Vector3Utils.distance(player.location, state.stuckLocation) > 0.15) {
-          try {
-            player.teleport(state.stuckLocation, {
-              rotation: player.getRotation(),
-              keepVelocity: false,
-            });
-          } catch {}
-        }
-      }
-    } else if (state.isStuck || state.stuckLocation) {
-      state.isStuck = false;
-      state.stuckLocation = undefined;
-    }
-
-    if (state.activeMode !== "none") {
-      const effectRatio = calculateMagnetEffectRatio(dist, def.physics);
-      if (effectRatio > 0) {
-        const lastTick =
-          state.lastActiveSoundTick ?? -def.activeSound.intervalTicks;
-        if (system.currentTick - lastTick >= def.activeSound.intervalTicks) {
-          const pitch = state.activeMode === "attract" ? 1.15 : 0.85;
-          this.playSoundSafe(player, def.activeSound.soundId, pitch);
-          state.lastActiveSoundTick = system.currentTick;
-        }
-      }
-    }
-
-    PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
-    return true;
-  }
-
-  private static renderMagnet(
-    player: Player,
-    state: MagnetHookshotState,
-  ): void {
-    const guideParticleId =
-      state.activeMode === "attract"
-        ? MAGNET_ATTRACT_WIRE_STYLE.particleId
-        : state.activeMode === "repel"
-          ? MAGNET_REPEL_WIRE_STYLE.particleId
-          : MAGNET_GUIDE_WIRE_STYLE.particleId;
-    const playerSidePos = LineRenderer.getHandPosition(player);
-    const diff = Vector3Utils.subtract(state.anchor, playerSidePos);
-    const dist = Vector3Utils.magnitude(diff);
-
-    if (dist > 0.4) {
-      const toAnchor = Vector3Utils.scale(diff, 1 / dist);
-      const toPlayer = Vector3Utils.scale(toAnchor, -1);
-
-      const p1Offset = Math.min(0.6, dist * 0.15);
-      const p2Offset = Math.min(1.4, dist * 0.35);
-      const m1Offset = Math.min(1.0, dist * 0.25);
-      const m2Offset = Math.min(2.0, dist * 0.45);
-
-      const points: Vector3[] = [
-        Vector3Utils.add(playerSidePos, Vector3Utils.scale(toAnchor, p1Offset)),
-        Vector3Utils.add(playerSidePos, Vector3Utils.scale(toAnchor, p2Offset)),
-        Vector3Utils.add(state.anchor, Vector3Utils.scale(toPlayer, m1Offset)),
-        Vector3Utils.add(state.anchor, Vector3Utils.scale(toPlayer, m2Offset)),
-      ];
-
-      for (const pos of points) {
-        try {
-          player.dimension.spawnParticle(guideParticleId, pos);
-        } catch {}
-      }
-    }
-
-    const outlineStyle =
-      state.activeMode === "attract"
-        ? MAGNET_ATTRACT_OUTLINE_STYLE
-        : state.activeMode === "repel"
-          ? MAGNET_REPEL_OUTLINE_STYLE
-          : MAGNET_NODE_OUTLINE_STYLE;
-
-    BlockOutlineRenderer.drawBlockOutline(
-      player.dimension,
-      state.blockPos,
-      outlineStyle,
-    );
-
-    if (state.activeMode !== "none" && system.currentTick % 4 === 0) {
-      const color = outlineStyle.color;
-      const molangVars = new MolangVariableMap();
-      if (color) {
-        molangVars.setFloat("variable.color_r", color.r);
-        molangVars.setFloat("variable.color_g", color.g);
-        molangVars.setFloat("variable.color_b", color.b);
-        molangVars.setFloat("variable.color_a", color.a ?? 0.95);
-      }
-      try {
-        player.dimension.spawnParticle(
-          "various_hookshot_addon:magnet_charge",
-          state.anchor,
-          molangVars,
-        );
-      } catch {}
-    }
   }
 
   public static toggleHook(player: Player, def: HookshotDefinition): void {
@@ -2421,10 +2115,17 @@ export class HookshotSystem {
             : this.handleReelInput(player, state, def);
 
         if (def.id === "magnet" && state.hookshotId === "magnet") {
-          if (!this.updateMagnetState(player, state, def)) {
+          const keep = stepMagnetState(
+            player,
+            state,
+            def,
+            (p, id, pitch) => this.playSoundSafe(p, id, pitch),
+          );
+          if (!keep) {
             this.unhook(player);
             continue;
           }
+          PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
         }
 
         if (def.id === "zipline" && state.hookshotId === "zipline") {
@@ -2655,7 +2356,7 @@ export class HookshotSystem {
 
           // ワイヤーの描画（ジップライン・マグネットは専用描画を使用）
           if (def.id === "magnet" && state.hookshotId === "magnet") {
-            this.renderMagnet(player, state);
+            renderMagnetHookshot(player, state);
           } else if (def.id === "zipline" && state.hookshotId === "zipline") {
             HookRenderManager.renderZipline(player, {
               railBase: state.railBase,
