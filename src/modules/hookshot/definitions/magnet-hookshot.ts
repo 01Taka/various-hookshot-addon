@@ -70,13 +70,14 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     zeroEffectDistance: 80,
     attractInitialSpeed: 1.6,
     attractAccel: 0.2,
-    attractMaxSpeed: 4.0,
+    attractMaxSpeed: 3.0,
     attractNearRadius: 2.0,
     attractNearScale: 1 / 3,
-    repelBurstSpeed: 2.4,
+    repelBurstSpeed: 2.2,
     repelSustainAccel: 0.2,
     repelRefDistance: 10.0,
     repelBurstCooldownTicks: 10,
+    repelSlowFallMinImpulseY: 0.4,
   },
   calculateImpulse: (player, state): Vector3 => {
     return calculateMagnetHookshot(

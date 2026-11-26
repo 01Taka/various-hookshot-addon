@@ -2533,6 +2533,20 @@ export class HookshotSystem {
           const impulse = this.calculateImpulseForState(player, def, state);
           if (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) {
             player.applyImpulse(impulse);
+            if (
+              def.id === "magnet" &&
+              state.hookshotId === "magnet" &&
+              state.activeMode === "repel" &&
+              state.isModeEntryTick &&
+              impulse.y >= def.physics.repelSlowFallMinImpulseY
+            ) {
+              try {
+                player.addEffect("slow_falling", 1, {
+                  amplifier: 0,
+                  showParticles: false,
+                });
+              } catch {}
+            }
           }
 
           if (state.hookshotId === "elastic" && state.releaseShotPending) {
