@@ -105,28 +105,6 @@ export function onRigidTick(
     dirty = true;
   }
 
-  const distance = Vector3Utils.distance(player.location, state.anchor);
-  const isTaut =
-    distance >= state.currentLength - rigidHookshotConfig.physics.tautMargin;
-  if (state.isReelingIn && isTaut) {
-    if (!state.gazeSteeringLatched) {
-      const steerResult = calculateRigidSteering(
-        player,
-        state.anchor,
-        rigidHookshotConfig.steering,
-        true,
-        { gazeSteeringLatched: false },
-      );
-      if (steerResult.isGazeSteeringActive) {
-        state.gazeSteeringLatched = true;
-        dirty = true;
-      }
-    }
-  } else if (state.gazeSteeringLatched) {
-    state.gazeSteeringLatched = false;
-    dirty = true;
-  }
-
   const maxAboveTicks = rigidHookshotConfig.steering.aboveAnchorDecayTicks;
   const currentAboveTicks = state.aboveAnchorTicks ?? 0;
   const currentBelowTicks = state.belowAnchorTicks ?? 0;
@@ -206,8 +184,6 @@ export function formatRigidHudText(
     player,
     state.anchor,
     rigidHookshotConfig.steering,
-    true,
-    { gazeSteeringLatched: state.gazeSteeringLatched },
   );
   const maxTiltRad =
     (rigidHookshotConfig.steering.maxUpwardTiltDeg * Math.PI) / 180;
@@ -216,8 +192,6 @@ export function formatRigidHudText(
       ? Math.min(1, steerResult.targetTiltRad / maxTiltRad)
       : 0;
   const effectPercent = Math.round(rawEffectRatio * decayFactor * 100);
-  const yawDiffDeg = Math.round(steerResult.yawDiffDeg);
-  const pitchDiffDeg = Math.round(steerResult.pitchDiffDeg);
 
-  return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m | 水平:${yawDiffDeg}° Y差:${pitchDiffDeg}° | 減衰:${decayPercent}% 効果:${effectPercent}%`;
+  return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m | 減衰:${decayPercent}% 効果:${effectPercent}%`;
 }

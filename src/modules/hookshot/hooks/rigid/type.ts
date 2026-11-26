@@ -29,7 +29,6 @@ export interface RigidHookshotOptions {
   enableSteering?: boolean;
   hasAeroVest?: boolean;
   aboveAnchorTicks?: number;
-  gazeSteeringLatched?: boolean;
   baumgarteFactor: number;
   physics: RigidPhysicsConfig;
   steering: RigidSteeringConfig;
@@ -44,7 +43,6 @@ export interface RigidHookshotState
   stallReelTicks?: number;
   aboveAnchorTicks?: number;
   belowAnchorTicks?: number;
-  gazeSteeringLatched?: boolean;
 }
 
 export interface RigidHookshotDefinition
