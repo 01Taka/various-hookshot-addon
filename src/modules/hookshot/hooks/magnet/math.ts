@@ -166,20 +166,15 @@ export function calculateMagnetHookshot(
         targetVel = { x: 0, y: 0, z: 0 };
       }
     } else {
-      const nearScale =
-        distance <= config.attractNearRadius ? config.attractNearScale : 1.0;
-      const initialSpeed = config.attractInitialSpeed * nearScale;
-      const accel = config.attractAccel * nearScale;
-      const maxSpeed = config.attractMaxSpeed * nearScale;
-
       let desiredVel: Vector3;
       if (isEntryTick) {
-        desiredVel = Vector3Utils.scale(dir, initialSpeed);
+        desiredVel = Vector3Utils.scale(dir, config.attractInitialSpeed);
       } else {
         const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
         const nextSpeed = Math.min(
-          maxSpeed,
-          Math.max(curDirSpeed, initialSpeed) + accel,
+          config.attractMaxSpeed,
+          Math.max(curDirSpeed, config.attractInitialSpeed) +
+            config.attractAccel,
         );
         desiredVel = Vector3Utils.scale(dir, nextSpeed);
       }
