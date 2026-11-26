@@ -14,11 +14,15 @@ export interface RigidSteeringConfig {
   /** 最大回転パワーが得られる基準距離 (m) */
   referenceSwingDistance: number;
   /** A/D入力なし時に最大加速(100%)へ到達する水平視線角度 (度) */
-  fullSteerAngleDeg: number;
+  fullSteerAngleDeg?: number;
+  /** A/D入力なし時にデジタル(100%)で旋回を開始する水平視線角度 (度) */
+  steerStartAngleDeg?: number;
   /** 接線加速の減衰を開始する水平視線角度 (度) */
   steerFadeStartDeg: number;
   /** 接線加速が完全に0になる水平視線角度 (度) */
   steerFadeEndDeg: number;
+  /** 視線旋回へ移行できる、視線ピッチとアンカー仰角の最大許容差 (度) */
+  maxGazePitchDiffDeg?: number;
   /** A/D入力優先に切り替わる移動入力の左右角度しきい値 (度) */
   adPriorityAngleDeg: number;
   /** 3D遠心力が最大基準に達する遠心加速度 (blocks/tick²) */
@@ -77,6 +81,12 @@ export interface RigidSteeringResult {
   targetTiltRad: number;
   /** プレイヤーがアンカーより下（仰角 > 0）にいるかどうか */
   isBelowAnchor: boolean;
+  /** A/D優先を使わずに視線ステアリングが有効に作動しているかどうか */
+  isGazeSteeringActive: boolean;
+  /** 水平視線方向とアンカー水平方向の角度差 (度, 0 〜 180) */
+  yawDiffDeg: number;
+  /** 視線ピッチ角とアンカー仰角の差の絶対値 (度, 0 〜 180) */
+  pitchDiffDeg: number;
 }
 
 interface SteeringPlaneBasis {
@@ -196,7 +206,10 @@ function calculateTrapezoidSteerRatio(
   hasADPriority: boolean,
   steering: Pick<
     RigidSteeringConfig,
-    "fullSteerAngleDeg" | "steerFadeStartDeg" | "steerFadeEndDeg"
+    | "fullSteerAngleDeg"
+    | "steerStartAngleDeg"
+    | "steerFadeStartDeg"
+    | "steerFadeEndDeg"
   >,
 ): number {
   const fadeStartRad = (steering.steerFadeStartDeg * Math.PI) / 180;
@@ -216,7 +229,16 @@ function calculateTrapezoidSteerRatio(
     return fadeOut;
   }
 
-  const fullSteerRad = (steering.fullSteerAngleDeg * Math.PI) / 180;
+  if (steering.steerStartAngleDeg !== undefined) {
+    const startRad = (steering.steerStartAngleDeg * Math.PI) / 180;
+    if (thetaYawRad < startRad) {
+      return 0;
+    }
+    return fadeOut;
+  }
+
+  const fullSteerDeg = steering.fullSteerAngleDeg ?? 0;
+  const fullSteerRad = (fullSteerDeg * Math.PI) / 180;
   if (fullSteerRad <= EPSILON || thetaYawRad >= fullSteerRad) {
     return fadeOut;
   }
@@ -237,8 +259,10 @@ export function calculateRigidSteering(
     | "steerAccelNormal"
     | "referenceSwingDistance"
     | "fullSteerAngleDeg"
+    | "steerStartAngleDeg"
     | "steerFadeStartDeg"
     | "steerFadeEndDeg"
+    | "maxGazePitchDiffDeg"
     | "adPriorityAngleDeg"
     | "centrifugal3DReferenceAccel"
     | "centrifugal3DDownwardScale"
@@ -249,6 +273,9 @@ export function calculateRigidSteering(
     | "tiltFullDistance"
   >,
   hasAeroVest: boolean = true,
+  options?: {
+    gazeSteeringLatched?: boolean;
+  },
 ): RigidSteeringResult {
   const basis = computeSteeringBasis(player.location, anchor);
   if (!basis) {
@@ -260,6 +287,9 @@ export function calculateRigidSteering(
       centrifugal3DRatio: 0,
       targetTiltRad: 0,
       isBelowAnchor: false,
+      isGazeSteeringActive: false,
+      yawDiffDeg: 0,
+      pitchDiffDeg: 0,
     };
   }
 
@@ -298,13 +328,23 @@ export function calculateRigidSteering(
   // 90°〜110° の減衰区間でもカメラローカルの A/D 符号（D=+1, A=-1）を使うことで逆回転を防止
   const turnSign = hasADPriority ? (inputVec.x >= 0 ? 1 : -1) : gazeSign;
 
+  // 視線上下ピッチ角とアンカー仰角の差による移行制限（一度旋回に移行したら解除しない）
+  const lookPitchRad = -(rot.x * Math.PI) / 180;
+  const pitchDiffRad = Math.abs(lookPitchRad - basis.elevationRad);
+  const maxPitchDiffRad =
+    steering.maxGazePitchDiffDeg !== undefined
+      ? (steering.maxGazePitchDiffDeg * Math.PI) / 180
+      : Infinity;
+  const isGazePitchAllowed =
+    (options?.gazeSteeringLatched ?? false) || pitchDiffRad < maxPitchDiffRad;
+
   // 台形カーブによる旋回比率 (0.0 〜 1.0)
-  const rawSteerRatio = calculateTrapezoidSteerRatio(
-    thetaYawRad,
-    hasADPriority,
-    steering,
-  );
+  const rawSteerRatio =
+    !hasADPriority && !isGazePitchAllowed
+      ? 0
+      : calculateTrapezoidSteerRatio(thetaYawRad, hasADPriority, steering);
   const steerRatio = rawSteerRatio * basis.horizFactor;
+  const isGazeSteeringActive = !hasADPriority && steerRatio > 0;
 
   const lateralDir = Vector3Utils.scale(basis.rightDir, turnSign);
 
@@ -372,6 +412,9 @@ export function calculateRigidSteering(
     centrifugal3DRatio,
     targetTiltRad,
     isBelowAnchor,
+    isGazeSteeringActive,
+    yawDiffDeg: (thetaYawRad * 180) / Math.PI,
+    pitchDiffDeg: (pitchDiffRad * 180) / Math.PI,
   };
 }
 

@@ -48,7 +48,9 @@ export function calculateRigidVelocity(
   );
 
   const steerResult = isSteeringActive
-    ? calculateRigidSteering(player, anchor, steering, hasAeroVest)
+    ? calculateRigidSteering(player, anchor, steering, hasAeroVest, {
+        gazeSteeringLatched: options.gazeSteeringLatched,
+      })
     : null;
   const isSteeringApplied = !!(
     steerResult &&

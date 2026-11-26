@@ -27,6 +27,7 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
       enableSteering: true,
       hasAeroVest: hasVest,
       aboveAnchorTicks: state.aboveAnchorTicks,
+      gazeSteeringLatched: state.gazeSteeringLatched,
       baumgarteFactor: baumgarteFactor ?? 0.15,
       physics,
       steering,
