@@ -7,11 +7,15 @@ import {
 } from "addon-utils";
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../../constants";
 import { getDirectionAndDistance, predictTickPhysics } from "../../math/physics-utils";
-import { MAGNET_STICK_RESTORE_GAIN } from "./config";
+import {
+  MAGNET_STICK_ALIGN_GAIN,
+  MAGNET_STICK_ALIGN_MAX_SPEED,
+} from "./config";
 import {
   MagnetContactAxis,
   MagnetForceMode,
   MagnetPhysicsConfig,
+  MagnetStuckPhase,
 } from "./type";
 
 /**
@@ -108,6 +112,7 @@ export function calculateMagnetHookshot(
   mode: MagnetForceMode,
   isEntryTick: boolean,
   isStuck: boolean,
+  stuckPhase: MagnetStuckPhase | undefined,
   stuckLocation: Vector3 | undefined,
   attractHoldTicks: number,
   repelHoldTicks: number,
@@ -146,12 +151,20 @@ export function calculateMagnetHookshot(
 
   if (mode === "attract") {
     if (isStuck) {
-      targetVel = stuckLocation
-        ? Vector3Utils.scale(
-            Vector3Utils.subtract(stuckLocation, player.location),
-            MAGNET_STICK_RESTORE_GAIN,
-          )
-        : { x: 0, y: 0, z: 0 };
+      if (stuckPhase === "aligning" && stuckLocation) {
+        const offset = Vector3Utils.subtract(stuckLocation, player.location);
+        const rawVel = Vector3Utils.scale(offset, MAGNET_STICK_ALIGN_GAIN);
+        const rawSpeed = Vector3Utils.magnitude(rawVel);
+        targetVel =
+          rawSpeed > MAGNET_STICK_ALIGN_MAX_SPEED && rawSpeed > EPSILON
+            ? Vector3Utils.scale(
+                rawVel,
+                MAGNET_STICK_ALIGN_MAX_SPEED / rawSpeed,
+              )
+            : rawVel;
+      } else {
+        targetVel = { x: 0, y: 0, z: 0 };
+      }
     } else {
       const nearScale =
         distance <= config.attractNearRadius ? config.attractNearScale : 1.0;

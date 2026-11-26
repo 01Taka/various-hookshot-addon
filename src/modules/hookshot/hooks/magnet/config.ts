@@ -5,7 +5,11 @@ export const MAGNET_ITEM_ID = "various_hookshot_addon:magnet_hookshot";
 
 export const MAGNET_STICK_RAY_EXTRA_DISTANCE = 0.25;
 export const MAGNET_HEAD_STICK_RADIUS = 1.0;
-export const MAGNET_STICK_RESTORE_GAIN = 0.5;
+export const MAGNET_STICK_DAMPING_SPEED_THRESHOLD = 0.25;
+export const MAGNET_STICK_ALIGN_GAIN = 0.4;
+export const MAGNET_STICK_ALIGN_MAX_SPEED = 0.35;
+export const MAGNET_STICK_ALIGN_TIMEOUT_TICKS = 12;
+export const MAGNET_STICK_LOCK_RADIUS = 0.2;
 export const MAGNET_CHARGE_PARTICLE_ID = "various_hookshot_addon:magnet_charge";
 export const MAGNET_CHARGE_INTERVAL_TICKS = 4;
 export const MAGNET_STICK_SOUND_ID = "random.click";

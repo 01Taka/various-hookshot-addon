@@ -4,6 +4,7 @@ import { BaseHookshotDefinition, BaseHookshotState } from "../../types";
 export const MAGNET_HOOKSHOT_ID = "magnet";
 
 export type MagnetForceMode = "none" | "attract" | "repel";
+export type MagnetStuckPhase = "damping" | "aligning" | "locked";
 
 export interface MagnetPhysicsConfig {
   fullEffectDistance: number;
@@ -36,6 +37,8 @@ export interface MagnetHookshotState
   isModeEntryTick?: boolean;
   canAutoDetachOnGround?: boolean;
   isStuck?: boolean;
+  stuckPhase?: MagnetStuckPhase;
+  stuckAlignTicks?: number;
   stuckLocation?: Vector3;
   lastActiveSoundTick?: number;
   lastRepelBurstTick?: number;

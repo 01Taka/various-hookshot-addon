@@ -4,6 +4,9 @@ import { isInputButtonPressed, isSneakButtonPressed } from "addon-utils";
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../../constants";
 import {
   MAGNET_HEAD_STICK_RADIUS,
+  MAGNET_STICK_ALIGN_TIMEOUT_TICKS,
+  MAGNET_STICK_DAMPING_SPEED_THRESHOLD,
+  MAGNET_STICK_LOCK_RADIUS,
   MAGNET_STICK_RAY_EXTRA_DISTANCE,
   MAGNET_STICK_SOUND_ID,
   magnetHookshotConfig,
@@ -46,22 +49,11 @@ function resolveDesiredMagnetMode(player: Player): MagnetForceMode {
   return "none";
 }
 
-function updateMagnetStickState(
+function canStickAtCurrentPosition(
   player: Player,
   state: MagnetHookshotState,
   chestPos: Vector3,
-  playSound: MagnetSoundPlayer,
-): void {
-  if (state.activeMode !== "attract") {
-    state.isStuck = false;
-    state.stuckLocation = undefined;
-    return;
-  }
-
-  if (state.isStuck) {
-    return;
-  }
-
+): { canStick: boolean; contactDir: Vector3 } {
   const { dir: contactDir, surfaceDist } = resolveMagnetContactAxis(
     chestPos,
     state.anchor,
@@ -74,11 +66,11 @@ function updateMagnetStickState(
   const headDist = Vector3Utils.distance(headPos, state.anchor);
   const feetDist = Vector3Utils.distance(player.location, state.anchor);
 
-  let shouldStick =
+  let canStick =
     headDist <= MAGNET_HEAD_STICK_RADIUS ||
     feetDist <= MAGNET_HEAD_STICK_RADIUS;
 
-  if (!shouldStick && Vector3Utils.magnitude(contactDir) > EPSILON) {
+  if (!canStick && Vector3Utils.magnitude(contactDir) > EPSILON) {
     try {
       const stickHit = player.dimension.getBlockFromRay(chestPos, contactDir, {
         maxDistance: surfaceDist + MAGNET_STICK_RAY_EXTRA_DISTANCE,
@@ -91,19 +83,82 @@ function updateMagnetStickState(
         Math.floor(stickHit.block.y) === state.blockPos.y &&
         Math.floor(stickHit.block.z) === state.blockPos.z
       ) {
-        shouldStick = true;
+        canStick = true;
       }
     } catch {}
   }
 
-  if (!shouldStick) return;
+  return { canStick, contactDir };
+}
 
-  state.isStuck = true;
-  state.stuckLocation = calculateMagnetFixedStickLocation(
-    state.anchor,
-    contactDir,
-  );
-  playSound(player, MAGNET_STICK_SOUND_ID, 1.4);
+function clearMagnetStickState(state: MagnetHookshotState): void {
+  state.isStuck = false;
+  state.stuckPhase = undefined;
+  state.stuckAlignTicks = 0;
+  state.stuckLocation = undefined;
+}
+
+function updateMagnetStickState(
+  player: Player,
+  state: MagnetHookshotState,
+  chestPos: Vector3,
+  playSound: MagnetSoundPlayer,
+): void {
+  if (state.activeMode !== "attract") {
+    clearMagnetStickState(state);
+    return;
+  }
+
+  if (!state.isStuck) {
+    const { canStick, contactDir } = canStickAtCurrentPosition(
+      player,
+      state,
+      chestPos,
+    );
+    if (!canStick) return;
+
+    state.isStuck = true;
+    state.stuckPhase = "damping";
+    state.stuckAlignTicks = 0;
+    state.stuckLocation = calculateMagnetFixedStickLocation(
+      state.anchor,
+      contactDir,
+    );
+    playSound(player, MAGNET_STICK_SOUND_ID, 1.4);
+    return;
+  }
+
+  if (state.stuckPhase === "damping") {
+    const speed = Vector3Utils.magnitude(player.getVelocity());
+    if (speed <= MAGNET_STICK_DAMPING_SPEED_THRESHOLD) {
+      state.stuckPhase = "aligning";
+      state.stuckAlignTicks = 0;
+    }
+    return;
+  }
+
+  const distToTarget = state.stuckLocation
+    ? Vector3Utils.distance(player.location, state.stuckLocation)
+    : 0;
+
+  if (state.stuckPhase === "aligning") {
+    state.stuckAlignTicks = (state.stuckAlignTicks ?? 0) + 1;
+    if (
+      distToTarget <= MAGNET_STICK_LOCK_RADIUS ||
+      state.stuckAlignTicks >= MAGNET_STICK_ALIGN_TIMEOUT_TICKS
+    ) {
+      state.stuckPhase = "locked";
+    }
+    return;
+  }
+
+  // locked: 目標位置から 0.2m 超えて離れ かつ 吸着条件を外れた場合は通常吸引へ戻す
+  if (distToTarget > MAGNET_STICK_LOCK_RADIUS) {
+    const { canStick } = canStickAtCurrentPosition(player, state, chestPos);
+    if (!canStick) {
+      clearMagnetStickState(state);
+    }
+  }
 }
 
 /**
@@ -212,7 +267,11 @@ export function formatMagnetHudText(
   const modeText =
     state.activeMode === "attract"
       ? state.isStuck
-        ? "吸着固定(Shift)"
+        ? state.stuckPhase === "damping"
+          ? "吸着S1:減速(Shift)"
+          : state.stuckPhase === "aligning"
+            ? "吸着S2:面寄せ(Shift)"
+            : "吸着S3:固定(Shift)"
         : "吸引(Shift)"
       : state.activeMode === "repel"
         ? "反発(Jump)"
