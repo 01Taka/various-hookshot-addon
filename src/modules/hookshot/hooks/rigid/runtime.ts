@@ -63,7 +63,7 @@ export function modifyRigidReelSpeed(
   mode: ReelMode,
   baseSpeed: number,
 ): number {
-  if (mode === "shorten" && rigidHookshotConfig.enableGazeSteering) {
+  if (mode === "shorten" && rigidHookshotConfig.enableSteering) {
     const multiplier = calculateReelSpeedMultiplier(
       player,
       state.anchor,

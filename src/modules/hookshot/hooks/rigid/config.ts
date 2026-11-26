@@ -32,7 +32,7 @@ export const rigidHookshotConfig: Omit<
   hitSoundId: "place.chain",
   missSoundId: "dig.chain",
   wireStyle: RIGID_WIRE_STYLE,
-  enableGazeSteering: true,
+  enableSteering: true,
   autoTakeUp: {
     ticks: 15,
     speed: 5.0,

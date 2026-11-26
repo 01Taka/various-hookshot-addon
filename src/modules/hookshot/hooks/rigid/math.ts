@@ -66,7 +66,7 @@ export function calculateRigidVelocity(
   const isGravityReduced = gravityScale < 1.0 - EPSILON;
   const effectiveGravity = MINECRAFT_GRAVITY * gravityScale;
 
-  // 3D遠心力比率に応じて接線速度の空気抵抗を軽減し、ベクトルの長さを維持しやすくする（ベスト装着時のみ）
+  // 3D遠心力比率に応じて接線速度の空気抵抗を軽減し、ベクトルの長さを維持しやすくする
   const baseDragXZ = getAirDrag(speed);
   const effectiveDragXZ = baseDragXZ + (1.0 - baseDragXZ) * c3D;
 
@@ -96,12 +96,15 @@ export function calculateRigidVelocity(
       }
     }
 
-    // 水平接線方向へステアリング加速度を加算
+    // 水平接線方向へステアリング加速度を加算（すでに上限速度以上の場合は減速させない）
     const targetLat =
       steerResult.tangentialAccel > 0
-        ? Math.min(
-            effectiveMaxSteeringSpeed,
-            baseLat + steerResult.tangentialAccel,
+        ? Math.max(
+            baseLat,
+            Math.min(
+              effectiveMaxSteeringSpeed,
+              baseLat + steerResult.tangentialAccel,
+            ),
           )
         : baseLat;
     const deltaLat = targetLat - currentLat;
@@ -112,7 +115,7 @@ export function calculateRigidVelocity(
       );
     }
 
-    // 接線平面（lateralDir, upNormal）上の速度ベクトルの長さを維持しつつ上方向へ回転（ベスト装着時のみ）
+    // 接線平面（lateralDir, upNormal）上の速度ベクトルの長さを維持しつつ上方向へ回転
     // ※ アンカーより上（!isBelowAnchor）では下向き落下速度を無理に水平へ戻さない。
     //    アンカーより上にいる間は時間経過で減衰し、下へ戻ると待機時間後に徐々に回復する。
     const aboveAnchorDecayFactor = calculateAboveAnchorDecayFactor(

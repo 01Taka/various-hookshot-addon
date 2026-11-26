@@ -4,9 +4,9 @@ import {
   BaseHookshotDefinition,
   BaseHookshotState,
   ContinuousReelState,
-  GazeSteeringCapable,
   RaycastGraceCapable,
   ReelCapable,
+  SteeringCapable,
 } from "../../types";
 
 export const RIGID_HOOKSHOT_ID = "rigid";
@@ -49,7 +49,7 @@ export interface RigidHookshotDefinition
   extends BaseHookshotDefinition<typeof RIGID_HOOKSHOT_ID, RigidHookshotState>,
     ReelCapable,
     RaycastGraceCapable,
-    GazeSteeringCapable {
+    SteeringCapable {
   autoTakeUp: {
     ticks: number;
     speed: number;

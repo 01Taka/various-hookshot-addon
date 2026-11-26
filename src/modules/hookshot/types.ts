@@ -220,11 +220,11 @@ export interface RaycastGraceCapable {
 }
 
 /**
- * 視線ステアリング推進力機能の定義
+ * ステアリング（横旋回・遠心力巻き取り補正）機能の定義
  */
-export interface GazeSteeringCapable {
-  /** 視線ステアリング推進力を有効にするかどうか */
-  enableGazeSteering: boolean;
+export interface SteeringCapable {
+  /** ステアリング・遠心力巻き取り補正を有効にするかどうか */
+  enableSteering: boolean;
 }
 
 /**

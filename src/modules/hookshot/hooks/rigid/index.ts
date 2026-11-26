@@ -24,7 +24,7 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
     const { physics, steering, baumgarteFactor } = rigidHookshotConfig;
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,
-      enableSteering: true,
+      enableSteering: rigidHookshotConfig.enableSteering,
       hasAeroVest: hasVest,
       aboveAnchorTicks: state.aboveAnchorTicks,
       baumgarteFactor: baumgarteFactor ?? 0.15,
