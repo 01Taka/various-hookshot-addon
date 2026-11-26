@@ -35,6 +35,8 @@ export interface MagnetPhysicsConfig {
   repelRefDistance: number;
   /** 反発初回バーストのクールタイム (ticks) */
   repelBurstCooldownTicks: number;
+  /** 反発初回バースト後に持続反発が開始するまでの遅延 (ticks) */
+  repelSustainDelayTicks: number;
   /** 反発初回バースト時に低速落下(1tick)を付与する最小上向きインパルス */
   repelSlowFallMinImpulseY: number;
 }
@@ -75,6 +77,7 @@ export function calculateMagnetHookshot(
   mode: MagnetForceMode,
   isEntryTick: boolean,
   isStuck: boolean,
+  repelHoldTicks: number,
   config: MagnetPhysicsConfig,
 ): Vector3 {
   if (mode === "none") {
@@ -147,13 +150,15 @@ export function calculateMagnetHookshot(
         predictedVel,
         Vector3Utils.scale(outDir, config.repelBurstSpeed * burstFactor),
       );
-    } else {
-      // 持続: 距離の二乗に反比例した反発力を放出しつつ空気抵抗・重力で減衰させる
+    } else if (repelHoldTicks >= config.repelSustainDelayTicks) {
+      // 持続（5tick後から開始）: 距離の二乗に反比例した反発力を放出しつつ空気抵抗・重力で減衰させる
       const sustainFactor = inverseDistScale * inverseDistScale * effectRatio;
       targetVel = Vector3Utils.add(
         predictedVel,
         Vector3Utils.scale(outDir, config.repelSustainAccel * sustainFactor),
       );
+    } else {
+      return { x: 0, y: 0, z: 0 };
     }
   }
 

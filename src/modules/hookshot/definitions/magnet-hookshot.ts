@@ -26,6 +26,8 @@ export interface MagnetHookshotState
   lastActiveSoundTick?: number;
   /** 反発初回バーストの直近発動Tick */
   lastRepelBurstTick?: number;
+  /** 反発入力の連続保持Tick数 */
+  repelHoldTicks?: number;
 }
 
 export interface MagnetHookshotDefinition
@@ -80,6 +82,7 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     repelSustainAccel: 0.2,
     repelRefDistance: 10.0,
     repelBurstCooldownTicks: 10,
+    repelSustainDelayTicks: 5,
     repelSlowFallMinImpulseY: 0.4,
   },
   calculateImpulse: (player, state): Vector3 => {
@@ -89,6 +92,7 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
       state.activeMode,
       !!state.isModeEntryTick,
       !!state.isStuck,
+      state.repelHoldTicks ?? 0,
       magnetHookshotDefinition.physics,
     );
   },

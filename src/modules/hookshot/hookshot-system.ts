@@ -1509,7 +1509,10 @@ export class HookshotSystem {
     state.activeMode = desiredMode;
     if (desiredMode === "attract") {
       state.isModeEntryTick = prevMode !== "attract";
+      state.repelHoldTicks = 0;
     } else if (desiredMode === "repel") {
+      state.repelHoldTicks =
+        prevMode !== "repel" ? 0 : (state.repelHoldTicks ?? 0) + 1;
       const cooldown = def.physics.repelBurstCooldownTicks;
       const lastBurst = state.lastRepelBurstTick ?? -cooldown;
       const canBurst =
@@ -1520,6 +1523,7 @@ export class HookshotSystem {
       }
     } else {
       state.isModeEntryTick = false;
+      state.repelHoldTicks = 0;
     }
 
     const chestPos: Vector3 = {
