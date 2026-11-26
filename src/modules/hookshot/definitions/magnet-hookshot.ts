@@ -39,8 +39,6 @@ export interface MagnetHookshotDefinition
   missSoundId: string;
   /** 解除時の効果音ID */
   detachSoundId: string;
-  /** 吸着ロック時の効果音ID */
-  lockSoundId: string;
   /** 磁力稼働中のループ効果音設定 */
   activeSound: {
     soundId: string;
@@ -65,7 +63,6 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
   hitSoundId: "block.lodestone.place",
   missSoundId: "note.bass",
   detachSoundId: "beacon.deactivate",
-  lockSoundId: "random.click",
   activeSound: {
     soundId: "beacon.ambient",
     intervalTicks: 10,

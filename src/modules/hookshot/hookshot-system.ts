@@ -1525,13 +1525,8 @@ export class HookshotSystem {
       z: player.location.z,
     };
     const dist = Vector3Utils.distance(chestPos, state.anchor);
-    const isNowLocked =
+    state.isAttractLocked =
       state.activeMode === "attract" && dist <= def.physics.attractLockRadius;
-
-    if (isNowLocked && !state.isAttractLocked) {
-      this.playSoundSafe(player, def.lockSoundId, 1.4);
-    }
-    state.isAttractLocked = isNowLocked;
 
     if (state.activeMode !== "none") {
       const effectRatio = calculateMagnetEffectRatio(dist, def.physics);
