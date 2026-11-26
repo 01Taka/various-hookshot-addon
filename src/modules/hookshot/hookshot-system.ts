@@ -195,7 +195,9 @@ export class HookshotSystem {
       const effectPercent = Math.round(effectRatio * 100);
       const modeText =
         state.activeMode === "attract"
-          ? "吸引(Shift)"
+          ? state.stuckLocation
+            ? "吸着固定(Shift)"
+            : "吸引(Shift)"
           : state.activeMode === "repel"
             ? "反発(Jump)"
             : effectRatio <= 0
@@ -1526,6 +1528,27 @@ export class HookshotSystem {
       z: player.location.z,
     };
     const dist = Vector3Utils.distance(chestPos, state.anchor);
+
+    if (state.activeMode === "attract") {
+      if (!state.stuckLocation && dist <= def.physics.attractStickRadius) {
+        state.stuckLocation = {
+          x: player.location.x,
+          y: player.location.y,
+          z: player.location.z,
+        };
+        this.playSoundSafe(player, "random.click", 1.4);
+      }
+      if (state.stuckLocation) {
+        try {
+          player.teleport(state.stuckLocation, {
+            rotation: player.getRotation(),
+            keepVelocity: false,
+          });
+        } catch {}
+      }
+    } else if (state.stuckLocation) {
+      state.stuckLocation = undefined;
+    }
 
     if (state.activeMode !== "none") {
       const effectRatio = calculateMagnetEffectRatio(dist, def.physics);

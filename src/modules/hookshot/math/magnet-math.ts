@@ -25,6 +25,8 @@ export interface MagnetPhysicsConfig {
   attractNearRadius: number;
   /** 至近距離（2m以内）での引き寄せ倍率 (1/3) */
   attractNearScale: number;
+  /** 座標ピン留め吸着を開始する半径 (blocks, 1.6m) */
+  attractStickRadius: number;
   /** 反発開始時の爆発初速 (blocks/tick) */
   repelBurstSpeed: number;
   /** 反発長押し中に放出し続ける持続反発加速度 (blocks/tick^2) */
