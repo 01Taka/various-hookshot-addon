@@ -33,6 +33,8 @@ export interface MagnetPhysicsConfig {
   repelRefDistance: number;
   /** 反発初回バーストのクールタイム (ticks) */
   repelBurstCooldownTicks: number;
+  /** 反発初回バースト時に低速落下(1tick)を付与する最小上向きインパルス */
+  repelSlowFallMinImpulseY: number;
 }
 
 /**
