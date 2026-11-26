@@ -102,16 +102,12 @@ export function calculateMagnetHookshot(
   if (mode === "attract") {
     let desiredVel: Vector3;
     if (distance <= config.attractLockRadius) {
-      // 至近距離（1.8m以内）: 強い減衰で通り過ぎずに壁・天井へピタッと吸着・静止
-      const pullSpeed = distance > 0.3 ? Math.min(distance * 0.15, 0.2) : 0;
-      const lockVel =
+      // 至近距離（2.0m以内）: 勢いをすべて無効化＋無重力＋緩い引き寄せ
+      const pullSpeed = distance > 0.25 ? Math.min(distance * 0.12, 0.16) : 0;
+      desiredVel =
         distance >= EPSILON
           ? Vector3Utils.scale(dir, pullSpeed)
           : { x: 0, y: 0, z: 0 };
-      desiredVel = Vector3Utils.add(
-        Vector3Utils.scale(currentVel, 0.15),
-        Vector3Utils.scale(lockVel, 0.85),
-      );
     } else if (isEntryTick) {
       // 開始瞬間: 初速（現在の0.8倍 = 1.6 b/t）で発進
       desiredVel = Vector3Utils.scale(dir, config.attractInitialSpeed);
