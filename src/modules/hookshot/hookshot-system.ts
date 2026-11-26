@@ -1543,26 +1543,26 @@ export class HookshotSystem {
         } catch {}
 
         if (!shouldStick) {
-          const playerCenter: Vector3 = {
-            x: player.location.x,
-            y: player.location.y + 0.9,
-            z: player.location.z,
-          };
-          const toAnchor = Vector3Utils.subtract(state.anchor, playerCenter);
-          const centerDist = Vector3Utils.magnitude(toAnchor);
-          if (centerDist > EPSILON) {
-            const dir = Vector3Utils.scale(toAnchor, 1 / centerDist);
-            const surfaceDist =
-              1 /
-              Math.max(
-                Math.abs(dir.x) / 0.3,
-                Math.abs(dir.y) / 0.9,
-                Math.abs(dir.z) / 0.3,
-                EPSILON,
-              );
+          const toAnchor = Vector3Utils.subtract(state.anchor, chestPos);
+          const ax = Math.abs(toAnchor.x);
+          const ay = Math.abs(toAnchor.y);
+          const az = Math.abs(toAnchor.z);
+          if (ax > EPSILON || ay > EPSILON || az > EPSILON) {
+            let dir: Vector3;
+            let surfaceDist: number;
+            if (ax >= ay && ax >= az) {
+              dir = { x: Math.sign(toAnchor.x), y: 0, z: 0 };
+              surfaceDist = 0.3;
+            } else if (az >= ax && az >= ay) {
+              dir = { x: 0, y: 0, z: Math.sign(toAnchor.z) };
+              surfaceDist = 0.3;
+            } else {
+              dir = { x: 0, y: Math.sign(toAnchor.y), z: 0 };
+              surfaceDist = toAnchor.y >= 0 ? 0.8 : 1.0;
+            }
             try {
               const stickHit = player.dimension.getBlockFromRay(
-                playerCenter,
+                chestPos,
                 dir,
                 {
                   maxDistance: surfaceDist + 0.25,
