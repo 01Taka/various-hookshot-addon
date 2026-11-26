@@ -18,7 +18,7 @@ export interface MagnetHookshotState
   activeMode: MagnetForceMode;
   /** 今Tickがモード開始瞬間（初速／爆発バースト適用Tick）かどうか */
   isModeEntryTick?: boolean;
-  /** 地上・無入力での自動解除が有効になったか（起動済みまたは一度空中を経由） */
+  /** 一度以上引き寄せまたは反発を実行したかどうか（地上・無入力での自動解除条件） */
   canAutoDetachOnGround?: boolean;
   /** 動作音再生の直近Tick */
   lastActiveSoundTick?: number;

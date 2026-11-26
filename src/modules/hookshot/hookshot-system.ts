@@ -1435,7 +1435,7 @@ export class HookshotSystem {
       jumpConsumed: isInputButtonPressed(player, "Jump") || player.isJumping,
       sneakConsumed: isSneakButtonPressed(player),
       activeMode: "none",
-      canAutoDetachOnGround: !player.isOnGround,
+      canAutoDetachOnGround: false,
     };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, newState);
@@ -1493,7 +1493,7 @@ export class HookshotSystem {
       desiredMode = "repel";
     }
 
-    if (desiredMode !== "none" || !player.isOnGround) {
+    if (desiredMode !== "none") {
       state.canAutoDetachOnGround = true;
     } else if (state.canAutoDetachOnGround && player.isOnGround) {
       return false;
