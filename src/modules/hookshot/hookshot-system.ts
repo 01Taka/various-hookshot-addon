@@ -24,7 +24,6 @@ import { HookRenderManager, LineRenderer, WireStyle } from "../render";
 import { PostFlightSystem } from "../post-flight";
 import {
   createMagnetStateFromHit,
-  formatMagnetUiText,
   isElasticAirChainActive,
   MagnetHookshotDefinition,
   markElasticAirLaunch,
@@ -35,9 +34,7 @@ import {
 } from "./definitions";
 import { stepZiplineRailAnchor } from "./math/zipline-math";
 import {
-  calculateAboveAnchorDecayFactor,
   calculateReelSpeedMultiplier,
-  calculateRigidSteering,
   canUseGazeSteering,
 } from "./math/steering-math";
 import {
@@ -45,11 +42,9 @@ import {
   DEFAULT_PROBING_MIN_HIT_DISTANCE,
   DEFAULT_TIMED_SOUND_INTERVAL_TICKS,
   EPSILON,
-  PREVIEW_MIN_RAYCAST_DISTANCE,
   PROJECTION_FALLBACK_DISTANCE,
   RETRACT_END_MIN_DISTANCE,
   RETRACT_START_MIN_DISTANCE,
-  TICKS_PER_SECOND,
 } from "./constants";
 import {
   AirProbingConfig,
@@ -65,9 +60,8 @@ import {
 const ACTIVE_HOOK_KEY = "hookshotActiveState";
 const PENDING_RAYCAST_KEY = "hookshotPendingRaycast";
 const LAST_USE_TICK_KEY = "hookshotLastUseTick";
-const UI_ACTIVE_KEY = "hookshotUiActive";
 
-interface PendingRaycastState {
+export interface PendingRaycastState {
   hookshotId: HookshotId;
   slotIndex?: number;
   remainingTicks: number;
@@ -79,11 +73,11 @@ export class HookshotSystem {
   private static definitionsById = new Map<HookshotId, HookshotDefinition>();
   private static isInitialized = false;
 
-  private static isStateAnchored(state: HookshotState): boolean {
+  public static isStateAnchored(state: HookshotState): boolean {
     return "isAnchored" in state ? state.isAnchored !== false : true;
   }
 
-  private static isStateRetracting(state: HookshotState): boolean {
+  public static isStateRetracting(state: HookshotState): boolean {
     return (
       (state.hookshotId === "bamboo" ||
         state.hookshotId === "rod" ||
@@ -156,60 +150,30 @@ export class HookshotSystem {
     return state.normal;
   }
 
-  private static formatDistanceUiText(
-    player: Player,
-    def: HookshotDefinition,
-    state: HookshotState,
-    distance: number,
-  ): string {
-    if (def.id === "elastic" && state.hookshotId === "elastic") {
-      return def.formatDistanceUi(player, state, distance);
-    }
-    if (def.id === "spring" && state.hookshotId === "spring") {
-      return def.formatDistanceUi(player, state, distance);
-    }
-    if (def.id === "zipline" && state.hookshotId === "zipline") {
-      const sign = state.facingDirectionSign ?? 1;
-      const remaining = Math.max(
-        0,
-        sign >= 0 ? state.railLength - state.railProgress : state.railProgress,
-      );
-      const railSpeed = Math.abs(state.railVelocity) * TICKS_PER_SECOND;
-      return `残 ${remaining.toFixed(1)}m / ${state.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
-    }
-    if (def.id === "magnet" && state.hookshotId === "magnet") {
-      return formatMagnetUiText(state, def, distance);
-    }
-    if (def.id === "rigid" && state.hookshotId === "rigid") {
-      const decayFactor = calculateAboveAnchorDecayFactor(
-        state.aboveAnchorTicks ?? 0,
-        def.steering,
-      );
-      const decayPercent = Math.round((1 - decayFactor) * 100);
-
-      const steerResult = calculateRigidSteering(
-        player,
-        state.anchor,
-        def.steering,
-      );
-      const maxTiltRad = (def.steering.maxUpwardTiltDeg * Math.PI) / 180;
-      const rawEffectRatio =
-        maxTiltRad > EPSILON
-          ? Math.min(1, steerResult.targetTiltRad / maxTiltRad)
-          : 0;
-      const effectPercent = Math.round(rawEffectRatio * decayFactor * 100);
-
-      return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m | 減衰:${decayPercent}% 効果:${effectPercent}%`;
-    }
-    return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`;
-  }
-
   /**
    * フックショットの定義を登録します。
    */
   public static register(def: HookshotDefinition): void {
     this.definitionsByItem.set(def.itemTypeId, def);
     this.definitionsById.set(def.id, def);
+  }
+
+  /**
+   * アイテム typeId から登録済みのフックショット定義を取得します。
+   */
+  public static getDefinitionByItem(
+    itemTypeId: string,
+  ): HookshotDefinition | undefined {
+    return this.definitionsByItem.get(itemTypeId);
+  }
+
+  /**
+   * フックショット ID から登録済みのフックショット定義を取得します。
+   */
+  public static getDefinitionById(
+    hookshotId: HookshotId,
+  ): HookshotDefinition | undefined {
+    return this.definitionsById.get(hookshotId);
   }
 
   /**
@@ -268,8 +232,6 @@ export class HookshotSystem {
       }
     }
 
-    this.clearDistanceUiIfActive(player);
-
     if (def?.id === "bamboo" && state.hookshotId === "bamboo") {
       def.onDetach(player, state);
     }
@@ -298,7 +260,7 @@ export class HookshotSystem {
     PlayerStateManager.delete(player.id, ACTIVE_HOOK_KEY);
   }
 
-  private static getPendingRaycast(player: Player): PendingRaycastState | null {
+  public static getPendingRaycast(player: Player): PendingRaycastState | null {
     return PlayerStateManager.get<PendingRaycastState | null>(
       player.id,
       PENDING_RAYCAST_KEY,
@@ -1409,7 +1371,6 @@ export class HookshotSystem {
     const pending = this.getPendingRaycast(player);
     if (pending) {
       this.clearPendingRaycast(player);
-      this.clearDistanceUiIfActive(player);
       if (pending.hookshotId === def.id) {
         return;
       }
@@ -2077,11 +2038,7 @@ export class HookshotSystem {
       for (const player of world.getAllPlayers()) {
         const state = this.getActiveState(player);
         if (!state) {
-          if (this.processPendingRaycast(player)) {
-            continue;
-          }
-          // アンカー設置前: メインハンドにフックショットを持っている場合はプレビュー距離UIを更新
-          this.updatePreviewDistanceUi(player);
+          this.processPendingRaycast(player);
           continue;
         }
 
@@ -2399,9 +2356,6 @@ export class HookshotSystem {
             undefined,
           );
         }
-
-        // 接続中距離UIの更新（○○m / ○○m）
-        this.updateDistanceUi(player, state, def);
       }
     });
   }
@@ -2409,7 +2363,7 @@ export class HookshotSystem {
   /**
    * レイキャスト衝突結果からアンカー座標を計算します。
    */
-  private static calculateAnchorPosition(
+  public static calculateAnchorPosition(
     dimensionId: string,
     origin: Vector3,
     direction: Vector3,
@@ -2475,7 +2429,6 @@ export class HookshotSystem {
       this.hasSwitchedItem(player, def.itemTypeId, pending.slotIndex)
     ) {
       this.clearPendingRaycast(player);
-      this.clearDistanceUiIfActive(player);
       return false;
     }
 
@@ -2493,7 +2446,6 @@ export class HookshotSystem {
     const remainingTicks = pending.remainingTicks - 1;
     if (remainingTicks <= 0) {
       this.clearPendingRaycast(player);
-      this.clearDistanceUiIfActive(player);
       if ("missSoundId" in def) {
         this.playSoundSafe(player, def.missSoundId);
       }
@@ -2505,80 +2457,7 @@ export class HookshotSystem {
       remainingTicks,
     });
 
-    try {
-      player.onScreenDisplay.setActionBar(
-        `[探索中] ${maxDistance.toFixed(1)}m (${remainingTicks}t)`,
-      );
-      PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
-    } catch {}
-
     return true;
-  }
-
-  /**
-   * アンカー設置前の距離UI（アクションバー）の更新
-   * 視線の先のブロックまでの距離 / 持っているフックショットの最大射程
-   */
-  private static updatePreviewDistanceUi(player: Player): void {
-    const mainhandItem = getMainhandItem(player);
-    if (!mainhandItem) {
-      this.clearDistanceUiIfActive(player);
-      return;
-    }
-
-    const def = this.definitionsByItem.get(mainhandItem.typeId);
-    if (!def) {
-      this.clearDistanceUiIfActive(player);
-      return;
-    }
-
-    const maxDistance = def.maxDistance;
-    const raycastDistance = Math.max(maxDistance, PREVIEW_MIN_RAYCAST_DISTANCE);
-
-    const hit = player.getBlockFromViewDirection({
-      maxDistance: raycastDistance,
-      includeLiquidBlocks: false,
-      includePassableBlocks: false,
-    });
-
-    if (!hit) {
-      this.clearDistanceUiIfActive(player);
-      return;
-    }
-
-    const anchor = this.calculateAnchorPosition(
-      player.dimension.id,
-      player.getHeadLocation(),
-      player.getViewDirection(),
-      hit,
-    );
-    const distance = Vector3Utils.distance(player.location, anchor);
-
-    try {
-      player.onScreenDisplay.setActionBar(
-        `${distance.toFixed(1)}m / ${maxDistance.toFixed(1)}m`,
-      );
-      PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
-    } catch {
-      // プレイヤー切断時などのエラー抑止
-    }
-  }
-
-  /**
-   * フックショットUIが表示中の場合のみアクションバーをクリア
-   */
-  private static clearDistanceUiIfActive(player: Player): void {
-    const isActive = PlayerStateManager.get<boolean>(
-      player.id,
-      UI_ACTIVE_KEY,
-      false,
-    );
-    if (!isActive) return;
-
-    PlayerStateManager.delete(player.id, UI_ACTIVE_KEY);
-    try {
-      player.onScreenDisplay.setActionBar("");
-    } catch {}
   }
 
   /**
@@ -2644,38 +2523,5 @@ export class HookshotSystem {
       state.isAutoExtendingToMin = false;
     }
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, state);
-  }
-
-  /**
-   * 接続中距離UI（アクションバー）の更新
-   */
-  private static updateDistanceUi(
-    player: Player,
-    state: HookshotState,
-    def: HookshotDefinition,
-  ): void {
-    try {
-      if (!this.isStateAnchored(state)) {
-        const maxLength = def.maxDistance;
-        player.onScreenDisplay.setActionBar(
-          `[構え] ${state.currentLength.toFixed(1)}m / ${maxLength.toFixed(1)}m`,
-        );
-      } else {
-        const distance = Vector3Utils.distance(player.location, state.anchor);
-        const speed = Vector3Utils.magnitude(player.getVelocity());
-        const baseText = this.formatDistanceUiText(
-          player,
-          def,
-          state,
-          distance,
-        );
-        player.onScreenDisplay.setActionBar(
-          `${baseText} | ${speed.toFixed(2)} b/t (${(speed * TICKS_PER_SECOND).toFixed(1)} m/s)`,
-        );
-      }
-      PlayerStateManager.set(player.id, UI_ACTIVE_KEY, true);
-    } catch {
-      // プレイヤー切断時などのエラー抑止
-    }
   }
 }

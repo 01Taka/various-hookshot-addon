@@ -438,26 +438,3 @@ export function renderMagnetHookshot(
     } catch {}
   }
 }
-
-/**
- * マグネットフックのアクションバー用テキストを整形します。
- */
-export function formatMagnetUiText(
-  state: MagnetHookshotState,
-  def: MagnetHookshotDefinition,
-  distance: number,
-): string {
-  const effectRatio = calculateMagnetEffectRatio(distance, def.physics);
-  const effectPercent = Math.round(effectRatio * 100);
-  const modeText =
-    state.activeMode === "attract"
-      ? state.isStuck
-        ? "吸着固定(Shift)"
-        : "吸引(Shift)"
-      : state.activeMode === "repel"
-        ? "反発(Jump)"
-        : effectRatio <= 0
-          ? "待機ゾーン"
-          : "待機";
-  return `${distance.toFixed(1)}m (効果 ${effectPercent}%) | ${modeText}`;
-}

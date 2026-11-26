@@ -34,9 +34,6 @@ export const AIR_DRAG_SPEED_THRESHOLD = 2.4;
 /** 過剰加速防止の動的空気抵抗における二次減衰係数 */
 export const AIR_DRAG_COEFFICIENT = 0.4;
 
-/** 構え前プレビュー距離UIの最小レイキャスト距離 (blocks) */
-export const PREVIEW_MIN_RAYCAST_DISTANCE = 250;
-
 /** 格納アニメーションを開始する最小距離閾値 (blocks) */
 export const RETRACT_START_MIN_DISTANCE = 0.1;
 

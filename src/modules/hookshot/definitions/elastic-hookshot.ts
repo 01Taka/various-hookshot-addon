@@ -153,12 +153,6 @@ export interface ElasticHookshotDefinition
   release: ElasticReleaseConfig;
   /** チャージ中の伸び量マイルストーン効果音設定 */
   chargeMilestoneSound: ChargeMilestoneSoundConfig;
-  /** 接続中アクションバーの表示文字列をカスタマイズするコールバック */
-  formatDistanceUi: (
-    player: Player,
-    state: ElasticHookshotState,
-    distance: number,
-  ) => string;
 }
 
 /**
@@ -237,13 +231,6 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
     pitches: [0.65, 0.85, 1.1, 1.35, 1.65, 1.95],
   },
   wireStyle: ELASTIC_WIRE_STYLE,
-  formatDistanceUi: (_player, state, distance) => {
-    const stretch =
-      Math.max(0, distance - state.currentLength) + (state.extraCharge ?? 0);
-    const prefix = state.isReelingIn ? "[溜め] " : "";
-    const stretchSuffix = stretch > 0.1 ? ` (+${stretch.toFixed(1)}m)` : "";
-    return `${prefix}${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m${stretchSuffix}`;
-  },
   calculateImpulse: (player, state) => {
     const {
       minConstraintLength,
