@@ -1438,7 +1438,6 @@ export class HookshotSystem {
       sneakConsumed: isSneakButtonPressed(player),
       activeMode: "none",
       isAttractLocked: false,
-      hasActivatedForce: false,
     };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, newState);
@@ -1511,12 +1510,6 @@ export class HookshotSystem {
       }
     } else {
       state.isModeEntryTick = false;
-    }
-
-    if (state.activeMode !== "none") {
-      state.hasActivatedForce = true;
-    } else if (state.hasActivatedForce) {
-      return false;
     }
 
     const chestPos: Vector3 = {
