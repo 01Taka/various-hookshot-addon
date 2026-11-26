@@ -75,6 +75,8 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     attractAccel: 0.2,
     attractMaxSpeed: 4.0,
     attractLockRadius: 2.0,
+    attractBrakeTicks: 3.0,
+    attractBrakeMinSpeed: 0.2,
     repelBurstSpeed: 3.6,
     repelSustainAccel: 0.2,
     repelRefDistance: 10.0,

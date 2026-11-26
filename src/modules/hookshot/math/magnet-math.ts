@@ -21,8 +21,12 @@ export interface MagnetPhysicsConfig {
   attractAccel: number;
   /** 引き寄せの最高速度上限 (blocks/tick, 2倍 = 4.0) */
   attractMaxSpeed: number;
-  /** 引き寄せ時の吸着ロック半径 (blocks, 1.5〜2.0m) */
+  /** 引き寄せ時の吸着ロック半径 (blocks, 2.0m) */
   attractLockRadius: number;
+  /** ロック半径到達前の予測ブレーキ時間 (ticks, 3.0) */
+  attractBrakeTicks: number;
+  /** 予測ブレーキの最低アプローチ速度 (blocks/tick) */
+  attractBrakeMinSpeed: number;
   /** 反発開始時の爆発初速 (blocks/tick) */
   repelBurstSpeed: number;
   /** 反発長押し中に放出し続ける持続反発加速度 (blocks/tick^2) */
@@ -108,17 +112,22 @@ export function calculateMagnetHookshot(
         distance >= EPSILON
           ? Vector3Utils.scale(dir, pullSpeed)
           : { x: 0, y: 0, z: 0 };
-    } else if (isEntryTick) {
-      // 開始瞬間: 初速（現在の0.8倍 = 1.6 b/t）で発進
-      desiredVel = Vector3Utils.scale(dir, config.attractInitialSpeed);
     } else {
-      // 2 Tick目以降: 加速度で上限（現在の2倍 = 4.0 b/t）まで加速
+      const remainDist = Math.max(0, distance - config.attractLockRadius);
       const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
-      const nextSpeed = Math.min(
-        config.attractMaxSpeed,
-        Math.max(curDirSpeed, config.attractInitialSpeed) +
-          config.attractAccel,
+      const baseNextSpeed = isEntryTick
+        ? config.attractInitialSpeed
+        : Math.min(
+            config.attractMaxSpeed,
+            Math.max(curDirSpeed, config.attractInitialSpeed) +
+              config.attractAccel,
+          );
+      // ロック半径到達の約3tick前から距離に応じた安全速度へ減速（通り過ぎ・荒ぶり防止）
+      const brakeSafeSpeed = Math.max(
+        config.attractBrakeMinSpeed,
+        remainDist / Math.max(config.attractBrakeTicks, 1),
       );
+      const nextSpeed = Math.min(baseNextSpeed, brakeSafeSpeed);
       desiredVel = Vector3Utils.scale(dir, nextSpeed);
     }
     targetVel = Vector3Utils.lerp(predictedVel, desiredVel, effectRatio);
