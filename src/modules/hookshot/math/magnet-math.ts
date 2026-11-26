@@ -25,7 +25,7 @@ export interface MagnetPhysicsConfig {
   attractNearRadius: number;
   /** 至近距離（2m以内）での引き寄せ倍率 (1/3) */
   attractNearScale: number;
-  /** 座標ピン留め吸着を開始する半径 (blocks, 1.6m) */
+  /** ゼロ速度インパルス固定を開始する半径 (blocks, 1.6m) */
   attractStickRadius: number;
   /** 反発開始時の爆発初速 (blocks/tick) */
   repelBurstSpeed: number;
@@ -74,6 +74,7 @@ export function calculateMagnetHookshot(
   anchor: Vector3,
   mode: MagnetForceMode,
   isEntryTick: boolean,
+  isStuck: boolean,
   config: MagnetPhysicsConfig,
 ): Vector3 {
   if (mode === "none") {
@@ -108,26 +109,31 @@ export function calculateMagnetHookshot(
   let targetVel: Vector3;
 
   if (mode === "attract") {
-    const nearScale =
-      distance <= config.attractNearRadius ? config.attractNearScale : 1.0;
-    const initialSpeed = config.attractInitialSpeed * nearScale;
-    const accel = config.attractAccel * nearScale;
-    const maxSpeed = config.attractMaxSpeed * nearScale;
-
-    let desiredVel: Vector3;
-    if (isEntryTick) {
-      // 開始瞬間: 初速（1.6 b/t, 2m以内は1/3）で発進
-      desiredVel = Vector3Utils.scale(dir, initialSpeed);
+    if (isStuck) {
+      // ゼロ速度インパルス固定: 現在速度と重力を打ち消して静止維持
+      targetVel = { x: 0, y: 0, z: 0 };
     } else {
-      // 2 Tick目以降: 加速度で上限（4.0 b/t, 2m以内は1/3）まで連続的に引き寄せ続ける
-      const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
-      const nextSpeed = Math.min(
-        maxSpeed,
-        Math.max(curDirSpeed, initialSpeed) + accel,
-      );
-      desiredVel = Vector3Utils.scale(dir, nextSpeed);
+      const nearScale =
+        distance <= config.attractNearRadius ? config.attractNearScale : 1.0;
+      const initialSpeed = config.attractInitialSpeed * nearScale;
+      const accel = config.attractAccel * nearScale;
+      const maxSpeed = config.attractMaxSpeed * nearScale;
+
+      let desiredVel: Vector3;
+      if (isEntryTick) {
+        // 開始瞬間: 初速（1.6 b/t, 2m以内は1/3）で発進
+        desiredVel = Vector3Utils.scale(dir, initialSpeed);
+      } else {
+        // 2 Tick目以降: 加速度で上限（3.0 b/t, 2m以内は1/3）まで連続的に引き寄せ続ける
+        const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
+        const nextSpeed = Math.min(
+          maxSpeed,
+          Math.max(curDirSpeed, initialSpeed) + accel,
+        );
+        desiredVel = Vector3Utils.scale(dir, nextSpeed);
+      }
+      targetVel = Vector3Utils.lerp(predictedVel, desiredVel, effectRatio);
     }
-    targetVel = Vector3Utils.lerp(predictedVel, desiredVel, effectRatio);
   } else {
     const outDir =
       distance >= EPSILON ? Vector3Utils.scale(dir, -1) : { x: 0, y: 1, z: 0 };

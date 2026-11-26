@@ -195,7 +195,7 @@ export class HookshotSystem {
       const effectPercent = Math.round(effectRatio * 100);
       const modeText =
         state.activeMode === "attract"
-          ? state.stuckLocation
+          ? state.isStuck
             ? "吸着固定(Shift)"
             : "吸引(Shift)"
           : state.activeMode === "repel"
@@ -1530,24 +1530,12 @@ export class HookshotSystem {
     const dist = Vector3Utils.distance(chestPos, state.anchor);
 
     if (state.activeMode === "attract") {
-      if (!state.stuckLocation && dist <= def.physics.attractStickRadius) {
-        state.stuckLocation = {
-          x: player.location.x,
-          y: player.location.y,
-          z: player.location.z,
-        };
+      if (!state.isStuck && dist <= def.physics.attractStickRadius) {
+        state.isStuck = true;
         this.playSoundSafe(player, "random.click", 1.4);
       }
-      if (state.stuckLocation) {
-        try {
-          player.teleport(state.stuckLocation, {
-            rotation: player.getRotation(),
-            keepVelocity: false,
-          });
-        } catch {}
-      }
-    } else if (state.stuckLocation) {
-      state.stuckLocation = undefined;
+    } else if (state.isStuck) {
+      state.isStuck = false;
     }
 
     if (state.activeMode !== "none") {

@@ -20,8 +20,8 @@ export interface MagnetHookshotState
   isModeEntryTick?: boolean;
   /** 一度以上引き寄せまたは反発を実行したかどうか（地上・無入力での自動解除条件） */
   canAutoDetachOnGround?: boolean;
-  /** 座標ピン留め吸着中の固定座標 */
-  stuckLocation?: Vector3;
+  /** ゼロ速度インパルス固定で吸着中かどうか */
+  isStuck?: boolean;
   /** 動作音再生の直近Tick */
   lastActiveSoundTick?: number;
   /** 反発初回バーストの直近発動Tick */
@@ -83,14 +83,12 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     repelSlowFallMinImpulseY: 0.4,
   },
   calculateImpulse: (player, state): Vector3 => {
-    if (state.stuckLocation) {
-      return { x: 0, y: 0, z: 0 };
-    }
     return calculateMagnetHookshot(
       player,
       state.anchor,
       state.activeMode,
       !!state.isModeEntryTick,
+      !!state.isStuck,
       magnetHookshotDefinition.physics,
     );
   },
