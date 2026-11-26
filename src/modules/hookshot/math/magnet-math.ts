@@ -27,6 +27,10 @@ export interface MagnetPhysicsConfig {
   attractNearScale: number;
   /** ゼロ速度インパルス固定を開始する半径 (blocks) */
   attractStickRadius: number;
+  /** 引き寄せ開始時の無重力化率 (0.35 = 35%) */
+  attractGravityCancelStart: number;
+  /** 無重力化率が 100% に到達するまでの時間 (ticks) */
+  attractGravityCancelRampTicks: number;
   /** 反発開始時の爆発初速 (blocks/tick) */
   repelBurstSpeed: number;
   /** 反発長押し中に放出し続ける持続反発加速度 (blocks/tick^2) */
@@ -140,6 +144,7 @@ export function calculateMagnetHookshot(
   mode: MagnetForceMode,
   isEntryTick: boolean,
   isStuck: boolean,
+  attractHoldTicks: number,
   repelHoldTicks: number,
   config: MagnetPhysicsConfig,
 ): Vector3 {
@@ -196,6 +201,22 @@ export function calculateMagnetHookshot(
         desiredVel = Vector3Utils.scale(dir, nextSpeed);
       }
       targetVel = Vector3Utils.lerp(predictedVel, desiredVel, effectRatio);
+
+      // 無重力化率を時間経過で 35% → 100%（10 ticks）へランプアップ
+      const timeProgress = Math.min(
+        1,
+        attractHoldTicks / Math.max(config.attractGravityCancelRampTicks, 1),
+      );
+      const timeFactor =
+        config.attractGravityCancelStart +
+        (1 - config.attractGravityCancelStart) * timeProgress;
+      const gravityCancelRatio = timeFactor * effectRatio;
+      const remainingGravityY =
+        (effectRatio - gravityCancelRatio) * MINECRAFT_GRAVITY * dragY;
+      targetVel = {
+        ...targetVel,
+        y: targetVel.y - remainingGravityY,
+      };
     }
   } else {
     const outDir =

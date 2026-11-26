@@ -61,6 +61,8 @@ export interface MagnetHookshotState
   lastActiveSoundTick?: number;
   /** 反発初回バーストの直近発動Tick */
   lastRepelBurstTick?: number;
+  /** 引き寄せ入力の連続保持Tick数（無重力ランプアップ用） */
+  attractHoldTicks?: number;
   /** 反発入力の連続保持Tick数 */
   repelHoldTicks?: number;
 }
@@ -113,6 +115,8 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     attractNearRadius: 2.0,
     attractNearScale: 1 / 3,
     attractStickRadius: 1.6,
+    attractGravityCancelStart: 0.35,
+    attractGravityCancelRampTicks: 10,
     repelBurstSpeed: 2.2,
     repelSustainAccel: 0.2,
     repelRefDistance: 10.0,
@@ -127,6 +131,7 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
       state.activeMode,
       !!state.isModeEntryTick,
       !!state.isStuck,
+      state.attractHoldTicks ?? 0,
       state.repelHoldTicks ?? 0,
       magnetHookshotDefinition.physics,
     );
@@ -305,8 +310,11 @@ export function stepMagnetState(
   state.activeMode = desiredMode;
   if (desiredMode === "attract") {
     state.isModeEntryTick = prevMode !== "attract";
+    state.attractHoldTicks =
+      prevMode !== "attract" ? 0 : (state.attractHoldTicks ?? 0) + 1;
     state.repelHoldTicks = 0;
   } else if (desiredMode === "repel") {
+    state.attractHoldTicks = 0;
     state.repelHoldTicks =
       prevMode !== "repel" ? 0 : (state.repelHoldTicks ?? 0) + 1;
     const cooldown = def.physics.repelBurstCooldownTicks;
@@ -319,6 +327,7 @@ export function stepMagnetState(
     }
   } else {
     state.isModeEntryTick = false;
+    state.attractHoldTicks = 0;
     state.repelHoldTicks = 0;
   }
 
