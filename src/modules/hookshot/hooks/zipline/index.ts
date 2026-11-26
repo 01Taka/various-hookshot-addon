@@ -3,9 +3,9 @@ import { isInputButtonPressed, isSneakButtonPressed } from "addon-utils";
 import { AeroVestSystem } from "../../../sub-items/aero-vest";
 import { ziplineHookshotConfig } from "./config";
 import { calculateZiplineHookshot } from "./math";
-import { renderZiplineHookshot } from "./render";
-import { shotZipline } from "./shot";
-import { formatZiplineHudText, onZiplineTick } from "./tick";
+import { renderZiplineHookshot } from "./runtime-render";
+import { shotZipline } from "./runtime-shot";
+import { formatZiplineHudText, onZiplineTick } from "./runtime-tick";
 import { ZiplineHookshotDefinition } from "./type";
 
 export * from "./type";

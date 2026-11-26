@@ -7,7 +7,7 @@ import {
   modifyElasticReelSpeed,
   onElasticBeforeDetach,
   onElasticTick,
-} from "./tick";
+} from "./runtime-tick";
 import { ElasticHookshotDefinition } from "./type";
 
 export * from "./type";
@@ -17,7 +17,7 @@ export {
   initElasticHookshotTracking,
   isElasticAirChainActive,
   markElasticAirLaunch,
-} from "./tick";
+} from "./runtime-tick";
 
 /**
  * リード（minecraft:lead）を使用した伸縮性（ゴム紐）フックショットの定義

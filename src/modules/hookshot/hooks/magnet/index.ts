@@ -1,21 +1,21 @@
 import { Vector3 } from "@minecraft/server";
 import { magnetHookshotConfig } from "./config";
 import { calculateMagnetHookshot } from "./math";
-import { renderMagnetHookshot } from "./render";
-import { onMagnetShot, onMagnetToggleWhileActive } from "./shot";
+import { renderMagnetHookshot } from "./runtime-render";
+import { onMagnetShot, onMagnetToggleWhileActive } from "./runtime-shot";
 import {
   formatMagnetHudText,
   onMagnetImpulseApplied,
   stepMagnetState,
-} from "./tick";
+} from "./runtime-tick";
 import { MagnetHookshotDefinition } from "./type";
 
 export * from "./type";
 export * from "./config";
 export * from "./math";
-export { createMagnetStateFromHit } from "./shot";
-export { stepMagnetState } from "./tick";
-export { renderMagnetHookshot } from "./render";
+export { createMagnetStateFromHit } from "./runtime-shot";
+export { stepMagnetState } from "./runtime-tick";
+export { renderMagnetHookshot } from "./runtime-render";
 
 export const magnetHookshotDefinition: MagnetHookshotDefinition = {
   ...magnetHookshotConfig,
