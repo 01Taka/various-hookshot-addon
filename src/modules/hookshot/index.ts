@@ -1,27 +1,48 @@
 import {
   bambooHookshotDefinition,
   initBambooHookshotTracking,
-} from "./definitions/bamboo-hookshot";
-import { elasticHookshotDefinition } from "./definitions/elastic-hookshot";
-import { magnetHookshotDefinition } from "./definitions/magnet-hookshot";
-import { rigidHookshotDefinition } from "./definitions/rigid-hookshot";
-import { rodHookshotDefinition } from "./definitions/rod-hookshot";
-import { springHookshotDefinition } from "./definitions/spring-hookshot";
-import { ziplineHookshotDefinition } from "./definitions/zipline-hookshot";
+} from "./bamboo/def";
+import { elasticHookshotDefinition } from "./elastic/def";
+import { magnetHookshotDefinition } from "./magnet/def";
+import { rigidHookshotDefinition } from "./rigid/def";
+import { rodHookshotDefinition } from "./rod/def";
+import { springHookshotDefinition } from "./spring/def";
+import { ziplineHookshotDefinition } from "./zipline/def";
 import { HookshotSystem } from "./hookshot-system";
 
 export * from "./constants";
 export * from "./types";
 export * from "./hookshot-system";
-export * from "./definitions";
-export * from "./math/bamboo-math";
-export * from "./math/elastic-math";
-export * from "./math/magnet-math";
-export * from "./math/rigid-math";
-export * from "./math/rod-math";
-export * from "./math/spring-math";
+
+export * from "./bamboo/def";
+export * from "./bamboo/math";
+export * from "./bamboo/type";
+
+export * from "./elastic/def";
+export * from "./elastic/math";
+export * from "./elastic/type";
+
+export * from "./magnet/def";
+export * from "./magnet/math";
+export * from "./magnet/type";
+
+export * from "./rigid/def";
+export * from "./rigid/math";
+export * from "./rigid/type";
+
+export * from "./rod/def";
+export * from "./rod/math";
+export * from "./rod/type";
+
+export * from "./spring/def";
+export * from "./spring/math";
+export * from "./spring/type";
+
+export * from "./zipline/def";
+export * from "./zipline/math";
+export * from "./zipline/type";
+
 export * from "./math/steering-math";
-export * from "./math/zipline-math";
 export * from "./math/physics-utils";
 
 /**

@@ -1,30 +1,9 @@
 import { ROD_WIRE_STYLE } from "../../render";
-import { calculateRodHookshot } from "../math/rod-math";
-import {
-  AirProbingCapable,
-  AirProbingState,
-  BaseHookshotDefinition,
-  BaseHookshotState,
-  ReelCapable,
-  RetractCapable,
-  RetractState,
-  StepReelState,
-} from "../types";
+import { calculateRodHookshot } from "./math";
+import { ROD_HOOKSHOT_ID, RodHookshotDefinition } from "./type";
 
-export const ROD_HOOKSHOT_ID = "rod";
 export const ROD_ITEM_ID = "various_hookshot_addon:rod_hookshot";
 
-export interface RodHookshotState
-  extends BaseHookshotState<typeof ROD_HOOKSHOT_ID>,
-    AirProbingState,
-    RetractState,
-    StepReelState {}
-
-export interface RodHookshotDefinition
-  extends BaseHookshotDefinition<typeof ROD_HOOKSHOT_ID, RodHookshotState>,
-    ReelCapable,
-    AirProbingCapable,
-    RetractCapable {}
 
 /**
  * 棒（minecraft:stick）を使用した内側にも縮まない剛体棒フックショットの定義

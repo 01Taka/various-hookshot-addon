@@ -1,38 +1,18 @@
 import { Vector3Utils } from "@minecraft/math";
-import { Player, system, world } from "@minecraft/server";
+import { system, world } from "@minecraft/server";
 import { PlayerStateManager } from "addon-utils";
 import { BAMBOO_WIRE_STYLE } from "../../render";
 import { EPSILON } from "../constants";
+import { calculateBambooHookshot } from "./math";
 import {
-  BambooPhysicsConfig,
-  calculateBambooHookshot,
-} from "../math/bamboo-math";
-import {
-  AirProbingCapable,
-  AirProbingState,
-  BaseHookshotDefinition,
-  BaseHookshotState,
-  ReelCapable,
-  RetractCapable,
-  RetractState,
-  StepReelState,
-} from "../types";
+  BAMBOO_HOOKSHOT_ID,
+  BambooAirChainState,
+  BambooHookshotDefinition,
+} from "./type";
 
-export const BAMBOO_HOOKSHOT_ID = "bamboo";
 export const BAMBOO_ITEM_ID = "various_hookshot_addon:bamboo_hookshot";
 export const BAMBOO_AIR_CHAIN_KEY = "bambooAirChainState";
 
-/**
- * 竹フックショットの空中連続使用状態
- */
-export interface BambooAirChainState {
-  /** 着地せずに竹を使用した回数 (0: 未使用/接地済み, 1: 1回使用済み, 2: 2回使用済み...) */
-  count: number;
-  /** 現在竹フックに接続中かどうか */
-  isHooked: boolean;
-  /** 竹使用後に空中（非接地）にいたかどうか */
-  hasBeenAirborne: boolean;
-}
 
 interface BambooTautState {
   hasCompressed: boolean;
@@ -41,25 +21,7 @@ interface BambooTautState {
 
 const bambooTautStates = new Map<string, BambooTautState>();
 
-export interface BambooAirChainBonusConfig {
-  /** 水平方向（X/Z 軸の走る速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick) */
-  speedFlexBonusFactorXZ: number;
-  /** 鉛直方向（Y 軸の落下・上昇速度）の接近速度に応じたしなりボーナス係数 (blocks per block/tick) */
-  speedFlexBonusFactorY: number;
-  /** 速度しなりボーナスの最大追加長 (blocks) */
-  maxSpeedFlexBonus: number;
-  /** 空中2回目以降のしなりボーナス倍率 (0.0〜1.0) */
-  consecutiveAirBonusDecayRate: number;
-}
 
-export interface BambooTautSoundConfig {
-  /** 竹がピンと張って減衰を開始するタイミングのSE */
-  soundId: string;
-  /** 竹がピンと張ったときのSEピッチ */
-  pitch: number;
-  /** 竹がピンと張ったときのSE音量 */
-  volume: number;
-}
 
 let isTrackingInitialized = false;
 
@@ -133,32 +95,6 @@ function updateBambooTautSound(
       } catch {}
     }
   }
-}
-
-export interface BambooHookshotState
-  extends BaseHookshotState<typeof BAMBOO_HOOKSHOT_ID>,
-    AirProbingState,
-    RetractState,
-    StepReelState {}
-
-export interface BambooHookshotDefinition
-  extends BaseHookshotDefinition<
-      typeof BAMBOO_HOOKSHOT_ID,
-      BambooHookshotState
-    >,
-    ReelCapable,
-    AirProbingCapable,
-    RetractCapable {
-  /** 自然長を超えて指定距離 (blocks) 以上伸びた場合に自動でアンカーを解除する */
-  maxOverstretchDistance: number;
-  /** 自動解除時の効果音ID */
-  detachSoundId: string;
-  /** 竹ポールの弾性・反発・しなり物理パラメータ */
-  physics: BambooPhysicsConfig;
-  /** 着弾時の速度に応じたしなりボーナス設定 */
-  airChainBonus: BambooAirChainBonusConfig;
-  /** 竹がピンと張ったときの効果音設定 */
-  tautSound: BambooTautSoundConfig;
 }
 
 /**

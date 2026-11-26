@@ -3,35 +3,19 @@ import { Player, system, world } from "@minecraft/server";
 import { PlayerStateManager } from "addon-utils";
 import { ELASTIC_WIRE_STYLE } from "../../render";
 import { EPSILON } from "../constants";
-import {
-  calculateElasticHookshot,
-  ElasticPhysicsConfig,
-  ElasticReleaseConfig,
-} from "../math/elastic-math";
+import { HookshotContext } from "../types";
 import { canUseGazeSteering } from "../math/steering-math";
+import { calculateElasticHookshot } from "./math";
 import {
-  BaseHookshotDefinition,
-  BaseHookshotState,
-  ChargeMilestoneSoundConfig,
-  ContinuousReelState,
-  HookshotContext,
-  RaycastGraceCapable,
-  ReelCapable,
-} from "../types";
+  ELASTIC_HOOKSHOT_ID,
+  ElasticAirChainState,
+  ElasticHookshotDefinition,
+  ElasticHookshotState,
+} from "./type";
 
-export const ELASTIC_HOOKSHOT_ID = "elastic";
 export const ELASTIC_ITEM_ID = "various_hookshot_addon:elastic_hookshot";
 export const ELASTIC_AIR_CHAIN_KEY = "elasticAirChainState";
 
-/**
- * 伸縮ロープフックの空中連続発動（発射後〜着地まで）追跡状態
- */
-export interface ElasticAirChainState {
-  /** 射出後に一度でも空中（非接地）に出たかどうか */
-  hasBeenAirborne: boolean;
-  /** 射出された Tick */
-  launchTick: number;
-}
 
 let isElasticTrackingInitialized = false;
 
@@ -94,70 +78,6 @@ export function isElasticAirChainActive(player: Player): boolean {
       null,
     ) !== null
   );
-}
-
-export interface ElasticHookshotState
-  extends BaseHookshotState<typeof ELASTIC_HOOKSHOT_ID>,
-    ContinuousReelState {
-  /** 最小ロープ長到達後に蓄積された追加チャージ量 (blocks) */
-  extraCharge?: number;
-  /** チャージ解放による放物線射出モード中かどうか */
-  isChargeReleasing?: boolean;
-  /** リリース直後の初速インパルスを未適用かどうか */
-  releaseShotPending?: boolean;
-  /** リリース開始Tick */
-  releaseStartTick?: number;
-  /** 放物線射出中の前Tickにおけるアンカーとの距離 */
-  lastReleaseDistance?: number;
-  /** 放物線射出中に接近速度が閾値を下回った連続Tick数 */
-  releaseStallTicks?: number;
-  /** 前Tickのチャージ伸び量（マイルストーン効果音判定用） */
-  prevChargeStretch?: number;
-  /** 直近に鳴らしたチャージマイルストーン距離 (m) */
-  lastChargeSoundThreshold?: number;
-  /** 直近のマイルストーンから±hysteresis以上離れて再鳴動可能になったか */
-  canRetriggerLastThreshold?: boolean;
-}
-
-export interface ElasticDistanceReelSpeedConfig {
-  /** 加速が開始されるアンカー距離の下限 (blocks) */
-  minDistance: number;
-  /** 最大巻き取り速度に到達するアンカー距離の上限 (blocks) */
-  maxDistance: number;
-  /** 遠距離到達時の最大巻き取り速度 (blocks/tick) */
-  maxSpeed: number;
-}
-
-export interface ElasticChargeSpeedBoostConfig {
-  /** 空中チェイン時の近距離側（minDistance以下）の巻き取り速度 (blocks/tick) */
-  airChainMinSpeed: number;
-  /** 空中チェイン時の遠距離側（maxDistance以上）の巻き取り速度 (blocks/tick) */
-  airChainMaxSpeed: number;
-}
-
-export interface ElasticHookshotDefinition
-  extends BaseHookshotDefinition<
-      typeof ELASTIC_HOOKSHOT_ID,
-      ElasticHookshotState
-    >,
-    ReelCapable,
-    RaycastGraceCapable {
-  /** 最小ロープ長到達後に追加で蓄積できる仮想チャージ上限 (blocks, 未指定時は無制限) */
-  maxExtraCharge?: number;
-  /** 自然長との差（stretch）がこの距離 (blocks) を超えるとゴムが切れて自動解除される */
-  maxOverstretchDistance: number;
-  /** 伸び切り破断時の効果音ID */
-  overstretchSoundId: string;
-  /** アンカーとの距離に応じた巻き取り速度ブースト設定 */
-  distanceReelSpeed: ElasticDistanceReelSpeedConfig;
-  /** 空中チェイン・エアロベスト後ろ入力によるチャージ速度バフ設定 */
-  chargeSpeedBoost: ElasticChargeSpeedBoostConfig;
-  /** 伸縮ゴム紐の弾性・チャージ物理パラメータ */
-  physics: ElasticPhysicsConfig;
-  /** チャージ解放（パチンコ射出）パラメータ */
-  release: ElasticReleaseConfig;
-  /** チャージ中の伸び量マイルストーン効果音設定 */
-  chargeMilestoneSound: ChargeMilestoneSoundConfig;
 }
 
 /**

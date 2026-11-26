@@ -1,6 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Dimension, MolangVariableMap, Player, Vector3 } from "@minecraft/server";
-import { calculateBambooBendDirection } from "../hookshot/math/bamboo-math";
+import { calculateBambooBendDirection } from "../hookshot/bamboo/math";
 import { WireRenderContext, WireStyle } from "./types";
 
 const MAX_PARTICLES_PER_WIRE = 500;

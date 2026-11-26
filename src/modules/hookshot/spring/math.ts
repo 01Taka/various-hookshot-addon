@@ -11,57 +11,8 @@ import {
   getDirectionAndDistance,
   getNormalComponent,
   predictTickPhysics,
-} from "./physics-utils";
-
-export interface SpringPhysicsConfig {
-  /** 限界長の下限値 (blocks) */
-  minConstraintLength: number;
-  /** 現在長に対する限界長倍率 */
-  constraintLengthMultiplier: number;
-  /** 動径方向の弾性係数 (ヤング率×断面積相当)。実効バネ定数は `stiffness / Math.max(naturalLength, minRadialDenominator)` */
-  stiffness: number;
-  /** 動径方向の速度減衰率 (0〜1)。大きいほど振動が早く収まる */
-  damping: number;
-  /** 1Tickあたりの最大加速度 (blocks/tick²)。急激な伸び縮みでの暴発防止 */
-  maxAcceleration: number;
-  /** 動径（縦）方向のひずみ計算時の分母下限値 (blocks) */
-  minRadialDenominator: number;
-  /** 曲げ（横）方向のひずみ計算時の分母下限値 (blocks) */
-  minBendingDenominator: number;
-  /** 曲げ方向の弾性係数。曲げひずみ `lateralOffset / bendingDenominator` に応じた復元力を計算します */
-  bendingStiffness: number;
-  /** 曲げひずみのべき乗指数 (1 = 線形, 2 = 2次プログレッシブ) */
-  bendingPower: number;
-  /** 曲げ方向の減衰率 (0〜1)。大きいほど横揺れが早く収まる */
-  bendingDamping: number;
-  /** 基準軸へ戻る向き (tangentVel > 0) の減衰倍率 (デフォルト 4.0) */
-  bendingReturnDampingMultiplier?: number;
-  /** 横方向付近（θ ≧ 90°）での曲げ復元加速度の上限 (blocks/tick², 未指定時は制限なし) */
-  horizontalBendingMaxAccel?: number;
-  /** 着弾面の裏側へめり込んだ際の反発倍率（effectiveStiffness に対する倍率） */
-  surfacePenetrationMultiplier: number;
-}
-
-export interface SpringRopeParams
-  extends Omit<
-    SpringPhysicsConfig,
-    "minConstraintLength" | "constraintLengthMultiplier"
-  > {
-  /** バネの自然長。これより伸びると引力、縮むと反発力（斥力）が働く */
-  naturalLength: number;
-  /** 限界長。これを超えると硬い拘束に切り替わる */
-  maxLength?: number;
-  /** Baumgarte 位置誤差安定化係数 */
-  baumgarteFactor: number;
-  /** 着弾面の法線ベクトル（面の裏側へのめり込み防止に使用。また bendingAxis 未指定時の基準軸としてもフォールバック利用される） */
-  surfaceNormal?: Vector3;
-  /**
-   * 曲げバネの基準軸ベクトル（単位ベクトル）。
-   * バネが横に曲げられた際、この軸方向へ引き戻す復元力が働く。
-   * 指定がない場合は surfaceNormal が使用される。
-   */
-  bendingAxis?: Vector3;
-}
+} from "../math/physics-utils";
+import { SpringPhysicsConfig, SpringRopeParams } from "./type";
 
 /**
  * 完全な双方向バネ（フックの法則）に基づき、

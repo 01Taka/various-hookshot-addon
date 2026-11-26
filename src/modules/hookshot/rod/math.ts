@@ -7,7 +7,7 @@ import {
   getDirectionAndDistance,
   getNormalComponent,
   predictTickPhysics,
-} from "./physics-utils";
+} from "../math/physics-utils";
 
 /**
  * 完全な剛体棒（双方向拘束）に基づき、

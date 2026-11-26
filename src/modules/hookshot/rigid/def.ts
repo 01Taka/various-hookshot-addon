@@ -1,62 +1,11 @@
 import { Vector3Utils } from "@minecraft/math";
 import { RIGID_WIRE_STYLE } from "../../render";
-import { calculateRigidHookshot, RigidPhysicsConfig } from "../math/rigid-math";
-import {
-  calculateReelSpeedMultiplier,
-  canUseGazeSteering,
-  RigidSteeringConfig,
-} from "../math/steering-math";
-import {
-  BaseHookshotDefinition,
-  BaseHookshotState,
-  ContinuousReelState,
-  GazeSteeringCapable,
-  RaycastGraceCapable,
-  ReelCapable,
-} from "../types";
+import { calculateRigidHookshot } from "./math";
+import { calculateReelSpeedMultiplier, canUseGazeSteering } from "../math/steering-math";
+import { RIGID_HOOKSHOT_ID, RigidHookshotDefinition } from "./type";
 
-export const RIGID_HOOKSHOT_ID = "rigid";
 export const RIGID_ITEM_ID = "various_hookshot_addon:rigid_hookshot";
 
-export interface RigidHookshotState
-  extends BaseHookshotState<typeof RIGID_HOOKSHOT_ID>,
-    ContinuousReelState {
-  /** 着弾直後の自動巻き取り残りTick数 */
-  autoTakeUpRemainingTicks?: number;
-  /** 巻き取り中に速度低下で停止している連続Tick数 */
-  stallReelTicks?: number;
-  /** アンカーより上に滞在して蓄積した減衰Tick数（アンカーより下で待機後に徐々に回復） */
-  aboveAnchorTicks?: number;
-  /** アンカーより下に連続滞在しているTick数（回復待機カウント用） */
-  belowAnchorTicks?: number;
-}
-
-export interface RigidHookshotDefinition
-  extends BaseHookshotDefinition<typeof RIGID_HOOKSHOT_ID, RigidHookshotState>,
-    ReelCapable,
-    RaycastGraceCapable,
-    GazeSteeringCapable {
-  /** 着弾直後にワイヤーが短い間だけ行う高速自動巻き取り設定 */
-  autoTakeUp: {
-    /** 自動巻き取りを行う最大Tick数 */
-    ticks: number;
-    /** 1Tickあたりの最大短縮速度 (blocks/tick) */
-    speed: number;
-  };
-  /** 巻き取り中にプレイヤーがほとんど停止した場合の戻し・停止設定 */
-  stallReelStop: {
-    /** 停止とみなす速度閾値 (blocks/tick) */
-    maxSpeed: number;
-    /** 停止判定が成立する連続Tick数 */
-    ticks: number;
-    /** 停止時にチェーン長を戻す基準の距離差 (blocks) */
-    restoreDiff: number;
-  };
-  /** 剛体ロープの物理パラメータ */
-  physics: RigidPhysicsConfig;
-  /** 視線ステアリング・振り子スイングパラメータ */
-  steering: RigidSteeringConfig;
-}
 
 /**
  * 糸（minecraft:string）を使用した伸びがない（剛体ロープ）フックショットの定義

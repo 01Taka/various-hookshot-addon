@@ -19,22 +19,21 @@ import {
   MAGNET_REPEL_WIRE_STYLE,
 } from "../../render";
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../constants";
+import { AnchorPosition, HookshotContext } from "../types";
 import {
   calculateMagnetEffectRatio,
   calculateMagnetHookshot,
   calculateMagnetSnapLocation,
-  MagnetForceMode,
-  MagnetPhysicsConfig,
   resolveMagnetContactAxis,
-} from "../math/magnet-math";
+} from "./math";
 import {
-  AnchorPosition,
-  BaseHookshotDefinition,
-  BaseHookshotState,
-  HookshotContext,
-} from "../types";
+  MAGNET_HOOKSHOT_ID,
+  MagnetForceMode,
+  MagnetHookshotDefinition,
+  MagnetHookshotState,
+  MagnetSoundPlayer,
+} from "./type";
 
-export const MAGNET_HOOKSHOT_ID = "magnet";
 export const MAGNET_ITEM_ID = "various_hookshot_addon:magnet_hookshot";
 
 const MAGNET_STICK_RAY_EXTRA_DISTANCE = 0.25;
@@ -43,50 +42,6 @@ const MAGNET_JITTER_RESNAP_THRESHOLD = 0.15;
 const MAGNET_CHARGE_PARTICLE_ID = "various_hookshot_addon:magnet_charge";
 const MAGNET_CHARGE_INTERVAL_TICKS = 4;
 const MAGNET_STICK_SOUND_ID = "random.click";
-
-export interface MagnetHookshotState
-  extends BaseHookshotState<typeof MAGNET_HOOKSHOT_ID> {
-  /** 磁化されているブロックの整数座標 */
-  blockPos: Vector3;
-  /** 現在発動中の磁力モード ("none" / "attract"=Shift / "repel"=Jump) */
-  activeMode: MagnetForceMode;
-  /** 今Tickがモード開始瞬間（初速／爆発バースト適用Tick）かどうか */
-  isModeEntryTick?: boolean;
-  /** 一度以上引き寄せまたは反発を実行したかどうか（地上・無入力での自動解除条件） */
-  canAutoDetachOnGround?: boolean;
-  /** ゼロ速度インパルス固定で吸着中かどうか */
-  isStuck?: boolean;
-  /** 吸着固定時のスナップ座標（ジッター補正用） */
-  stuckLocation?: Vector3;
-  /** 動作音再生の直近Tick */
-  lastActiveSoundTick?: number;
-  /** 反発初回バーストの直近発動Tick */
-  lastRepelBurstTick?: number;
-  /** 引き寄せ入力の連続保持Tick数（無重力ランプアップ用） */
-  attractHoldTicks?: number;
-  /** 反発入力の連続保持Tick数 */
-  repelHoldTicks?: number;
-}
-
-export interface MagnetHookshotDefinition
-  extends BaseHookshotDefinition<
-    typeof MAGNET_HOOKSHOT_ID,
-    MagnetHookshotState
-  > {
-  /** 着弾（磁化成功）時の効果音ID */
-  hitSoundId: string;
-  /** 不発（空撃ち）時の効果音ID */
-  missSoundId: string;
-  /** 解除時の効果音ID */
-  detachSoundId: string;
-  /** 磁力稼働中のループ効果音設定 */
-  activeSound: {
-    soundId: string;
-    intervalTicks: number;
-  };
-  /** 物理パラメータ */
-  physics: MagnetPhysicsConfig;
-}
 
 export const magnetHookshotDefinition: MagnetHookshotDefinition = {
   id: MAGNET_HOOKSHOT_ID,
@@ -207,11 +162,6 @@ function shotMagnet(
   return true;
 }
 
-export type MagnetSoundPlayer = (
-  player: Player,
-  soundId: string,
-  pitch?: number,
-) => void;
 
 /**
  * ブロックヒット情報からマグネットフックの初期状態を生成します。

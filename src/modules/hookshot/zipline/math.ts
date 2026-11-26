@@ -1,51 +1,13 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
-import { convertTargetVelocityToImpulse } from "./physics-utils";
-import { calculateRigidVelocity, RigidPhysicsConfig } from "./rigid-math";
-import { RigidSteeringConfig } from "./steering-math";
-
-export interface ZiplineRailPhysicsConfig {
-  /** 入力（Jump / Shift）によるレール上の加速度 (blocks/tick²) */
-  inputAccel: number;
-  /** レール斜度に対する重力加速度係数 (blocks/tick²) */
-  railGravity: number;
-  /** 通常走行時の速度減衰（摩擦）係数 (per tick) */
-  friction: number;
-  /** 同時押し（ブレーキ）時の速度減衰係数 (per tick) */
-  brakeFriction: number;
-  /** レール上の最大移動速度 (blocks/tick) */
-  maxRailSpeed: number;
-  /** プレイヤー胴からアンカーまでの最大許容距離 (blocks, 鎖4.0m + 許容2.0m = 6.0m) */
-  maxAnchorDistance: number;
-  /** 地面踏ん張り判定で鎖が張ったとみなす胴〜アンカー距離 (blocks, デフォルト: 3.9) */
-  tautChainLength: number;
-  /** プレイヤー足元から胴接続点までのYオフセット (blocks) */
-  torsoHeightOffset: number;
-  /** 最小停止速度閾値 (blocks/tick) */
-  stopSpeedThreshold: number;
-}
-
-export interface ZiplineRailStepInput {
-  railStart: Vector3;
-  railEnd: Vector3;
-  railLength: number;
-  railProgress: number;
-  railVelocity: number;
-  dimensionId: string;
-  jumpPressed: boolean;
-  sneakPressed: boolean;
-  /** 視線に基づく正面進行符号 (+1: 終点方向, -1: 始点方向) */
-  inputDirectionSign: 1 | -1;
-  isOnGround: boolean;
-  playerLocation: Vector3;
-  config: ZiplineRailPhysicsConfig;
-}
-
-export interface ZiplineRailStepResult {
-  railProgress: number;
-  railVelocity: number;
-  anchor: Vector3 & { dimensionId: string };
-}
+import { convertTargetVelocityToImpulse } from "../math/physics-utils";
+import { calculateRigidVelocity } from "../rigid/math";
+import {
+  ZiplineHookshotOptions,
+  ZiplineRailPhysicsConfig,
+  ZiplineRailStepInput,
+  ZiplineRailStepResult,
+} from "./type";
 
 /**
  * レール上の1次元アンカー移動物理を計算します。
@@ -163,23 +125,6 @@ export function stepZiplineRailAnchor(
       dimensionId,
     },
   };
-}
-
-export interface ZiplineHookshotOptions {
-  baumgarteFactor: number;
-  physics: RigidPhysicsConfig;
-  steering: RigidSteeringConfig;
-  swingPumpAccel: number;
-  /** レール方向（始点→終点）の単位ベクトル */
-  railDir: Vector3;
-  /** アンカーの現在速度ベクトル (blocks/tick) */
-  anchorVelocity: Vector3;
-  /** レール平行方向（前後揺れ）のダンピング率 (0.0〜1.0, デフォルト: 0.14) */
-  parallelDamping?: number;
-  /** レール垂直方向（左右スイング）のダンピング率 (0.0〜1.0, デフォルト: 0.02) */
-  lateralDamping?: number;
-  /** true のときレールと平行なスイング加速成分を無効化する */
-  suppressParallelSwing?: boolean;
 }
 
 /**

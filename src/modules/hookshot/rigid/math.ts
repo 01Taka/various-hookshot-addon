@@ -8,55 +8,14 @@ import {
   getDirectionAndDistance,
   getNormalComponent,
   predictTickPhysics,
-} from "./physics-utils";
+} from "../math/physics-utils";
 import {
   calculateAboveAnchorDecayFactor,
   calculatePendulumPumpAcceleration,
   calculateRigidSteering,
   RigidSteeringConfig,
-} from "./steering-math";
-
-export interface RigidPhysicsConfig {
-  /** ロープが張っているとみなす自然長からの許容マージン (blocks) */
-  tautMargin: number;
-  /** 内側スイング継続ゾーンの幅 (blocks) */
-  innerSwingMargin: number;
-  /** 内側スイング継続ゾーンでの緩やかな復元係数 */
-  innerBaumgarteFactor: number;
-  /** 内側スイング継続ゾーンから自由落下へ抜ける内向き速度閾値 (blocks/tick) */
-  inwardEscapeThreshold: number;
-  /** ステアリング加速時の最高速度上限（エアロベスト装着時, blocks/tick） */
-  maxSteeringSpeed: number;
-  /** ステアリング加速時の最高速度上限（エアロベスト未装着時, blocks/tick） */
-  maxSteeringSpeedNormal?: number;
-  /** エアロベスト装着かつ巻き取り中の重力倍率 (0.0〜1.0, 例: 0.8 = 20%軽減) */
-  reelGravityScaleVest?: number;
-  /** 非巻き取り時の振り子スイング追加加速度（通常時, blocks/tick²） */
-  swingPumpAccelNormal: number;
-  /** 非巻き取り時の振り子スイング追加加速度（エアロベスト装備時, blocks/tick²） */
-  swingPumpAccelVest: number;
-}
-
-export interface RigidHookshotOptions {
-  /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
-  isReelingIn?: boolean;
-  /** 視線ステアリング推進力を有効にするかどうか */
-  enableSteering?: boolean;
-  /** エアロベスト系装備が有効かどうか（trueでフル旋回＋巻き取り中重力軽減） */
-  hasAeroVest?: boolean;
-  /** アンカーより上に滞在した累計Tick数 */
-  aboveAnchorTicks?: number;
-  /** Baumgarte 位置誤差安定化係数 */
-  baumgarteFactor: number;
-  /** 剛体ロープ物理パラメータ */
-  physics: RigidPhysicsConfig;
-  /** 視線ステアリングパラメータ */
-  steering: RigidSteeringConfig;
-  /** 非巻き取り時の振り子スイング追加加速度 (blocks/tick²) */
-  swingPumpAccel: number;
-  /** 指定時、振り子スイング加速からこの水平ベクトルと平行な成分を除去する */
-  suppressPumpParallelDir?: Vector3;
-}
+} from "../math/steering-math";
+import { RigidHookshotOptions, RigidPhysicsConfig } from "./type";
 
 /**
  * 速度射影 + Baumgarte安定化（位置補正）に基づき、

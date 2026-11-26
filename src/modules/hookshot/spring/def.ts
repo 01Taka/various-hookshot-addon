@@ -1,92 +1,15 @@
 import { Vector3Utils } from "@minecraft/math";
-import { Player, system, Vector3 } from "@minecraft/server";
+import { system, Vector3 } from "@minecraft/server";
 import { SPRING_WIRE_STYLE } from "../../render";
+import { calculateSpringHookshot } from "./math";
 import {
-  calculateSpringHookshot,
-  SpringPhysicsConfig,
-} from "../math/spring-math";
-import {
-  AirProbingCapable,
-  AirProbingState,
-  BaseHookshotDefinition,
-  BaseHookshotState,
-  ContinuousReelState,
-  ReelCapable,
-  RetractCapable,
-  RetractState,
-} from "../types";
+  SPRING_HOOKSHOT_ID,
+  SpringHookshotDefinition,
+  SpringHookshotState,
+} from "./type";
 
-export const SPRING_HOOKSHOT_ID = "spring";
 export const SPRING_ITEM_ID = "various_hookshot_addon:spring_hookshot";
 
-export interface SpringHookshotState
-  extends BaseHookshotState<typeof SPRING_HOOKSHOT_ID>,
-    AirProbingState,
-    RetractState,
-    ContinuousReelState {
-  /** アンカーからプレイヤーへ向かう、フック着弾（刺さった）瞬間の初期方向ベクトル（単位ベクトル） */
-  initialDirection?: Vector3;
-  /** minRopeLength 未満で着弾した際、minRopeLength まで自動伸長中かどうか */
-  isAutoExtendingToMin?: boolean;
-  /** 手動伸長中の前Tickにおけるアンカーからの距離 (blocks) */
-  lastExtendDistance?: number;
-  /** 最後に縮め操作を行ったTick (縮め中の曲げ減衰ブースト用) */
-  lastShortenTick?: number;
-  /** 縮め中の曲げ減衰ブーストの現在ブレンド率 (0.0〜1.0) */
-  shortenDampingBlend?: number;
-}
-
-export interface SpringAutoExtendToMinConfig {
-  /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす速度 (blocks/tick) */
-  speed: number;
-}
-
-export interface SpringShortenCompressionBrakeConfig {
-  /** 圧縮量（currentLength - distance）1ブロックあたりの短縮速度減衰係数 */
-  brakePerBlock: number;
-  /** 圧縮時の最低短縮速度倍率（0〜1） */
-  minSpeedMultiplier: number;
-}
-
-export interface SpringShortenBendingDampingConfig {
-  /** 縮めている間に適用する強い曲げ減衰率 (0〜1) */
-  boostedDamping: number;
-  /** ブーストの立ち上がりにかかる時間 (ticks) */
-  rampUpTicks: number;
-  /** ブーストの立ち下がり（元の値へ戻るまで）にかかる時間 (ticks) */
-  rampDownTicks: number;
-}
-
-export interface SpringHookshotDefinition
-  extends BaseHookshotDefinition<
-      typeof SPRING_HOOKSHOT_ID,
-      SpringHookshotState
-    >,
-    ReelCapable,
-    AirProbingCapable,
-    RetractCapable {
-  /** 圧縮状態で手動伸長する際、外向き移動量に追従して距離差が縮まないように伸ばすか */
-  matchOutwardExtend: boolean;
-  /** minRopeLength 未満で着弾した際に minRopeLength まで自動で伸ばす設定 */
-  autoExtendToMin: SpringAutoExtendToMinConfig;
-  /** 圧縮状態（distance < currentLength）で短縮する際の速度ブレーキ設定 */
-  shortenCompressionBrake: SpringShortenCompressionBrakeConfig;
-  /** 縮め操作中および直後の曲げ減衰ブースト設定 */
-  shortenBendingDamping: SpringShortenBendingDampingConfig;
-  /** 曲げ復元力の基準モード ("shot_angle" | "surface_normal") */
-  bendingMode: SpringBendingMode;
-  /** バネの物理パラメータ */
-  physics: SpringPhysicsConfig;
-  /** ワイヤー描画時の基準軸（法線または曲げ軸）を解決するコールバック */
-  getWireAxis: (state: SpringHookshotState) => Vector3 | undefined;
-}
-
-/**
- * バネの曲げ復元力（角度維持）の基準モード
- * - "shot_angle": 刺さった瞬間の角度・方向を維持（新仕様）
- * - "surface_normal": 着弾面の法線方向（垂直）を維持（従来の仕様）
- */
-export type SpringBendingMode = "shot_angle" | "surface_normal";
 
 /**
  * 現在の設定に応じた曲げ基準軸（角度維持ベクトル）を取得します

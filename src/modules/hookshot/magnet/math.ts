@@ -6,51 +6,12 @@ import {
   MINECRAFT_GRAVITY,
 } from "addon-utils";
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../constants";
-import { getDirectionAndDistance, predictTickPhysics } from "./physics-utils";
-
-export type MagnetForceMode = "none" | "attract" | "repel";
-
-export interface MagnetPhysicsConfig {
-  /** 最大効果ゾーンの上限距離 (blocks, 50m) */
-  fullEffectDistance: number;
-  /** 減衰ゾーンの上限距離 / 効果0になる距離 (blocks, 80m) */
-  zeroEffectDistance: number;
-  /** 引き寄せ開始時の初速 (blocks/tick) */
-  attractInitialSpeed: number;
-  /** 引き寄せの加速度 (blocks/tick^2) */
-  attractAccel: number;
-  /** 引き寄せの最高速度上限 (blocks/tick) */
-  attractMaxSpeed: number;
-  /** 至近距離減衰の開始半径 (blocks) */
-  attractNearRadius: number;
-  /** 至近距離（2m以内）での引き寄せ倍率 */
-  attractNearScale: number;
-  /** ゼロ速度インパルス固定を開始する半径 (blocks) */
-  attractStickRadius: number;
-  /** 引き寄せ開始時の無重力化率 (0.35 = 35%) */
-  attractGravityCancelStart: number;
-  /** 無重力化率が 100% に到達するまでの時間 (ticks) */
-  attractGravityCancelRampTicks: number;
-  /** 反発開始時の爆発初速 (blocks/tick) */
-  repelBurstSpeed: number;
-  /** 反発長押し中に放出し続ける持続反発加速度 (blocks/tick^2) */
-  repelSustainAccel: number;
-  /** 反発の距離減衰基準距離 r0 (blocks) */
-  repelRefDistance: number;
-  /** 反発初回バーストのクールタイム (ticks) */
-  repelBurstCooldownTicks: number;
-  /** 反発初回バースト後に持続反発が開始するまでの遅延 (ticks) */
-  repelSustainDelayTicks: number;
-  /** 反発初回バースト時に低速落下(1tick)を付与する最小上向きインパルス */
-  repelSlowFallMinImpulseY: number;
-}
-
-export interface MagnetContactAxis {
-  /** 接触想定面に対して垂直な単位軸ベクトル (±X / ±Y / ±Z) */
-  dir: Vector3;
-  /** プレイヤー胸位置からその軸方向の当たり判定表面までの距離 (blocks) */
-  surfaceDist: number;
-}
+import { getDirectionAndDistance, predictTickPhysics } from "../math/physics-utils";
+import {
+  MagnetContactAxis,
+  MagnetForceMode,
+  MagnetPhysicsConfig,
+} from "./type";
 
 /**
  * 距離 r に応じた効果倍率 effectRatio(r) を返します。
