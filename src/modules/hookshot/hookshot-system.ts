@@ -1555,6 +1555,12 @@ export class HookshotSystem {
       player.dimension.spawnParticle(guideParticleId, playerSidePos);
     } catch {}
 
+    BlockOutlineRenderer.drawBlockOutline(
+      player.dimension,
+      state.blockPos,
+      MAGNET_NODE_OUTLINE_STYLE,
+    );
+
     if (system.currentTick % 4 === 0) {
       try {
         player.dimension.spawnParticle(
