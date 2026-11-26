@@ -41,7 +41,7 @@ import {
   ZiplineHookshotState,
 } from "./definitions";
 import {
-  calculateMagneticFieldStrength,
+  calculateMagnetEffectRatio,
   MagnetForceMode,
 } from "./math/magnet-math";
 import { stepZiplineRailAnchor } from "./math/zipline-math";
@@ -189,21 +189,19 @@ export class HookshotSystem {
       return `残 ${remaining.toFixed(1)}m / ${state.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
     }
     if (def.id === "magnet" && state.hookshotId === "magnet") {
-      const fieldStrength = calculateMagneticFieldStrength(
-        distance,
-        def.physics,
-      );
-      const fieldRatio =
-        def.physics.maxAccel > 0
-          ? Math.round((fieldStrength / def.physics.maxAccel) * 100)
-          : 0;
+      const effectRatio = calculateMagnetEffectRatio(distance, def.physics);
+      const effectPercent = Math.round(effectRatio * 100);
       const modeText =
         state.activeMode === "attract"
-          ? "吸引(Jump)"
+          ? distance <= def.physics.attractLockRadius
+            ? "吸着ロック"
+            : "吸引(Jump)"
           : state.activeMode === "repel"
             ? "反発(Shift)"
-            : "待機";
-      return `${distance.toFixed(1)}m (磁場 ${fieldRatio}%) | ${modeText}`;
+            : effectRatio <= 0
+              ? "待機ゾーン"
+              : "待機";
+      return `${distance.toFixed(1)}m (効果 ${effectPercent}%) | ${modeText}`;
     }
     if (def.id === "rigid" && state.hookshotId === "rigid") {
       const decayFactor = calculateAboveAnchorDecayFactor(
@@ -1393,19 +1391,14 @@ export class HookshotSystem {
    * フックのトグル処理（排他制御対応）
    */
   /**
-   * マグネットフックの単一ブロック磁化・撃ち直しを処理します。
-   * - 新規配置時: 視線の先 100m 以内のブロックを磁化（空撃ち時は不発）
-   * - 再射撃時: 別ブロックに当たれば即撃ち直し、同じブロックまたは空撃ちで解除
+   * マグネットフックの単一ブロック磁化を処理します。
+   * 視線の先 100m 以内のブロックを磁化します（空撃ち時は不発）。
    */
   private static shotMagnet(
     player: Player,
     def: MagnetHookshotDefinition,
   ): boolean {
     if (!player.isValid) return false;
-
-    const currentState = this.getActiveState(player);
-    const isAlreadyActive =
-      currentState !== null && currentState.hookshotId === "magnet";
 
     let hit: BlockRaycastHit | undefined;
     try {
@@ -1419,10 +1412,6 @@ export class HookshotSystem {
     }
 
     if (!hit) {
-      if (isAlreadyActive) {
-        this.unhook(player);
-        return false;
-      }
       this.playSoundSafe(player, def.missSoundId);
       return false;
     }
@@ -1430,19 +1419,6 @@ export class HookshotSystem {
     const bx = Math.floor(hit.block.x);
     const by = Math.floor(hit.block.y);
     const bz = Math.floor(hit.block.z);
-
-    // すでに配置中の同じブロックを撃った場合は解除
-    if (
-      isAlreadyActive &&
-      currentState.blockPos.x === bx &&
-      currentState.blockPos.y === by &&
-      currentState.blockPos.z === bz &&
-      currentState.anchor.dimensionId === player.dimension.id
-    ) {
-      this.unhook(player);
-      return false;
-    }
-
     const blockPos: Vector3 = { x: bx, y: by, z: bz };
     const center: Vector3 = { x: bx + 0.5, y: by + 0.5, z: bz + 0.5 };
     const anchor: AnchorPosition = {
@@ -1450,22 +1426,17 @@ export class HookshotSystem {
       ...center,
     };
 
-    const newState: MagnetHookshotState = isAlreadyActive
-      ? {
-          ...currentState,
-          anchor,
-          blockPos,
-        }
-      : {
-          hookshotId: "magnet",
-          slotIndex: player.selectedSlotIndex,
-          anchor,
-          blockPos,
-          currentLength: 0,
-          jumpConsumed: isInputButtonPressed(player, "Jump") || player.isJumping,
-          sneakConsumed: isSneakButtonPressed(player),
-          activeMode: "none",
-        };
+    const newState: MagnetHookshotState = {
+      hookshotId: "magnet",
+      slotIndex: player.selectedSlotIndex,
+      anchor,
+      blockPos,
+      currentLength: 0,
+      jumpConsumed: isInputButtonPressed(player, "Jump") || player.isJumping,
+      sneakConsumed: isSneakButtonPressed(player),
+      activeMode: "none",
+      isAttractLocked: false,
+    };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, newState);
     this.playSoundSafe(player, def.shotSoundId);
@@ -1488,7 +1459,8 @@ export class HookshotSystem {
   }
 
   /**
-   * マグネットフックの毎Tick状態更新（ブロック検証・入力サイクル・初回ブースト）を行います。
+   * マグネットフックの毎Tick状態更新（ブロック検証・入力・吸着ロック音）を行います。
+   * 距離による自動解除は行いません（ブロック破壊・持ち替え・ディメンション移動でのみ解除）。
    */
   private static updateMagnetState(
     player: Player,
@@ -1499,10 +1471,6 @@ export class HookshotSystem {
       return false;
     }
     if (this.isMagnetBlockBroken(player.dimension, state.blockPos)) {
-      return false;
-    }
-    const dist = Vector3Utils.distance(player.location, state.anchor);
-    if (dist > def.maxDetachDistance) {
       return false;
     }
 
@@ -1525,15 +1493,35 @@ export class HookshotSystem {
       desiredMode = "repel";
     }
 
+    const prevMode = state.activeMode;
     state.activeMode = desiredMode;
+    state.isModeEntryTick =
+      desiredMode !== "none" && desiredMode !== prevMode;
+
+    const chestPos: Vector3 = {
+      x: player.location.x,
+      y: player.location.y + 1.0,
+      z: player.location.z,
+    };
+    const dist = Vector3Utils.distance(chestPos, state.anchor);
+    const isNowLocked =
+      state.activeMode === "attract" && dist <= def.physics.attractLockRadius;
+
+    if (isNowLocked && !state.isAttractLocked) {
+      this.playSoundSafe(player, def.lockSoundId, 1.4);
+    }
+    state.isAttractLocked = isNowLocked;
 
     if (state.activeMode !== "none") {
-      const lastTick =
-        state.lastActiveSoundTick ?? -def.activeSound.intervalTicks;
-      if (system.currentTick - lastTick >= def.activeSound.intervalTicks) {
-        const pitch = state.activeMode === "attract" ? 1.15 : 0.85;
-        this.playSoundSafe(player, def.activeSound.soundId, pitch);
-        state.lastActiveSoundTick = system.currentTick;
+      const effectRatio = calculateMagnetEffectRatio(dist, def.physics);
+      if (effectRatio > 0) {
+        const lastTick =
+          state.lastActiveSoundTick ?? -def.activeSound.intervalTicks;
+        if (system.currentTick - lastTick >= def.activeSound.intervalTicks) {
+          const pitch = state.activeMode === "attract" ? 1.15 : 0.85;
+          this.playSoundSafe(player, def.activeSound.soundId, pitch);
+          state.lastActiveSoundTick = system.currentTick;
+        }
       }
     }
 
@@ -1588,10 +1576,6 @@ export class HookshotSystem {
       }
       // 既に接続中のフックがある場合
       if (currentState.hookshotId === def.id) {
-        if (def.id === "magnet") {
-          this.shotMagnet(player, def);
-          return;
-        }
         // 同じフックショットなら解除（トグル動作）
         this.unhook(player);
         return;
