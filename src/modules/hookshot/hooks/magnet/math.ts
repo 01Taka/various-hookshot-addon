@@ -7,6 +7,7 @@ import {
 } from "addon-utils";
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../../constants";
 import { getDirectionAndDistance, predictTickPhysics } from "../../math/physics-utils";
+import { MAGNET_STICK_RESTORE_GAIN } from "./config";
 import {
   MagnetContactAxis,
   MagnetForceMode,
@@ -105,6 +106,7 @@ export function calculateMagnetHookshot(
   mode: MagnetForceMode,
   isEntryTick: boolean,
   isStuck: boolean,
+  stuckLocation: Vector3 | undefined,
   attractHoldTicks: number,
   repelHoldTicks: number,
   config: MagnetPhysicsConfig,
@@ -142,7 +144,12 @@ export function calculateMagnetHookshot(
 
   if (mode === "attract") {
     if (isStuck) {
-      targetVel = { x: 0, y: 0, z: 0 };
+      targetVel = stuckLocation
+        ? Vector3Utils.scale(
+            Vector3Utils.subtract(stuckLocation, player.location),
+            MAGNET_STICK_RESTORE_GAIN,
+          )
+        : { x: 0, y: 0, z: 0 };
     } else {
       const nearScale =
         distance <= config.attractNearRadius ? config.attractNearScale : 1.0;

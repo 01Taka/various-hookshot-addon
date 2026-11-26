@@ -84,12 +84,9 @@ function updateMagnetStickState(
     y: player.location.y + 1.62,
     z: player.location.z,
   };
-  const chestDist = Vector3Utils.distance(chestPos, state.anchor);
   const headDist = Vector3Utils.distance(headPos, state.anchor);
 
-  let shouldStick =
-    chestDist <= magnetHookshotConfig.physics.attractStickRadius ||
-    headDist <= MAGNET_HEAD_STICK_RADIUS;
+  let shouldStick = headDist <= MAGNET_HEAD_STICK_RADIUS;
 
   if (!shouldStick && Vector3Utils.magnitude(contactDir) > EPSILON) {
     try {

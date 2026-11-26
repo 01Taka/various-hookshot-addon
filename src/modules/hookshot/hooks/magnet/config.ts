@@ -5,7 +5,8 @@ export const MAGNET_ITEM_ID = "various_hookshot_addon:magnet_hookshot";
 
 export const MAGNET_STICK_RAY_EXTRA_DISTANCE = 0.25;
 export const MAGNET_HEAD_STICK_RADIUS = 1.0;
-export const MAGNET_JITTER_RESNAP_THRESHOLD = 0.15;
+export const MAGNET_JITTER_RESNAP_THRESHOLD = 0.5;
+export const MAGNET_STICK_RESTORE_GAIN = 0.5;
 export const MAGNET_CHARGE_PARTICLE_ID = "various_hookshot_addon:magnet_charge";
 export const MAGNET_CHARGE_INTERVAL_TICKS = 4;
 export const MAGNET_STICK_SOUND_ID = "random.click";
@@ -37,7 +38,7 @@ export const magnetHookshotConfig: Omit<
     attractNearScale: 1 / 3,
     attractStickRadius: 1.6,
     attractGravityCancelStart: 0.35,
-    attractGravityCancelRampTicks: 10,
+    attractGravityCancelRampTicks: 20,
     repelBurstSpeed: 2.2,
     repelSustainAccel: 0.2,
     repelRefDistance: 10.0,
