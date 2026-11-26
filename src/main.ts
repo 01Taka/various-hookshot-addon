@@ -3,7 +3,7 @@ import { PlayerStateManager } from "addon-utils";
 import { initExplosionSupportSystem } from "./modules/explosion-support";
 import { initHookshotSystem } from "./modules/hookshot";
 import { initHookshotHudSystem } from "./modules/hud";
-import { PostFlightSystem } from "./modules/post-flight";
+import { AeroVestSystem } from "./modules/aero-vest";
 
 // プレイヤー切断時の状態自動クリーンアップを登録
 PlayerStateManager.registerAutoCleanup();
@@ -12,8 +12,8 @@ world.afterEvents.worldLoad.subscribe(() => {
   world.sendMessage("[Various Hookshot Addon] loaded");
 });
 
-// 切断後速度維持（ポストフライト慣性飛行）システム初期化
-PostFlightSystem.init();
+// エアロベスト（慣性飛行）システム初期化
+AeroVestSystem.init();
 
 // 通常フックショットシステム初期化（リード: 伸縮、糸: 剛体、棒: ロッド、スライムボール: ばね、竹: 棒高跳びポール）
 initHookshotSystem();

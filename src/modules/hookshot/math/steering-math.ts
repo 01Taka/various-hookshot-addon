@@ -1,7 +1,7 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import { PlayerDirectionResolver } from "addon-utils";
-import { PostFlightSystem } from "../../post-flight";
+import { AeroVestSystem } from "../../aero-vest";
 import {
   EPSILON,
   INPUT_DEADZONE,
@@ -107,7 +107,7 @@ const HORIZ_SINGULARITY_FADE_DISTANCE = 2.0;
  * エアロベスト系チェストプレートを有効な状態（残り耐久 > 1）で装備している場合のみ true を返します。
  */
 export function canUseGazeSteering(player: Player): boolean {
-  return PostFlightSystem.getEquippedVestInfo(player) !== null;
+  return AeroVestSystem.getEquippedVestInfo(player) !== null;
 }
 
 /**

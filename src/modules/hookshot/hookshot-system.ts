@@ -19,7 +19,7 @@ import {
   PlayerStateManager,
 } from "addon-utils";
 import { HookRenderManager, LineRenderer, WireStyle } from "../render";
-import { PostFlightSystem } from "../post-flight";
+import { InertiaFlightSystem } from "../inertia-flight";
 import {
   PROJECTION_FALLBACK_DISTANCE,
   RETRACT_END_MIN_DISTANCE,
@@ -1157,8 +1157,8 @@ export class HookshotSystem {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    PostFlightSystem.init();
-    PostFlightSystem.registerSuppressor((player) => {
+    InertiaFlightSystem.init();
+    InertiaFlightSystem.registerSuppressor((player) => {
       const state = this.getActiveState(player);
       return state !== null && this.isStateAnchored(state);
     });
