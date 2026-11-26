@@ -1,7 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import { PlayerDirectionResolver } from "addon-utils";
-import { AeroVestSystem } from "../../sub-items/aero-vest";
 import {
   EPSILON,
   INPUT_DEADZONE,
@@ -101,14 +100,6 @@ interface SteeringPlaneBasis {
 
 /** アンカー真上・真下の特異点フェード距離 (blocks) */
 const HORIZ_SINGULARITY_FADE_DISTANCE = 2.0;
-
-/**
- * 視線・移動入力によるステアリングボーナスが利用可能かを判定します。
- * エアロベスト系チェストプレートを有効な状態（残り耐久 > 1）で装備している場合のみ true を返します。
- */
-export function canUseGazeSteering(player: Player): boolean {
-  return AeroVestSystem.getEquippedVestInfo(player) !== null;
-}
 
 /**
  * アンカーより上に滞在した累計Tick数から、回転方向変更効果の減衰係数 (0.0 〜 1.0) を計算します。

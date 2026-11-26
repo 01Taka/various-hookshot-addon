@@ -1,6 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { isInputButtonPressed, isSneakButtonPressed } from "addon-utils";
-import { canUseGazeSteering } from "../../math/steering-math";
+import { AeroVestSystem } from "../../../sub-items/aero-vest";
 import { ziplineHookshotConfig } from "./config";
 import { calculateZiplineHookshot } from "./math";
 import { renderZiplineHookshot } from "./render";
@@ -15,7 +15,7 @@ export * from "./math";
 export const ziplineHookshotDefinition: ZiplineHookshotDefinition = {
   ...ziplineHookshotConfig,
   calculateImpulse: (player, state) => {
-    const hasVest = canUseGazeSteering(player);
+    const hasVest = AeroVestSystem.isEquipped(player);
     const { physics, steering, baumgarteFactor } = ziplineHookshotConfig;
     const railDir =
       state.railLength > 0.0001

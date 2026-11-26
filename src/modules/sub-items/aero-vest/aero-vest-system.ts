@@ -52,6 +52,13 @@ export class AeroVestSystem {
   }
 
   /**
+   * プレイヤーが有効なエアロベストを装備しているかを返します。
+   */
+  public static isEquipped(player: Player): boolean {
+    return this.getEquippedVestInfo(player) !== null;
+  }
+
+  /**
    * プレイヤーが有効なエアロベストを装備しているか（残り耐久 > 1）を返します。
    */
   public static getEquippedVestInfo(player: Player): EquippedVestInfo | null {

@@ -1,9 +1,54 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Dimension, MolangVariableMap, Player, Vector3 } from "@minecraft/server";
-import { calculateBambooBendDirection } from "../hookshot/hooks/bamboo/math";
 import { WireRenderContext, WireStyle } from "./types";
 
 const MAX_PARTICLES_PER_WIRE = 500;
+const BEND_DIRECTION_EPSILON = 0.0001;
+
+/**
+ * 始点・終点・着弾面法線から、しなり（弓なり曲げ）方向ベクトルを計算します。
+ */
+export function calculateBendDirection(
+  startPos: Vector3,
+  endPos: Vector3,
+  surfaceNormal?: Vector3,
+): Vector3 {
+  const diff = Vector3Utils.subtract(endPos, startPos);
+  const dist = Vector3Utils.magnitude(diff);
+  if (dist < BEND_DIRECTION_EPSILON) return { x: 0, y: 1, z: 0 };
+
+  const dir = Vector3Utils.scale(diff, 1 / dist);
+  const globalRef: Vector3 =
+    Math.abs(diff.y / dist) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+
+  if (surfaceNormal && Math.abs(surfaceNormal.y) >= 0.5) {
+    const dot = Vector3Utils.dot(surfaceNormal, dir);
+    const perp = Vector3Utils.subtract(
+      surfaceNormal,
+      Vector3Utils.scale(dir, dot),
+    );
+    const perpLen = Vector3Utils.magnitude(perp);
+    if (perpLen > 0.05) {
+      return Vector3Utils.scale(perp, 1 / perpLen);
+    }
+  }
+
+  const dotUp = Vector3Utils.dot(globalRef, dir);
+  const perpUp = Vector3Utils.subtract(
+    globalRef,
+    Vector3Utils.scale(dir, dotUp),
+  );
+  const perpUpLen = Vector3Utils.magnitude(perpUp);
+  if (perpUpLen <= 0.05) {
+    return { x: 0, y: 1, z: 0 };
+  }
+
+  let result = Vector3Utils.scale(perpUp, 1 / perpUpLen);
+  if ((!surfaceNormal || surfaceNormal.y > -0.5) && result.y < 0) {
+    result = Vector3Utils.scale(result, -1);
+  }
+  return result;
+}
 
 export class LineRenderer {
   /**
@@ -271,7 +316,7 @@ export class LineRenderer {
 
     // しなり（弓なり曲げ）用の曲げ方向ベクトルの準備
     const bendDir: Vector3 = isBent
-      ? calculateBambooBendDirection(start, end, normal)
+      ? calculateBendDirection(start, end, normal)
       : { x: 0, y: 1, z: 0 };
 
     // 始点手前から終点（アンカー手前）まで補間配置

@@ -1,4 +1,4 @@
-import { canUseGazeSteering } from "../../math/steering-math";
+import { AeroVestSystem } from "../../../sub-items/aero-vest";
 import { elasticHookshotConfig } from "./config";
 import { calculateElasticHookshot } from "./math";
 import {
@@ -41,7 +41,7 @@ export const elasticHookshotDefinition: ElasticHookshotDefinition = {
       isReelingIn: state.isReelingIn,
       isChargeReleasing: state.isChargeReleasing,
       releaseShotPending: state.releaseShotPending,
-      boostInputChargeControl: canUseGazeSteering(player),
+      boostInputChargeControl: AeroVestSystem.isEquipped(player),
       release: elasticHookshotConfig.release,
       ...elasticParams,
     });

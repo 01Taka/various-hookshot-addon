@@ -1,4 +1,4 @@
-import { canUseGazeSteering } from "../../math/steering-math";
+import { AeroVestSystem } from "../../../sub-items/aero-vest";
 import { rigidHookshotConfig } from "./config";
 import { calculateRigidHookshot } from "./math";
 import {
@@ -20,7 +20,7 @@ export * from "./math";
 export const rigidHookshotDefinition: RigidHookshotDefinition = {
   ...rigidHookshotConfig,
   calculateImpulse: (player, state) => {
-    const hasVest = canUseGazeSteering(player);
+    const hasVest = AeroVestSystem.isEquipped(player);
     const { physics, steering, baumgarteFactor } = rigidHookshotConfig;
     return calculateRigidHookshot(player, state.anchor, state.currentLength, {
       isReelingIn: state.isReelingIn,

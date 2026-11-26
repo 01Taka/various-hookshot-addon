@@ -1,5 +1,6 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
+import { calculateBendDirection } from "../../../render/line-renderer";
 import { EPSILON } from "../../constants";
 import {
   convertTargetVelocityToImpulse,
@@ -12,44 +13,13 @@ import { BambooPhysicsConfig, BambooPhysicsParams } from "./type";
 
 /**
  * アンカーとプレイヤー位置、アンカー面法線から、パーティクル描画と完全に同期した竹のしなり方向（接線ベクトル）を計算します。
- * - 地面・側面: 上方向基準（globalRef）と竹の直線に直交する凸方向（地面刺しと統一）
- * - 天井面など: 面法線と直線に直交する凸方向
  */
 export function calculateBambooBendDirection(
   playerPos: Vector3,
   anchorPos: Vector3,
   surfaceNormal?: Vector3,
 ): Vector3 {
-  const diff = Vector3Utils.subtract(anchorPos, playerPos);
-  const dist = Vector3Utils.magnitude(diff);
-  if (dist < EPSILON) return { x: 0, y: 1, z: 0 };
-
-  const dir = Vector3Utils.scale(diff, 1 / dist);
-  const globalRef: Vector3 =
-    Math.abs(diff.y / dist) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
-
-  if (surfaceNormal && Math.abs(surfaceNormal.y) >= 0.5) {
-    const dot = Vector3Utils.dot(surfaceNormal, dir);
-    const perp = Vector3Utils.subtract(surfaceNormal, Vector3Utils.scale(dir, dot));
-    const perpLen = Vector3Utils.magnitude(perp);
-    if (perpLen > 0.05) {
-      return Vector3Utils.scale(perp, 1 / perpLen);
-    }
-  }
-
-  const dotUp = Vector3Utils.dot(globalRef, dir);
-  const perpUp = Vector3Utils.subtract(globalRef, Vector3Utils.scale(dir, dotUp));
-  const perpUpLen = Vector3Utils.magnitude(perpUp);
-  if (perpUpLen <= 0.05) {
-    return { x: 0, y: 1, z: 0 };
-  }
-
-  let result = Vector3Utils.scale(perpUp, 1 / perpUpLen);
-  // 壁・地面では水平より下（y < 0）にしならないよう上向き側へ揃える
-  if ((!surfaceNormal || surfaceNormal.y > -0.5) && result.y < 0) {
-    result = Vector3Utils.scale(result, -1);
-  }
-  return result;
+  return calculateBendDirection(playerPos, anchorPos, surfaceNormal);
 }
 
 /**
