@@ -70,32 +70,6 @@ export function resolveMagnetContactAxis(
 }
 
 /**
- * 吸着固定発動時にプレイヤーを配置するブロック真横のスナップ座標を算出します。
- */
-export function calculateMagnetSnapLocation(
-  playerLocation: Vector3,
-  anchor: Vector3,
-  contactDir: Vector3,
-): Vector3 {
-  return {
-    x:
-      contactDir.x !== 0
-        ? anchor.x - contactDir.x * 0.82
-        : playerLocation.x,
-    y:
-      contactDir.y > 0
-        ? anchor.y - 2.32
-        : contactDir.y < 0
-          ? anchor.y + 0.5
-          : playerLocation.y,
-    z:
-      contactDir.z !== 0
-        ? anchor.z - contactDir.z * 0.82
-        : playerLocation.z,
-  };
-}
-
-/**
  * 距離ゾーン effectRatio(r) に基づき、マグネットフックの毎Tickインパルスを計算します。
  * - attract: 2m超は初速→加速の無重力補間、2m以内は1/3スケール、吸着固定中はゼロ速度維持
  * - repel: 初回バースト (1/r) ＋ 5tick後から持続反発 (1/r²)

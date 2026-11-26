@@ -5,7 +5,6 @@ export const MAGNET_ITEM_ID = "various_hookshot_addon:magnet_hookshot";
 
 export const MAGNET_STICK_RAY_EXTRA_DISTANCE = 0.25;
 export const MAGNET_HEAD_STICK_RADIUS = 1.0;
-export const MAGNET_JITTER_RESNAP_THRESHOLD = 0.5;
 export const MAGNET_STICK_RESTORE_GAIN = 0.5;
 export const MAGNET_CHARGE_PARTICLE_ID = "various_hookshot_addon:magnet_charge";
 export const MAGNET_CHARGE_INTERVAL_TICKS = 4;

@@ -3,7 +3,6 @@ import { Dimension, Player, system, Vector3 } from "@minecraft/server";
 import { isInputButtonPressed, isSneakButtonPressed } from "addon-utils";
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../../constants";
 import {
-  MAGNET_JITTER_RESNAP_THRESHOLD,
   MAGNET_HEAD_STICK_RADIUS,
   MAGNET_STICK_RAY_EXTRA_DISTANCE,
   MAGNET_STICK_SOUND_ID,
@@ -11,7 +10,6 @@ import {
 } from "./config";
 import {
   calculateMagnetEffectRatio,
-  calculateMagnetSnapLocation,
   resolveMagnetContactAxis,
 } from "./math";
 import {
@@ -60,18 +58,6 @@ function updateMagnetStickState(
   }
 
   if (state.isStuck) {
-    if (
-      state.stuckLocation &&
-      Vector3Utils.distance(player.location, state.stuckLocation) >
-        MAGNET_JITTER_RESNAP_THRESHOLD
-    ) {
-      try {
-        player.teleport(state.stuckLocation, {
-          rotation: player.getRotation(),
-          keepVelocity: false,
-        });
-      } catch {}
-    }
     return;
   }
 
@@ -108,19 +94,12 @@ function updateMagnetStickState(
 
   if (!shouldStick) return;
 
-  const snapLocation = calculateMagnetSnapLocation(
-    player.location,
-    state.anchor,
-    contactDir,
-  );
   state.isStuck = true;
-  state.stuckLocation = snapLocation;
-  try {
-    player.teleport(snapLocation, {
-      rotation: player.getRotation(),
-      keepVelocity: false,
-    });
-  } catch {}
+  state.stuckLocation = {
+    x: player.location.x,
+    y: player.location.y,
+    z: player.location.z,
+  };
   playSound(player, MAGNET_STICK_SOUND_ID, 1.4);
 }
 
