@@ -22,6 +22,8 @@ export interface MagnetHookshotState
   canAutoDetachOnGround?: boolean;
   /** ゼロ速度インパルス固定で吸着中かどうか */
   isStuck?: boolean;
+  /** 吸着固定時のスナップ座標（ジッター補正用） */
+  stuckLocation?: Vector3;
   /** 動作音再生の直近Tick */
   lastActiveSoundTick?: number;
   /** 反発初回バーストの直近発動Tick */

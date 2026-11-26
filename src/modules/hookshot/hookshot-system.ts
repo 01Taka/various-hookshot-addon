@@ -1536,59 +1536,93 @@ export class HookshotSystem {
     if (state.activeMode === "attract") {
       if (!state.isStuck && dist > EPSILON) {
         let shouldStick = false;
+        const toAnchor = Vector3Utils.subtract(state.anchor, chestPos);
+        const ax = Math.abs(toAnchor.x);
+        const ay = Math.abs(toAnchor.y);
+        const az = Math.abs(toAnchor.z);
+
+        let contactDir: Vector3 = { x: 0, y: 1, z: 0 };
+        if (ax >= ay && ax >= az) {
+          contactDir = { x: Math.sign(toAnchor.x) || 1, y: 0, z: 0 };
+        } else if (az >= ax && az >= ay) {
+          contactDir = { x: 0, y: 0, z: Math.sign(toAnchor.z) || 1 };
+        } else {
+          contactDir = { x: 0, y: Math.sign(toAnchor.y) || 1, z: 0 };
+        }
+
         try {
-          if (Vector3Utils.distance(player.getHeadLocation(), state.anchor) <= 1.0) {
+          if (
+            Vector3Utils.distance(player.getHeadLocation(), state.anchor) <= 1.0
+          ) {
             shouldStick = true;
           }
         } catch {}
 
-        if (!shouldStick) {
-          const toAnchor = Vector3Utils.subtract(state.anchor, chestPos);
-          const ax = Math.abs(toAnchor.x);
-          const ay = Math.abs(toAnchor.y);
-          const az = Math.abs(toAnchor.z);
-          if (ax > EPSILON || ay > EPSILON || az > EPSILON) {
-            let dir: Vector3;
-            let surfaceDist: number;
-            if (ax >= ay && ax >= az) {
-              dir = { x: Math.sign(toAnchor.x), y: 0, z: 0 };
-              surfaceDist = 0.3;
-            } else if (az >= ax && az >= ay) {
-              dir = { x: 0, y: 0, z: Math.sign(toAnchor.z) };
-              surfaceDist = 0.3;
-            } else {
-              dir = { x: 0, y: Math.sign(toAnchor.y), z: 0 };
-              surfaceDist = toAnchor.y >= 0 ? 0.8 : 1.0;
+        if (!shouldStick && (ax > EPSILON || ay > EPSILON || az > EPSILON)) {
+          const surfaceDist =
+            contactDir.y !== 0 ? (contactDir.y > 0 ? 0.8 : 1.0) : 0.3;
+          try {
+            const stickHit = player.dimension.getBlockFromRay(
+              chestPos,
+              contactDir,
+              {
+                maxDistance: surfaceDist + 0.25,
+                includeLiquidBlocks: false,
+                includePassableBlocks: false,
+              },
+            );
+            if (
+              stickHit &&
+              Math.floor(stickHit.block.x) === state.blockPos.x &&
+              Math.floor(stickHit.block.y) === state.blockPos.y &&
+              Math.floor(stickHit.block.z) === state.blockPos.z
+            ) {
+              shouldStick = true;
             }
-            try {
-              const stickHit = player.dimension.getBlockFromRay(
-                chestPos,
-                dir,
-                {
-                  maxDistance: surfaceDist + 0.25,
-                  includeLiquidBlocks: false,
-                  includePassableBlocks: false,
-                },
-              );
-              if (
-                stickHit &&
-                Math.floor(stickHit.block.x) === state.blockPos.x &&
-                Math.floor(stickHit.block.y) === state.blockPos.y &&
-                Math.floor(stickHit.block.z) === state.blockPos.z
-              ) {
-                shouldStick = true;
-              }
-            } catch {}
-          }
+          } catch {}
         }
 
         if (shouldStick) {
+          const loc = player.location;
+          const snapLocation: Vector3 = {
+            x:
+              contactDir.x !== 0
+                ? state.anchor.x - contactDir.x * 0.82
+                : loc.x,
+            y:
+              contactDir.y > 0
+                ? state.anchor.y - 2.32
+                : contactDir.y < 0
+                  ? state.anchor.y + 0.5
+                  : loc.y,
+            z:
+              contactDir.z !== 0
+                ? state.anchor.z - contactDir.z * 0.82
+                : loc.z,
+          };
           state.isStuck = true;
+          state.stuckLocation = snapLocation;
+          try {
+            player.teleport(snapLocation, {
+              rotation: player.getRotation(),
+              keepVelocity: false,
+            });
+          } catch {}
           this.playSoundSafe(player, "random.click", 1.4);
         }
+      } else if (state.isStuck && state.stuckLocation) {
+        if (Vector3Utils.distance(player.location, state.stuckLocation) > 0.15) {
+          try {
+            player.teleport(state.stuckLocation, {
+              rotation: player.getRotation(),
+              keepVelocity: false,
+            });
+          } catch {}
+        }
       }
-    } else if (state.isStuck) {
+    } else if (state.isStuck || state.stuckLocation) {
       state.isStuck = false;
+      state.stuckLocation = undefined;
     }
 
     if (state.activeMode !== "none") {
