@@ -36,7 +36,12 @@
         }
       },
       "minecraft:particle_appearance_tinting": {
-        "color": [0.35, 0.78, 1.0, 0.9]
+        "color": [
+          "variable.color_a > 0 ? variable.color_r : 0.35",
+          "variable.color_a > 0 ? variable.color_g : 0.78",
+          "variable.color_a > 0 ? variable.color_b : 1.0",
+          "variable.color_a > 0 ? variable.color_a : 0.9"
+        ]
       }
     }
   }

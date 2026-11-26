@@ -163,14 +163,36 @@ export const MAGNET_REPEL_WIRE_STYLE: WireStyle = {
 };
 
 /**
- * マグネットフックの通常磁化ブロック囲み枠線（紫青系）
+ * マグネットフックの待機中ブロック囲み枠線（ガイドと同色）
  */
 export const MAGNET_NODE_OUTLINE_STYLE: BlockOutlineStyle = {
   particleId: "various_hookshot_addon:block_outline",
   stepDistance: 0.35,
   padding: 0.04,
   particleSize: 0.09,
-  color: { r: 0.35, g: 0.72, b: 1.0, a: 0.9 },
+  color: { r: 0.65, g: 0.78, b: 0.9, a: 0.45 },
+};
+
+/**
+ * マグネットフックの吸引中ブロック囲み枠線（青系・ガイドと同色）
+ */
+export const MAGNET_ATTRACT_OUTLINE_STYLE: BlockOutlineStyle = {
+  particleId: "various_hookshot_addon:block_outline",
+  stepDistance: 0.35,
+  padding: 0.04,
+  particleSize: 0.09,
+  color: { r: 0.2, g: 0.65, b: 1.0, a: 0.95 },
+};
+
+/**
+ * マグネットフックの反発中ブロック囲み枠線（赤系・ガイドと同色）
+ */
+export const MAGNET_REPEL_OUTLINE_STYLE: BlockOutlineStyle = {
+  particleId: "various_hookshot_addon:block_outline",
+  stepDistance: 0.35,
+  padding: 0.04,
+  particleSize: 0.09,
+  color: { r: 1.0, g: 0.25, b: 0.25, a: 0.95 },
 };
 
 /**

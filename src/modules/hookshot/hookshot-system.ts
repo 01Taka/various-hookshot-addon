@@ -8,6 +8,7 @@ import {
   GameMode,
   ItemComponentTypes,
   ItemStack,
+  MolangVariableMap,
   Player,
   system,
   Vector3,
@@ -24,10 +25,11 @@ import {
   BlockOutlineRenderer,
   HookRenderManager,
   LineRenderer,
+  MAGNET_ATTRACT_OUTLINE_STYLE,
   MAGNET_ATTRACT_WIRE_STYLE,
   MAGNET_GUIDE_WIRE_STYLE,
-  MAGNET_METALLIC_OUTLINE_STYLE,
   MAGNET_NODE_OUTLINE_STYLE,
+  MAGNET_REPEL_OUTLINE_STYLE,
   MAGNET_REPEL_WIRE_STYLE,
   WireStyle,
 } from "../render";
@@ -1585,17 +1587,33 @@ export class HookshotSystem {
       }
     }
 
+    const outlineStyle =
+      state.activeMode === "attract"
+        ? MAGNET_ATTRACT_OUTLINE_STYLE
+        : state.activeMode === "repel"
+          ? MAGNET_REPEL_OUTLINE_STYLE
+          : MAGNET_NODE_OUTLINE_STYLE;
+
     BlockOutlineRenderer.drawBlockOutline(
       player.dimension,
       state.blockPos,
-      MAGNET_NODE_OUTLINE_STYLE,
+      outlineStyle,
     );
 
-    if (system.currentTick % 4 === 0) {
+    if (state.activeMode !== "none" && system.currentTick % 4 === 0) {
+      const color = outlineStyle.color;
+      const molangVars = new MolangVariableMap();
+      if (color) {
+        molangVars.setFloat("variable.color_r", color.r);
+        molangVars.setFloat("variable.color_g", color.g);
+        molangVars.setFloat("variable.color_b", color.b);
+        molangVars.setFloat("variable.color_a", color.a ?? 0.95);
+      }
       try {
         player.dimension.spawnParticle(
           "various_hookshot_addon:magnet_charge",
           state.anchor,
+          molangVars,
         );
       } catch {}
     }
