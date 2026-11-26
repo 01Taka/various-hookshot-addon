@@ -71,8 +71,11 @@ function updateMagnetStickState(
     z: player.location.z,
   };
   const headDist = Vector3Utils.distance(headPos, state.anchor);
+  const feetDist = Vector3Utils.distance(player.location, state.anchor);
 
-  let shouldStick = headDist <= MAGNET_HEAD_STICK_RADIUS;
+  let shouldStick =
+    headDist <= MAGNET_HEAD_STICK_RADIUS ||
+    feetDist <= MAGNET_HEAD_STICK_RADIUS;
 
   if (!shouldStick && Vector3Utils.magnitude(contactDir) > EPSILON) {
     try {
