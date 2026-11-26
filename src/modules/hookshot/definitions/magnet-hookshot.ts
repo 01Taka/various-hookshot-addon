@@ -14,10 +14,12 @@ export interface MagnetHookshotState
   extends BaseHookshotState<typeof MAGNET_HOOKSHOT_ID> {
   /** 磁化されているブロックの整数座標 */
   blockPos: Vector3;
-  /** 現在発動中の磁力モード ("none" / "attract"=Jump / "repel"=Shift) */
+  /** 現在発動中の磁力モード ("none" / "attract"=Shift / "repel"=Jump) */
   activeMode: MagnetForceMode;
   /** 今Tickがモード開始瞬間（初速／爆発バースト適用Tick）かどうか */
   isModeEntryTick?: boolean;
+  /** 地上・無入力での自動解除が有効になったか（起動済みまたは一度空中を経由） */
+  canAutoDetachOnGround?: boolean;
   /** 引き寄せ吸着ロック中かどうか（カチッ音の一回再生判定用） */
   isAttractLocked?: boolean;
   /** 動作音再生の直近Tick */

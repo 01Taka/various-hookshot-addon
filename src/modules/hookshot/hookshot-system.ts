@@ -197,9 +197,9 @@ export class HookshotSystem {
         state.activeMode === "attract"
           ? distance <= def.physics.attractLockRadius
             ? "吸着ロック"
-            : "吸引(Jump)"
+            : "吸引(Shift)"
           : state.activeMode === "repel"
-            ? "反発(Shift)"
+            ? "反発(Jump)"
             : effectRatio <= 0
               ? "待機ゾーン"
               : "待機";
@@ -1438,6 +1438,7 @@ export class HookshotSystem {
       sneakConsumed: isSneakButtonPressed(player),
       activeMode: "none",
       isAttractLocked: false,
+      canAutoDetachOnGround: !player.isOnGround,
     };
 
     PlayerStateManager.set(player.id, ACTIVE_HOOK_KEY, newState);
@@ -1489,10 +1490,16 @@ export class HookshotSystem {
     let desiredMode: MagnetForceMode = "none";
     if (jumpPressed && sneakPressed) {
       desiredMode = "none";
-    } else if (jumpPressed) {
-      desiredMode = "attract";
     } else if (sneakPressed) {
+      desiredMode = "attract";
+    } else if (jumpPressed) {
       desiredMode = "repel";
+    }
+
+    if (desiredMode !== "none" || !player.isOnGround) {
+      state.canAutoDetachOnGround = true;
+    } else if (state.canAutoDetachOnGround && player.isOnGround) {
+      return false;
     }
 
     const prevMode = state.activeMode;
