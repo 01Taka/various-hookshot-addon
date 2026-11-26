@@ -1547,13 +1547,31 @@ export class HookshotSystem {
           ? MAGNET_REPEL_WIRE_STYLE.particleId
           : MAGNET_GUIDE_WIRE_STYLE.particleId;
     const playerSidePos = LineRenderer.getHandPosition(player);
+    const diff = Vector3Utils.subtract(state.anchor, playerSidePos);
+    const dist = Vector3Utils.magnitude(diff);
 
-    try {
-      player.dimension.spawnParticle(guideParticleId, state.anchor);
-    } catch {}
-    try {
-      player.dimension.spawnParticle(guideParticleId, playerSidePos);
-    } catch {}
+    if (dist > 0.4) {
+      const toAnchor = Vector3Utils.scale(diff, 1 / dist);
+      const toPlayer = Vector3Utils.scale(toAnchor, -1);
+
+      const p1Offset = Math.min(0.6, dist * 0.15);
+      const p2Offset = Math.min(1.4, dist * 0.35);
+      const m1Offset = Math.min(1.0, dist * 0.25);
+      const m2Offset = Math.min(2.0, dist * 0.45);
+
+      const points: Vector3[] = [
+        Vector3Utils.add(playerSidePos, Vector3Utils.scale(toAnchor, p1Offset)),
+        Vector3Utils.add(playerSidePos, Vector3Utils.scale(toAnchor, p2Offset)),
+        Vector3Utils.add(state.anchor, Vector3Utils.scale(toPlayer, m1Offset)),
+        Vector3Utils.add(state.anchor, Vector3Utils.scale(toPlayer, m2Offset)),
+      ];
+
+      for (const pos of points) {
+        try {
+          player.dimension.spawnParticle(guideParticleId, pos);
+        } catch {}
+      }
+    }
 
     BlockOutlineRenderer.drawBlockOutline(
       player.dimension,
@@ -1566,12 +1584,6 @@ export class HookshotSystem {
         player.dimension.spawnParticle(
           "various_hookshot_addon:magnet_charge",
           state.anchor,
-        );
-      } catch {}
-      try {
-        player.dimension.spawnParticle(
-          "various_hookshot_addon:magnet_charge",
-          playerSidePos,
         );
       } catch {}
     }
