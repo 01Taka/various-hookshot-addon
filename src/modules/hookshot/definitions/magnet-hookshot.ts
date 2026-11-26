@@ -18,6 +18,8 @@ export interface MagnetHookshotState
   activeMode: MagnetForceMode;
   /** 今Tickがモード開始瞬間（初速／爆発バースト適用Tick）かどうか */
   isModeEntryTick?: boolean;
+  /** 一度でも引き寄せまたは反発を実行したかどうか */
+  hasActivatedForce?: boolean;
   /** 引き寄せ吸着ロック中かどうか（カチッ音の一回再生判定用） */
   isAttractLocked?: boolean;
   /** 動作音再生の直近Tick */
