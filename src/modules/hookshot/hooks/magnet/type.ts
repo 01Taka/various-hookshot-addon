@@ -12,7 +12,6 @@ export interface MagnetPhysicsConfig {
   attractInitialSpeed: number;
   attractAccel: number;
   attractMaxSpeed: number;
-  attractStickRadius: number;
   attractGravityCancelStart: number;
   attractGravityCancelRampTicks: number;
   repelBurstSpeed: number;

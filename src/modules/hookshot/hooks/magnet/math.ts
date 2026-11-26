@@ -103,7 +103,7 @@ export function calculateMagnetFixedStickLocation(
 
 /**
  * 距離ゾーン effectRatio(r) に基づき、マグネットフックの毎Tickインパルスを計算します。
- * - attract: 2m超は初速→加速の無重力補間、2m以内は1/3スケール、吸着固定中はゼロ速度維持
+ * - attract: 通常は初速→加速の無重力ランプ補間、吸着固定中は3段階 (damping/aligning/locked)
  * - repel: 初回バースト (1/r) ＋ 5tick後から持続反発 (1/r²)
  */
 export function calculateMagnetHookshot(
@@ -180,7 +180,7 @@ export function calculateMagnetHookshot(
       }
       targetVel = Vector3Utils.lerp(predictedVel, desiredVel, effectRatio);
 
-      // 無重力化率を時間経過で 35% → 100%（10 ticks）へランプアップ
+      // 無重力化率を時間経過で 35% → 100%（20 ticks）へランプアップ
       const timeProgress = Math.min(
         1,
         attractHoldTicks / Math.max(config.attractGravityCancelRampTicks, 1),

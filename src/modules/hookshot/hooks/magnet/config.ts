@@ -37,7 +37,6 @@ export const magnetHookshotConfig: Omit<
     attractInitialSpeed: 1.6,
     attractAccel: 0.2,
     attractMaxSpeed: 3.0,
-    attractStickRadius: 1.6,
     attractGravityCancelStart: 0.35,
     attractGravityCancelRampTicks: 20,
     repelBurstSpeed: 2.2,
