@@ -21,12 +21,6 @@ export interface MagnetPhysicsConfig {
   attractAccel: number;
   /** 引き寄せの最高速度上限 (blocks/tick, 2倍 = 4.0) */
   attractMaxSpeed: number;
-  /** 引き寄せ時の吸着ロック半径 (blocks, 1.2m = ブロック密着距離) */
-  attractLockRadius: number;
-  /** ロック半径到達前の予測ブレーキ時間 (ticks, 3.0) */
-  attractBrakeTicks: number;
-  /** 予測ブレーキの最低アプローチ速度 (blocks/tick) */
-  attractBrakeMinSpeed: number;
   /** 反発開始時の爆発初速 (blocks/tick) */
   repelBurstSpeed: number;
   /** 反発長押し中に放出し続ける持続反発加速度 (blocks/tick^2) */
@@ -107,34 +101,17 @@ export function calculateMagnetHookshot(
 
   if (mode === "attract") {
     let desiredVel: Vector3;
-    if (distance <= config.attractLockRadius) {
-      // 至近距離（1.2m以内・密着時）: 無重力＋緩い引き寄せ（勢い100%無効化なし）
-      const zeroGVel: Vector3 = {
-        x: currentVel.x * dragXZ,
-        y: currentVel.y * dragY,
-        z: currentVel.z * dragXZ,
-      };
-      const pullAccel = distance > 0.25 ? 0.06 : 0;
-      desiredVel =
-        distance >= EPSILON
-          ? Vector3Utils.add(zeroGVel, Vector3Utils.scale(dir, pullAccel))
-          : zeroGVel;
+    if (isEntryTick) {
+      // 開始瞬間: 初速（1.6 b/t）で発進
+      desiredVel = Vector3Utils.scale(dir, config.attractInitialSpeed);
     } else {
-      const remainDist = Math.max(0, distance - config.attractLockRadius);
+      // 2 Tick目以降: 加速度で上限（4.0 b/t）まで連続的に引き寄せ続ける
       const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
-      const baseNextSpeed = isEntryTick
-        ? config.attractInitialSpeed
-        : Math.min(
-            config.attractMaxSpeed,
-            Math.max(curDirSpeed, config.attractInitialSpeed) +
-              config.attractAccel,
-          );
-      // ロック半径到達の約3tick前から距離に応じた安全速度へ減速（通り過ぎ・荒ぶり防止）
-      const brakeSafeSpeed = Math.max(
-        config.attractBrakeMinSpeed,
-        remainDist / Math.max(config.attractBrakeTicks, 1),
+      const nextSpeed = Math.min(
+        config.attractMaxSpeed,
+        Math.max(curDirSpeed, config.attractInitialSpeed) +
+          config.attractAccel,
       );
-      const nextSpeed = Math.min(baseNextSpeed, brakeSafeSpeed);
       desiredVel = Vector3Utils.scale(dir, nextSpeed);
     }
     targetVel = Vector3Utils.lerp(predictedVel, desiredVel, effectRatio);

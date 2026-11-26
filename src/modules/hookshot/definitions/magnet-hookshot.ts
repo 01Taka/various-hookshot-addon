@@ -20,8 +20,6 @@ export interface MagnetHookshotState
   isModeEntryTick?: boolean;
   /** 地上・無入力での自動解除が有効になったか（起動済みまたは一度空中を経由） */
   canAutoDetachOnGround?: boolean;
-  /** 引き寄せ吸着ロック中かどうか（カチッ音の一回再生判定用） */
-  isAttractLocked?: boolean;
   /** 動作音再生の直近Tick */
   lastActiveSoundTick?: number;
   /** 反発初回バーストの直近発動Tick */
@@ -73,9 +71,6 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     attractInitialSpeed: 1.6,
     attractAccel: 0.2,
     attractMaxSpeed: 4.0,
-    attractLockRadius: 1.2,
-    attractBrakeTicks: 3.0,
-    attractBrakeMinSpeed: 0.2,
     repelBurstSpeed: 3.6,
     repelSustainAccel: 0.2,
     repelRefDistance: 10.0,

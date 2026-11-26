@@ -195,9 +195,7 @@ export class HookshotSystem {
       const effectPercent = Math.round(effectRatio * 100);
       const modeText =
         state.activeMode === "attract"
-          ? distance <= def.physics.attractLockRadius
-            ? "吸着ロック"
-            : "吸引(Shift)"
+          ? "吸引(Shift)"
           : state.activeMode === "repel"
             ? "反発(Jump)"
             : effectRatio <= 0
@@ -1437,7 +1435,6 @@ export class HookshotSystem {
       jumpConsumed: isInputButtonPressed(player, "Jump") || player.isJumping,
       sneakConsumed: isSneakButtonPressed(player),
       activeMode: "none",
-      isAttractLocked: false,
       canAutoDetachOnGround: !player.isOnGround,
     };
 
@@ -1525,8 +1522,6 @@ export class HookshotSystem {
       z: player.location.z,
     };
     const dist = Vector3Utils.distance(chestPos, state.anchor);
-    state.isAttractLocked =
-      state.activeMode === "attract" && dist <= def.physics.attractLockRadius;
 
     if (state.activeMode !== "none") {
       const effectRatio = calculateMagnetEffectRatio(dist, def.physics);
