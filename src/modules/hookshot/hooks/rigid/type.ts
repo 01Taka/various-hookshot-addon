@@ -15,6 +15,7 @@ export interface RigidPhysicsConfig {
   tautMargin: number;
   innerSwingMargin: number;
   innerBaumgarteFactor: number;
+  radialCorrectionGain: number;
   inwardEscapeThreshold: number;
   maxSteeringSpeed: number;
   maxSteeringSpeedNormal?: number;

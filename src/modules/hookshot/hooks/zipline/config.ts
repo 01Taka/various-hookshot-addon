@@ -54,6 +54,7 @@ export const ziplineHookshotConfig: Omit<
     tautMargin: 0.25,
     innerSwingMargin: 2.0,
     innerBaumgarteFactor: 0.08,
+    radialCorrectionGain: 0.7,
     inwardEscapeThreshold: 0.45,
     maxSteeringSpeed: 2.2,
     swingPumpAccelNormal: 0.015,

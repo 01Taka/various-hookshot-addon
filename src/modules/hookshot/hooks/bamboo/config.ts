@@ -46,6 +46,7 @@ export const bambooHookshotConfig: Omit<
     flexibility: 1.0,
     baseStiffnessFactor: 0.14,
     maxCompression: 5.0,
+    bottomOutBaumgarteFactor: 0.2,
     tangentTransferRatio: 0.7,
     damping: 0.02,
     maxAcceleration: 12,

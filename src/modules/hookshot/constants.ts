@@ -19,12 +19,6 @@ export const PLAYER_CHEST_HEIGHT_OFFSET = 1.0;
 /** アンカーとプレイヤー位置がほぼ重なった場合に法線へフォールバックする閾値距離 (blocks) */
 export const PROJECTION_FALLBACK_DISTANCE = 0.25;
 
-/** 限界圧縮底打ち拘束における Baumgarte 位置誤差安定化係数 */
-export const BAUMGARTE_BOTTOM_OUT_FACTOR = 0.2;
-
-/** 剛体ロープの同期遅延による発振を防ぐ動径補正ゲイン */
-export const RADIAL_CORRECTION_GAIN = 0.7;
-
 /** 標準空中水平空気抵抗 (XZ) */
 export const AIR_DRAG_BASE = 0.99;
 
@@ -39,12 +33,3 @@ export const RETRACT_START_MIN_DISTANCE = 0.1;
 
 /** 格納アニメーションを完了とみなす最小残り距離閾値 (blocks) */
 export const RETRACT_END_MIN_DISTANCE = 0.05;
-
-/** 未着弾構え時の最小ヒット除外距離のフォールバック値 (blocks) */
-export const DEFAULT_PROBING_MIN_HIT_DISTANCE = 1.5;
-
-/** 連続伸縮時の効果音再生間隔フォールバック値 (ticks) */
-export const DEFAULT_CONTINUOUS_SOUND_INTERVAL_TICKS = 4;
-
-/** ステップ／自動伸長・格納時の効果音再生間隔フォールバック値 (ticks) */
-export const DEFAULT_TIMED_SOUND_INTERVAL_TICKS = 2;

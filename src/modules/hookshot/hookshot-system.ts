@@ -21,9 +21,6 @@ import {
 import { HookRenderManager, LineRenderer, WireStyle } from "../render";
 import { PostFlightSystem } from "../post-flight";
 import {
-  DEFAULT_CONTINUOUS_SOUND_INTERVAL_TICKS,
-  DEFAULT_PROBING_MIN_HIT_DISTANCE,
-  DEFAULT_TIMED_SOUND_INTERVAL_TICKS,
   PROJECTION_FALLBACK_DISTANCE,
   RETRACT_END_MIN_DISTANCE,
   RETRACT_START_MIN_DISTANCE,
@@ -455,8 +452,7 @@ export class HookshotSystem {
     }
 
     const head = player.getHeadLocation();
-    const minHitDistance =
-      probing.minHitDistance ?? DEFAULT_PROBING_MIN_HIT_DISTANCE;
+    const minHitDistance = probing.minHitDistance;
 
     const hit = player.dimension.getBlockFromRay(head, dir, {
       maxDistance: state.currentLength,
@@ -520,8 +516,7 @@ export class HookshotSystem {
           config.soundId &&
           (direction > 0 || nextLength > 0)
         ) {
-          const interval =
-            config.soundIntervalTicks ?? DEFAULT_TIMED_SOUND_INTERVAL_TICKS;
+          const interval = config.soundIntervalTicks;
           if (now - nextLastTick >= interval) {
             nextLastTick = now;
             this.playSoundSafe(player, config.soundId);
@@ -1002,8 +997,7 @@ export class HookshotSystem {
 
     let continuousSoundId: string | undefined;
     if (reelConfig.soundId) {
-      const interval =
-        reelConfig.soundIntervalTicks ?? DEFAULT_CONTINUOUS_SOUND_INTERVAL_TICKS;
+      const interval = reelConfig.soundIntervalTicks;
       const lastSoundTick = (state as ContinuousReelState)
         .lastContinuousReelSoundTick;
       if (

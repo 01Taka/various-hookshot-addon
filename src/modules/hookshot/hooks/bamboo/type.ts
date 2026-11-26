@@ -17,6 +17,7 @@ export interface BambooPhysicsConfig {
   baseStiffnessFactor: number;
   compressionStiffness?: number;
   maxCompression?: number;
+  bottomOutBaumgarteFactor: number;
   tangentTransferRatio: number;
   damping: number;
   maxAcceleration: number;

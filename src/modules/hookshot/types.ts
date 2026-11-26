@@ -7,8 +7,20 @@ export type AnchorPosition = Vector3 & { dimensionId: string };
 
 export type ReelMode = "shorten" | "extend";
 
-export type ReelConfig =
+export type ContinuousSoundConfig =
   | {
+      /** 効果音ID */
+      soundId: string;
+      /** 効果音再生間隔 (ticks) */
+      soundIntervalTicks: number;
+    }
+  | {
+      soundId?: undefined;
+      soundIntervalTicks?: undefined;
+    };
+
+export type ReelConfig =
+  | ({
       mode: "continuous";
       /** 継続的な長さ変更速度 (blocks/tick, 単一数値または { shorten, extend } で指定可能) */
       speed: number | { shorten: number; extend: number };
@@ -16,11 +28,7 @@ export type ReelConfig =
       slackSpeed?: number;
       /** ボタンを押した瞬間に追加で一気に変更する瞬間変化量 (blocks, 単一数値または { shorten?, extend? } で指定可能) */
       initialDelta?: number | { shorten?: number; extend?: number };
-      /** 連続伸縮時の効果音ID */
-      soundId?: string;
-      /** 連続伸縮時の効果音再生間隔 (ticks, デフォルト: 4) */
-      soundIntervalTicks?: number;
-    }
+    } & ContinuousSoundConfig)
   | {
       mode: "step";
       /** 1ステップあたりの長さ変化量 (blocks) */
@@ -36,15 +44,11 @@ export type ReelConfig =
     };
 
 export type AirProbingExtendConfig =
-  | {
+  | ({
       mode: "continuous";
       /** 着弾までに自動で伸びる速度 (blocks/tick) */
       speed: number;
-      /** 自動伸長時の効果音ID */
-      soundId?: string;
-      /** 自動伸長時の効果音再生間隔 (ticks, デフォルト: 2) */
-      soundIntervalTicks?: number;
-    }
+    } & ContinuousSoundConfig)
   | {
       mode: "step";
       /** 1ステップで伸びる長さ (blocks) */
@@ -62,8 +66,8 @@ export interface AirProbingConfig {
   initialLength: number;
   /** 着弾までの自動伸長設定 */
   extend: AirProbingExtendConfig;
-  /** 手元・足元の誤爆防止で除外する最小距離 (blocks, デフォルト: 1.5) */
-  minHitDistance?: number;
+  /** 手元・足元の誤爆防止で除外する最小距離 (blocks) */
+  minHitDistance: number;
   /** 構えからブロックに刺さった時の効果音ID */
   hitSoundId?: string;
 }

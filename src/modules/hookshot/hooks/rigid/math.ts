@@ -1,7 +1,7 @@
 import { Vector3Utils } from "@minecraft/math";
 import { Player, Vector3 } from "@minecraft/server";
 import { MINECRAFT_GRAVITY } from "addon-utils";
-import { EPSILON, RADIAL_CORRECTION_GAIN } from "../../constants";
+import { EPSILON } from "../../constants";
 import {
   convertTargetVelocityToImpulse,
   getAirDrag,
@@ -208,7 +208,7 @@ export function calculateRigidVelocity(
     const vtVec = Vector3Utils.subtract(vPred, Vector3Utils.scale(normal, vn));
     const targetRadialSpeed =
       (ropeLength - r) * physics.innerBaumgarteFactor * radialWeight;
-    const effectiveGain = RADIAL_CORRECTION_GAIN * radialWeight;
+    const effectiveGain = physics.radialCorrectionGain * radialWeight;
     const dampedRadialSpeed = vn + (targetRadialSpeed - vn) * effectiveGain;
     return Vector3Utils.add(
       vtVec,
@@ -240,7 +240,7 @@ export function calculateRigidVelocity(
   return excess > 0
     ? Vector3Utils.subtract(
         vPred,
-        Vector3Utils.scale(normal, excess * RADIAL_CORRECTION_GAIN),
+        Vector3Utils.scale(normal, excess * physics.radialCorrectionGain),
       )
     : vPred;
 }
