@@ -27,6 +27,8 @@ export interface MagnetPhysicsConfig {
   repelBurstSpeed: number;
   /** 反発長押し中に放出し続ける持続反発加速度 (blocks/tick^2) */
   repelSustainAccel: number;
+  /** 反発の逆二乗減衰の基準最小距離 r0 (blocks) */
+  repelRefDistance: number;
 }
 
 /**
@@ -127,15 +129,21 @@ export function calculateMagnetHookshot(
   } else {
     const outDir =
       distance >= EPSILON ? Vector3Utils.scale(dir, -1) : { x: 0, y: 1, z: 0 };
+    const clampedR = Math.max(distance, Math.max(config.repelRefDistance, EPSILON));
+    const inverseSquareScale = Math.pow(config.repelRefDistance / clampedR, 2);
+    const repelFactor = inverseSquareScale * effectRatio;
+
     if (isEntryTick) {
-      // 開始瞬間: 爆発初速で弾き出す
-      const burstVel = Vector3Utils.scale(outDir, config.repelBurstSpeed);
-      targetVel = Vector3Utils.lerp(predictedVel, burstVel, effectRatio);
-    } else {
-      // 持続: 常に反発力を放出しつつ空気抵抗・重力で減衰させる
+      // 開始瞬間: 距離の二乗に反比例した爆発初速で弾き出す
       targetVel = Vector3Utils.add(
         predictedVel,
-        Vector3Utils.scale(outDir, config.repelSustainAccel * effectRatio),
+        Vector3Utils.scale(outDir, config.repelBurstSpeed * repelFactor),
+      );
+    } else {
+      // 持続: 距離の二乗に反比例した反発力を放出しつつ空気抵抗・重力で減衰させる
+      targetVel = Vector3Utils.add(
+        predictedVel,
+        Vector3Utils.scale(outDir, config.repelSustainAccel * repelFactor),
       );
     }
   }
