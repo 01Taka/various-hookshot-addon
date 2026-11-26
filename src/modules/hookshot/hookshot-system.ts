@@ -1590,6 +1590,10 @@ export class HookshotSystem {
       }
       // 既に接続中のフックがある場合
       if (currentState.hookshotId === def.id) {
+        if (def.id === "magnet") {
+          this.shotMagnet(player, def);
+          return;
+        }
         // 同じフックショットなら解除（トグル動作）
         this.unhook(player);
         return;
