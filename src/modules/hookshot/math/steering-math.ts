@@ -307,7 +307,15 @@ export function calculateRigidSteering(
     Math.abs(inputVec.x) / inputLen >= adThresholdSin;
 
   // 90°〜110° の減衰区間でもカメラローカルの A/D 符号（D=+1, A=-1）を使うことで逆回転を防止
-  const turnSign = hasADPriority ? (inputVec.x >= 0 ? 1 : -1) : gazeSign;
+  // requireADInput が有効かつ A/D なしの場合は視線符号を使わない
+  const isGazeDisabled = !hasADPriority && !!steering.requireADInput;
+  const turnSign = hasADPriority
+    ? inputVec.x >= 0
+      ? 1
+      : -1
+    : isGazeDisabled
+      ? 0
+      : gazeSign;
 
   // 台形カーブによる旋回比率 (0.0 〜 1.0)
   const rawSteerRatio = calculateTrapezoidSteerRatio(
@@ -342,7 +350,7 @@ export function calculateRigidSteering(
   // 近づくほど × アンカーより下にいる（仰角 > 0）ほど大きくなる上向き回転目標角
   const isBelowAnchor = basis.elevationRad > 0;
   let targetTiltRad = 0;
-  if (isBelowAnchor && centrifugal3DRatio > 0) {
+  if (!isGazeDisabled && isBelowAnchor && centrifugal3DRatio > 0) {
     const distDiff = Math.max(0, basis.horizDist - steering.tiltFullDistance);
     const distProximity =
       steering.tiltHalfDistance > EPSILON

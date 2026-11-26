@@ -52,7 +52,8 @@ export function calculateRigidVelocity(
     : null;
   const isSteeringApplied = !!(
     steerResult &&
-    (steerResult.steerRatio > 0 || steerResult.centrifugal3DRatio > 0)
+    (steerResult.steerRatio > 0 ||
+      (!steering.requireADInput && steerResult.centrifugal3DRatio > 0))
   );
 
   const c3D = steerResult ? steerResult.centrifugal3DRatio : 0;
