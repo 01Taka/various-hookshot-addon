@@ -21,7 +21,7 @@ export interface MagnetPhysicsConfig {
   attractAccel: number;
   /** 引き寄せの最高速度上限 (blocks/tick, 2倍 = 4.0) */
   attractMaxSpeed: number;
-  /** 引き寄せ時の吸着ロック半径 (blocks, 2.0m) */
+  /** 引き寄せ時の吸着ロック半径 (blocks, 1.2m = ブロック密着距離) */
   attractLockRadius: number;
   /** ロック半径到達前の予測ブレーキ時間 (ticks, 3.0) */
   attractBrakeTicks: number;
@@ -108,12 +108,17 @@ export function calculateMagnetHookshot(
   if (mode === "attract") {
     let desiredVel: Vector3;
     if (distance <= config.attractLockRadius) {
-      // 至近距離（2.0m以内）: 勢いをすべて無効化＋無重力＋緩い引き寄せ
-      const pullSpeed = distance > 0.25 ? Math.min(distance * 0.12, 0.16) : 0;
+      // 至近距離（1.2m以内・密着時）: 無重力＋緩い引き寄せ（勢い100%無効化なし）
+      const zeroGVel: Vector3 = {
+        x: currentVel.x * dragXZ,
+        y: currentVel.y * dragY,
+        z: currentVel.z * dragXZ,
+      };
+      const pullAccel = distance > 0.25 ? 0.06 : 0;
       desiredVel =
         distance >= EPSILON
-          ? Vector3Utils.scale(dir, pullSpeed)
-          : { x: 0, y: 0, z: 0 };
+          ? Vector3Utils.add(zeroGVel, Vector3Utils.scale(dir, pullAccel))
+          : zeroGVel;
     } else {
       const remainDist = Math.max(0, distance - config.attractLockRadius);
       const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
