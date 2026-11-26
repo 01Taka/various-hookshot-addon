@@ -339,6 +339,8 @@ export interface BaseHookshotDefinition<
   getWireAxis?: (state: TState) => Vector3 | undefined;
   /** 標準描画時に渡す追加チャージ量取得フック */
   getRenderExtraCharge?: (state: TState) => number | undefined;
+  /** アクションバーHUDの距離・状態テキスト整形フック */
+  formatHudText?: (player: Player, state: TState, distance: number) => string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
