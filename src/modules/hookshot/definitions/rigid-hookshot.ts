@@ -1,12 +1,18 @@
+import { Vector3Utils } from "@minecraft/math";
 import { RIGID_WIRE_STYLE } from "../../render";
 import { calculateRigidHookshot, RigidPhysicsConfig } from "../math/rigid-math";
-import { canUseGazeSteering, RigidSteeringConfig } from "../math/steering-math";
+import {
+  calculateReelSpeedMultiplier,
+  canUseGazeSteering,
+  RigidSteeringConfig,
+} from "../math/steering-math";
 import {
   BaseHookshotDefinition,
   BaseHookshotState,
   ContinuousReelState,
   GazeSteeringCapable,
   RaycastGraceCapable,
+  ReelCapable,
 } from "../types";
 
 export const RIGID_HOOKSHOT_ID = "rigid";
@@ -27,6 +33,7 @@ export interface RigidHookshotState
 
 export interface RigidHookshotDefinition
   extends BaseHookshotDefinition<typeof RIGID_HOOKSHOT_ID, RigidHookshotState>,
+    ReelCapable,
     RaycastGraceCapable,
     GazeSteeringCapable {
   /** 着弾直後にワイヤーが短い間だけ行う高速自動巻き取り設定 */
@@ -140,5 +147,146 @@ export const rigidHookshotDefinition: RigidHookshotDefinition = {
         ? physics.swingPumpAccelVest
         : physics.swingPumpAccelNormal,
     });
+  },
+  onAttach: (_player, state) => {
+    state.autoTakeUpRemainingTicks =
+      rigidHookshotDefinition.autoTakeUp.ticks > 0
+        ? rigidHookshotDefinition.autoTakeUp.ticks
+        : 0;
+  },
+  isReelBlocked: (player, state, mode, ctx) => {
+    if (mode !== "shorten") return false;
+    const { maxSpeed, ticks, restoreDiff } =
+      rigidHookshotDefinition.stallReelStop;
+    const distance = Vector3Utils.distance(player.location, state.anchor);
+    const diff = distance - state.currentLength;
+    const speed = Vector3Utils.magnitude(player.getVelocity());
+    const prevTicks = state.stallReelTicks ?? 0;
+
+    if (speed <= maxSpeed && diff >= restoreDiff - 0.01) {
+      if (prevTicks >= ticks) {
+        if (diff > restoreDiff) {
+          state.currentLength = Math.min(
+            rigidHookshotDefinition.maxDistance,
+            distance - restoreDiff,
+          );
+          ctx.setActiveState(player, state);
+        }
+        return true;
+      }
+      if (diff > restoreDiff) {
+        const nextTicks = prevTicks + 1;
+        state.stallReelTicks = nextTicks;
+        if (nextTicks >= ticks) {
+          state.currentLength = Math.min(
+            rigidHookshotDefinition.maxDistance,
+            distance - restoreDiff,
+          );
+          ctx.setActiveState(player, state);
+          return true;
+        }
+        ctx.setActiveState(player, state);
+        return false;
+      }
+    }
+
+    if (prevTicks !== 0) {
+      state.stallReelTicks = 0;
+      ctx.setActiveState(player, state);
+    }
+    return false;
+  },
+  modifyReelSpeed: (player, state, mode, baseSpeed) => {
+    if (mode === "shorten" && rigidHookshotDefinition.enableGazeSteering) {
+      const multiplier = calculateReelSpeedMultiplier(
+        player,
+        state.anchor,
+        state.currentLength,
+        rigidHookshotDefinition.steering,
+      );
+      return baseSpeed * multiplier;
+    }
+    return baseSpeed;
+  },
+  onLengthChanged: (player, state, mode, _prevLength, nextLength) => {
+    const outward = rigidHookshotDefinition.reelLengthDiffLimit?.outward;
+    if (mode === "shorten" && outward !== undefined && state.isReelingIn) {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      const minAllowedByDiff = distance - outward;
+      if (nextLength <= minAllowedByDiff) {
+        state.isReelingIn = false;
+      }
+    }
+  },
+  onTick: (player, state, { activeReelMode }, ctx) => {
+    let dirty = false;
+
+    if (activeReelMode !== "shorten" && state.stallReelTicks) {
+      state.stallReelTicks = 0;
+      dirty = true;
+    }
+
+    const maxAboveTicks = rigidHookshotDefinition.steering.aboveAnchorDecayTicks;
+    const currentAboveTicks = state.aboveAnchorTicks ?? 0;
+    const currentBelowTicks = state.belowAnchorTicks ?? 0;
+
+    if (player.location.y >= state.anchor.y) {
+      if (currentBelowTicks !== 0) {
+        state.belowAnchorTicks = 0;
+        dirty = true;
+      }
+      if (currentAboveTicks < maxAboveTicks) {
+        state.aboveAnchorTicks = currentAboveTicks + 1;
+        dirty = true;
+      }
+    } else if (currentAboveTicks > 0) {
+      const nextBelowTicks = currentBelowTicks + 1;
+      if (nextBelowTicks !== currentBelowTicks) {
+        state.belowAnchorTicks = nextBelowTicks;
+        dirty = true;
+      }
+      const recoveryDelayTicks =
+        rigidHookshotDefinition.steering.belowAnchorRecoveryDelayTicks ?? 4;
+      const recoveryRate =
+        rigidHookshotDefinition.steering.belowAnchorRecoveryRate ?? 1;
+      if (nextBelowTicks >= recoveryDelayTicks) {
+        const nextAboveTicks = Math.max(0, currentAboveTicks - recoveryRate);
+        if (nextAboveTicks !== currentAboveTicks) {
+          state.aboveAnchorTicks = nextAboveTicks;
+          if (nextAboveTicks === 0) {
+            state.belowAnchorTicks = 0;
+          }
+          dirty = true;
+        }
+      }
+    } else if (currentBelowTicks !== 0) {
+      state.belowAnchorTicks = 0;
+      dirty = true;
+    }
+
+    const remaining = state.autoTakeUpRemainingTicks ?? 0;
+    if (remaining > 0) {
+      if (activeReelMode !== null) {
+        state.autoTakeUpRemainingTicks = 0;
+        dirty = true;
+      } else {
+        const distance = Vector3Utils.distance(player.location, state.anchor);
+        const minLength = rigidHookshotDefinition.minRopeLength;
+        if (distance < state.currentLength) {
+          state.currentLength = Math.max(
+            minLength,
+            distance,
+            state.currentLength - rigidHookshotDefinition.autoTakeUp.speed,
+          );
+        }
+        state.autoTakeUpRemainingTicks =
+          state.currentLength <= minLength ? 0 : remaining - 1;
+        dirty = true;
+      }
+    }
+
+    if (dirty) {
+      ctx.setActiveState(player, state);
+    }
   },
 };

@@ -1,42 +1,7 @@
 import { Player, Vector3 } from "@minecraft/server";
 import { WireStyle } from "../render/types";
-import type {
-  BambooHookshotDefinition,
-  BambooHookshotState,
-} from "./definitions/bamboo-hookshot";
-import type {
-  ElasticHookshotDefinition,
-  ElasticHookshotState,
-} from "./definitions/elastic-hookshot";
-import type {
-  MagnetHookshotDefinition,
-  MagnetHookshotState,
-} from "./definitions/magnet-hookshot";
-import type {
-  RigidHookshotDefinition,
-  RigidHookshotState,
-} from "./definitions/rigid-hookshot";
-import type {
-  RodHookshotDefinition,
-  RodHookshotState,
-} from "./definitions/rod-hookshot";
-import type {
-  SpringHookshotDefinition,
-  SpringHookshotState,
-} from "./definitions/spring-hookshot";
-import type {
-  ZiplineHookshotDefinition,
-  ZiplineHookshotState,
-} from "./definitions/zipline-hookshot";
 
-export type HookshotId =
-  | "bamboo"
-  | "elastic"
-  | "magnet"
-  | "rigid"
-  | "rod"
-  | "spring"
-  | "zipline";
+export type HookshotId = string;
 
 export type AnchorPosition = Vector3 & { dimensionId: string };
 
@@ -117,7 +82,7 @@ export interface ChargeMilestoneSoundConfig {
 }
 
 /**
- * 全フックショットで共通のランタイム状態
+ * 全フックショットで共通の最小限ランタイム状態
  */
 export interface BaseHookshotState<TId extends HookshotId = HookshotId> {
   hookshotId: TId;
@@ -129,7 +94,7 @@ export interface BaseHookshotState<TId extends HookshotId = HookshotId> {
   currentLength: number;
   jumpConsumed?: boolean;
   sneakConsumed?: boolean;
-  /** 空中ジャンプ入力によって現在短縮（巻き取り）中かどうか */
+  /** 短縮（巻き取り）入力中かどうか */
   isReelingIn?: boolean;
 }
 
@@ -184,26 +149,35 @@ export interface ContinuousReelState {
 }
 
 /**
- * 全フックショットで共通の定義プロパティ
+ * HookshotSystem が定義側のライフサイクルフックへ提供する共通操作コンテキスト
  */
-export interface BaseHookshotDefinition<
-  TId extends HookshotId = HookshotId,
-  TState extends BaseHookshotState<TId> = BaseHookshotState<TId>,
-> {
-  /** 一意な識別子 */
-  id: TId;
-  /** 使用するアイテムの typeId */
-  itemTypeId: string;
-  /** Raycast の最大射程距離 (blocks) */
-  maxDistance: number;
+export interface HookshotContext {
+  playSound: (player: Player, soundId?: string, pitch?: number) => void;
+  unhook: (
+    player: Player,
+    options?: UnhookOptions,
+  ) => void;
+  consumeDurability: (
+    player: Player,
+    expectedItemTypeId: string,
+    slotIndex?: number,
+  ) => void;
+  setActiveState: (player: Player, state: BaseHookshotState) => void;
+  clearActiveState: (player: Player) => void;
+}
+
+export interface UnhookOptions {
+  skipReleaseShot?: boolean;
+  overrideSoundId?: string;
+}
+
+export interface ReelCapable {
   /** ロープ長の変更挙動設定（連続またはステップ） */
   reel: ReelConfig;
   /** 長さ変更の挙動モード ("shorten": 縮む, "extend": 伸びる) */
   reelMode: ReelMode;
   /** 最小ロープ長 (blocks) */
   minRopeLength: number;
-  /** 剛体・限界長拘束における Baumgarte 位置誤差安定化係数 */
-  baumgarteFactor?: number;
   /** 着弾中の実距離とロープ長の差による伸縮制限 (blocks) */
   reelLengthDiffLimit?: {
     /** 実距離がロープ長よりこの値以上長いとき、短縮（巻き取り）を停止する */
@@ -211,12 +185,6 @@ export interface BaseHookshotDefinition<
     /** ロープ長が実距離よりこの値以上長いとき、伸長を停止する */
     inward?: number;
   };
-  /** ワイヤーの描画スタイル（パーティクル、形状モードなど） */
-  wireStyle: WireStyle;
-  /** 発射時の効果音ID */
-  shotSoundId: string;
-  /** 毎Tickの物理インパルス計算 */
-  calculateImpulse: (player: Player, state: TState) => Vector3;
 }
 
 /**
@@ -255,20 +223,129 @@ export interface GazeSteeringCapable {
   enableGazeSteering: boolean;
 }
 
-export type HookshotState =
-  | BambooHookshotState
-  | ElasticHookshotState
-  | MagnetHookshotState
-  | RigidHookshotState
-  | RodHookshotState
-  | SpringHookshotState
-  | ZiplineHookshotState;
+/**
+ * 全フックショットで共通の最小限定義プロパティ＋ライフサイクルフック
+ */
+export interface BaseHookshotDefinition<
+  TId extends HookshotId = HookshotId,
+  TState extends BaseHookshotState<TId> = BaseHookshotState<TId>,
+> {
+  /** 一意な識別子 */
+  id: TId;
+  /** 使用するアイテムの typeId */
+  itemTypeId: string;
+  /** Raycast の最大射程距離 (blocks) */
+  maxDistance: number;
+  /** 剛体・限界長拘束における Baumgarte 位置誤差安定化係数 */
+  baumgarteFactor?: number;
+  /** ワイヤーの描画スタイル（パーティクル、形状モードなど） */
+  wireStyle: WireStyle;
+  /** 発射時の効果音ID */
+  shotSoundId: string;
+  /** 解除時の効果音ID */
+  detachSoundId?: string;
+  /** 解除時に耐久値を消費するかどうか（デフォルト: true） */
+  consumeDurabilityOnDetach?: boolean;
+  /** 毎Tickの物理インパルス計算 */
+  calculateImpulse: (player: Player, state: TState) => Vector3;
 
-export type HookshotDefinition =
-  | BambooHookshotDefinition
-  | ElasticHookshotDefinition
-  | MagnetHookshotDefinition
-  | RigidHookshotDefinition
-  | RodHookshotDefinition
-  | SpringHookshotDefinition
-  | ZiplineHookshotDefinition;
+  // --- ライフサイクルフック（個別仕様の移譲先） ---
+  /** 標準のレイキャスト発射を置き換えるカスタム発射処理 */
+  customShot?: (player: Player, ctx: HookshotContext) => boolean;
+  /** 既に同じフックショットが接続中のときに再使用された場合のフック（true を返すと標準トグル解除をスキップ） */
+  onToggleWhileActive?: (
+    player: Player,
+    state: TState,
+    ctx: HookshotContext,
+  ) => boolean;
+  /** 初期状態の追加初期化フック */
+  onCreateState?: (player: Player, state: TState) => void;
+  /** アンカー確定（着弾）時のフック */
+  onAttach?: (
+    player: Player,
+    state: TState,
+    info: { initialDirection: Vector3; distance: number },
+    ctx: HookshotContext,
+  ) => void;
+  /** 解除処理の開始直前（耐久消費や格納アニメーション前）のフック */
+  onBeforeDetach?: (
+    player: Player,
+    state: TState,
+    options: UnhookOptions | undefined,
+    ctx: HookshotContext,
+  ) => void;
+  /** 解除時のクリーンアップフック */
+  onDetach?: (player: Player, state: TState, ctx: HookshotContext) => void;
+  /** 標準の入力伸縮処理を許可するかどうかの判定 */
+  canHandleReelInput?: (player: Player, state: TState) => boolean;
+  /** チャージ＆リリース型（両押し/シフト押下で isReelingIn を維持）かどうか */
+  hasChargeRelease?: boolean;
+  /** 短縮・伸長入力が固有条件でブロックされているかの判定 */
+  isReelBlocked?: (
+    player: Player,
+    state: TState,
+    mode: ReelMode,
+    ctx: HookshotContext,
+  ) => boolean;
+  /** 連続伸縮時の基本速度を補正するフック */
+  modifyReelSpeed?: (
+    player: Player,
+    state: TState,
+    mode: ReelMode,
+    baseSpeed: number,
+    isInitial: boolean,
+  ) => number;
+  /** 長さ変更のカスタム適用フック（返り値で変更有無と強制保存を指定） */
+  customApplyLengthDelta?: (
+    player: Player,
+    state: TState,
+    mode: ReelMode,
+    delta: number,
+    forceSave: boolean,
+    soundId: string | undefined,
+    ctx: HookshotContext,
+  ) => boolean;
+  /** 長さ変更が適用された後のフック */
+  onLengthChanged?: (
+    player: Player,
+    state: TState,
+    mode: ReelMode,
+    prevLength: number,
+    nextLength: number,
+  ) => void;
+  /** 毎Tick更新フック（アンカー確定・未確定を問わず、入力処理の後に呼ばれる。false を返すとそのTickの残り処理をスキップ） */
+  onTick?: (
+    player: Player,
+    state: TState,
+    info: { activeReelMode: ReelMode | null; wasReelingIn: boolean },
+    ctx: HookshotContext,
+  ) => boolean | void;
+  /** 過伸長などによる自動解除判定フック */
+  shouldDetach?: (
+    player: Player,
+    state: TState,
+    distance: number,
+  ) => { detach: true; options?: UnhookOptions } | { detach: false };
+  /** 物理インパルス適用後のフック */
+  onImpulseApplied?: (
+    player: Player,
+    state: TState,
+    impulse: Vector3,
+    ctx: HookshotContext,
+  ) => void;
+  /** カスタム描画フック（未指定時は HookRenderManager.renderHookshot を使用） */
+  render?: (player: Player, state: TState) => void;
+  /** 標準描画時に渡すワイヤー軸解決フック */
+  getWireAxis?: (state: TState) => Vector3 | undefined;
+  /** 標準描画時に渡す追加チャージ量取得フック */
+  getRenderExtraCharge?: (state: TState) => number | undefined;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type HookshotState = BaseHookshotState<any>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type HookshotDefinition = BaseHookshotDefinition<string, any> &
+  Partial<
+    ReelCapable & AirProbingCapable & RetractCapable & RaycastGraceCapable
+  >;

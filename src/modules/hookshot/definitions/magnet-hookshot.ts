@@ -31,6 +31,7 @@ import {
   AnchorPosition,
   BaseHookshotDefinition,
   BaseHookshotState,
+  HookshotContext,
 } from "../types";
 
 export const MAGNET_HOOKSHOT_ID = "magnet";
@@ -91,12 +92,7 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
   id: MAGNET_HOOKSHOT_ID,
   itemTypeId: MAGNET_ITEM_ID,
   maxDistance: 100,
-  reel: {
-    mode: "continuous",
-    speed: 0,
-  },
-  reelMode: "shorten",
-  minRopeLength: 0,
+  consumeDurabilityOnDetach: false,
   wireStyle: MAGNET_GUIDE_WIRE_STYLE,
   shotSoundId: "crossbow.shoot",
   hitSoundId: "block.lodestone.place",
@@ -136,7 +132,80 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
       magnetHookshotDefinition.physics,
     );
   },
+  customShot: (player, ctx) =>
+    shotMagnet(player, magnetHookshotDefinition, ctx, false),
+  onToggleWhileActive: (player, _state, ctx) => {
+    shotMagnet(player, magnetHookshotDefinition, ctx, true);
+    return true;
+  },
+  onTick: (player, state, _info, ctx) => {
+    const keep = stepMagnetState(
+      player,
+      state,
+      magnetHookshotDefinition,
+      (p, id, pitch) => ctx.playSound(p, id, pitch),
+    );
+    if (!keep) {
+      ctx.unhook(player);
+      return false;
+    }
+    ctx.setActiveState(player, state);
+  },
+  onImpulseApplied: (player, state, impulse) => {
+    if (
+      (impulse.x !== 0 || impulse.y !== 0 || impulse.z !== 0) &&
+      state.activeMode === "repel" &&
+      state.isModeEntryTick &&
+      impulse.y >= magnetHookshotDefinition.physics.repelSlowFallMinImpulseY
+    ) {
+      try {
+        player.addEffect("slow_falling", 1, {
+          amplifier: 0,
+          showParticles: false,
+        });
+      } catch {}
+    }
+  },
+  render: (player, state) => {
+    renderMagnetHookshot(player, state);
+  },
 };
+
+function shotMagnet(
+  player: Player,
+  def: MagnetHookshotDefinition,
+  ctx: HookshotContext,
+  isAlreadyActive: boolean,
+): boolean {
+  if (!player.isValid) return false;
+
+  let hit: BlockRaycastHit | undefined;
+  try {
+    hit = player.getBlockFromViewDirection({
+      maxDistance: def.maxDistance,
+      includeLiquidBlocks: false,
+      includePassableBlocks: false,
+    });
+  } catch {
+    hit = undefined;
+  }
+
+  if (!hit) {
+    if (isAlreadyActive) {
+      ctx.unhook(player);
+    } else {
+      ctx.playSound(player, def.missSoundId);
+    }
+    return false;
+  }
+
+  const newState = createMagnetStateFromHit(player, hit);
+  ctx.setActiveState(player, newState);
+  ctx.playSound(player, def.shotSoundId);
+  ctx.playSound(player, def.hitSoundId);
+  ctx.consumeDurability(player, def.itemTypeId, newState.slotIndex);
+  return true;
+}
 
 export type MagnetSoundPlayer = (
   player: Player,

@@ -5,6 +5,7 @@ import {
   AirProbingState,
   BaseHookshotDefinition,
   BaseHookshotState,
+  ReelCapable,
   RetractCapable,
   RetractState,
   StepReelState,
@@ -21,6 +22,7 @@ export interface RodHookshotState
 
 export interface RodHookshotDefinition
   extends BaseHookshotDefinition<typeof ROD_HOOKSHOT_ID, RodHookshotState>,
+    ReelCapable,
     AirProbingCapable,
     RetractCapable {}
 

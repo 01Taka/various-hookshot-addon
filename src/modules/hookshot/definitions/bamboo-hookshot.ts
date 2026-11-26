@@ -12,6 +12,7 @@ import {
   AirProbingState,
   BaseHookshotDefinition,
   BaseHookshotState,
+  ReelCapable,
   RetractCapable,
   RetractState,
   StepReelState,
@@ -145,6 +146,7 @@ export interface BambooHookshotDefinition
       typeof BAMBOO_HOOKSHOT_ID,
       BambooHookshotState
     >,
+    ReelCapable,
     AirProbingCapable,
     RetractCapable {
   /** 自然長を超えて指定距離 (blocks) 以上伸びた場合に自動でアンカーを解除する */
@@ -157,10 +159,6 @@ export interface BambooHookshotDefinition
   airChainBonus: BambooAirChainBonusConfig;
   /** 竹がピンと張ったときの効果音設定 */
   tautSound: BambooTautSoundConfig;
-  /** フック接続時のコールバック */
-  onAttach: (player: Player, state: BambooHookshotState) => void;
-  /** フック解除時のコールバック */
-  onDetach: (player: Player, state: BambooHookshotState) => void;
 }
 
 /**
@@ -237,6 +235,11 @@ export const bambooHookshotDefinition: BambooHookshotDefinition = {
       ...bambooHookshotDefinition.physics,
     });
   },
+  shouldDetach: (_player, state, distance) =>
+    distance - state.currentLength >=
+    bambooHookshotDefinition.maxOverstretchDistance
+      ? { detach: true }
+      : { detach: false },
   onAttach: (player, state) => {
     const chain = PlayerStateManager.get<BambooAirChainState | null>(
       player.id,

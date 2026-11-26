@@ -1,3 +1,4 @@
+import { Vector3Utils } from "@minecraft/math";
 import { Player, system, Vector3 } from "@minecraft/server";
 import { SPRING_WIRE_STYLE } from "../../render";
 import {
@@ -10,6 +11,7 @@ import {
   BaseHookshotDefinition,
   BaseHookshotState,
   ContinuousReelState,
+  ReelCapable,
   RetractCapable,
   RetractState,
 } from "../types";
@@ -60,6 +62,7 @@ export interface SpringHookshotDefinition
       typeof SPRING_HOOKSHOT_ID,
       SpringHookshotState
     >,
+    ReelCapable,
     AirProbingCapable,
     RetractCapable {
   /** 圧縮状態で手動伸長する際、外向き移動量に追従して距離差が縮まないように伸ばすか */
@@ -197,5 +200,96 @@ export const springHookshotDefinition: SpringHookshotDefinition = {
       ...springParams,
       bendingDamping: effectiveBendingDamping,
     });
+  },
+  onAttach: (_player, state, { initialDirection, distance }) => {
+    state.initialDirection = initialDirection;
+    const targetMinLength = Math.min(
+      springHookshotDefinition.minRopeLength,
+      springHookshotDefinition.maxDistance,
+    );
+    state.isAutoExtendingToMin = distance < targetMinLength;
+  },
+  onDetach: (_player, state) => {
+    state.isAutoExtendingToMin = false;
+    state.lastExtendDistance = undefined;
+  },
+  canHandleReelInput: (_player, state) => !state.isAutoExtendingToMin,
+  modifyReelSpeed: (player, state, mode, baseSpeed, isInitial) => {
+    const isAnchored = state.isAnchored !== false;
+    if (!isAnchored) return baseSpeed;
+
+    if (mode === "shorten") {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      const compression = state.currentLength - distance;
+      if (compression > 0) {
+        const { brakePerBlock, minSpeedMultiplier } =
+          springHookshotDefinition.shortenCompressionBrake;
+        const multiplier = Math.max(
+          minSpeedMultiplier,
+          1 / (1 + Math.max(0, brakePerBlock) * compression),
+        );
+        return baseSpeed * multiplier;
+      }
+    } else if (
+      mode === "extend" &&
+      springHookshotDefinition.matchOutwardExtend
+    ) {
+      const distance = Vector3Utils.distance(player.location, state.anchor);
+      const prevDistance = state.lastExtendDistance;
+      state.lastExtendDistance = distance;
+      if (
+        !isInitial &&
+        prevDistance !== undefined &&
+        distance < state.currentLength
+      ) {
+        const outwardDelta = Math.max(0, distance - prevDistance);
+        return Math.max(baseSpeed, outwardDelta);
+      }
+    }
+    return baseSpeed;
+  },
+  onLengthChanged: (_player, state, mode) => {
+    if (mode === "shorten") {
+      state.lastShortenTick = system.currentTick;
+    }
+  },
+  onTick: (player, state, { activeReelMode }, ctx) => {
+    if (state.isAnchored === false) return;
+
+    let dirty = false;
+    if (state.lastExtendDistance !== undefined) {
+      if (activeReelMode !== "extend") {
+        state.lastExtendDistance = undefined;
+      }
+      dirty = true;
+    }
+
+    if (state.isAutoExtendingToMin) {
+      const targetMinLength = Math.min(
+        springHookshotDefinition.minRopeLength,
+        springHookshotDefinition.maxDistance,
+      );
+      if (state.currentLength >= targetMinLength) {
+        state.isAutoExtendingToMin = false;
+      } else {
+        const stepPerTick = Math.max(
+          0,
+          springHookshotDefinition.autoExtendToMin.speed,
+        );
+        const nextLength = Math.min(
+          state.currentLength + stepPerTick,
+          targetMinLength,
+        );
+        state.currentLength = nextLength;
+        if (nextLength >= targetMinLength) {
+          state.isAutoExtendingToMin = false;
+        }
+      }
+      dirty = true;
+    }
+
+    if (dirty) {
+      ctx.setActiveState(player, state);
+    }
   },
 };

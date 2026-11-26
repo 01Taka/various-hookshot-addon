@@ -3,10 +3,21 @@ import {
   calculateAboveAnchorDecayFactor,
   calculateMagnetEffectRatio,
   calculateRigidSteering,
+  ELASTIC_HOOKSHOT_ID,
+  ElasticHookshotState,
   EPSILON,
   HookshotDefinition,
   HookshotState,
+  MAGNET_HOOKSHOT_ID,
+  MagnetHookshotDefinition,
+  MagnetHookshotState,
+  RIGID_HOOKSHOT_ID,
+  RigidHookshotDefinition,
+  RigidHookshotState,
+  SPRING_HOOKSHOT_ID,
   TICKS_PER_SECOND,
+  ZIPLINE_HOOKSHOT_ID,
+  ZiplineHookshotState,
 } from "../hookshot";
 
 /**
@@ -18,15 +29,17 @@ export function formatHookshotDistanceText(
   state: HookshotState,
   distance: number,
 ): string {
-  if (def.id === "elastic" && state.hookshotId === "elastic") {
+  if (def.id === ELASTIC_HOOKSHOT_ID && state.hookshotId === ELASTIC_HOOKSHOT_ID) {
+    const elasticState = state as ElasticHookshotState;
     const stretch =
-      Math.max(0, distance - state.currentLength) + (state.extraCharge ?? 0);
-    const prefix = state.isReelingIn ? "[溜め] " : "";
+      Math.max(0, distance - elasticState.currentLength) +
+      (elasticState.extraCharge ?? 0);
+    const prefix = elasticState.isReelingIn ? "[溜め] " : "";
     const stretchSuffix = stretch > 0.1 ? ` (+${stretch.toFixed(1)}m)` : "";
-    return `${prefix}${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m${stretchSuffix}`;
+    return `${prefix}${distance.toFixed(1)}m / ${elasticState.currentLength.toFixed(1)}m${stretchSuffix}`;
   }
 
-  if (def.id === "spring" && state.hookshotId === "spring") {
+  if (def.id === SPRING_HOOKSHOT_ID && state.hookshotId === SPRING_HOOKSHOT_ID) {
     const diff = distance - state.currentLength;
     const diffSuffix =
       Math.abs(diff) > 0.1
@@ -35,25 +48,28 @@ export function formatHookshotDistanceText(
     return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m${diffSuffix}`;
   }
 
-  if (def.id === "zipline" && state.hookshotId === "zipline") {
-    const sign = state.facingDirectionSign ?? 1;
+  if (def.id === ZIPLINE_HOOKSHOT_ID && state.hookshotId === ZIPLINE_HOOKSHOT_ID) {
+    const zipState = state as ZiplineHookshotState;
+    const sign = zipState.facingDirectionSign ?? 1;
     const remaining = Math.max(
       0,
-      sign >= 0 ? state.railLength - state.railProgress : state.railProgress,
+      sign >= 0 ? zipState.railLength - zipState.railProgress : zipState.railProgress,
     );
-    const railSpeed = Math.abs(state.railVelocity) * TICKS_PER_SECOND;
-    return `残 ${remaining.toFixed(1)}m / ${state.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
+    const railSpeed = Math.abs(zipState.railVelocity) * TICKS_PER_SECOND;
+    return `残 ${remaining.toFixed(1)}m / ${zipState.railLength.toFixed(1)}m | レール ${railSpeed.toFixed(1)} m/s`;
   }
 
-  if (def.id === "magnet" && state.hookshotId === "magnet") {
-    const effectRatio = calculateMagnetEffectRatio(distance, def.physics);
+  if (def.id === MAGNET_HOOKSHOT_ID && state.hookshotId === MAGNET_HOOKSHOT_ID) {
+    const magnetDef = def as MagnetHookshotDefinition;
+    const magnetState = state as MagnetHookshotState;
+    const effectRatio = calculateMagnetEffectRatio(distance, magnetDef.physics);
     const effectPercent = Math.round(effectRatio * 100);
     const modeText =
-      state.activeMode === "attract"
-        ? state.isStuck
+      magnetState.activeMode === "attract"
+        ? magnetState.isStuck
           ? "吸着固定(Shift)"
           : "吸引(Shift)"
-        : state.activeMode === "repel"
+        : magnetState.activeMode === "repel"
           ? "反発(Jump)"
           : effectRatio <= 0
             ? "待機ゾーン"
@@ -61,26 +77,28 @@ export function formatHookshotDistanceText(
     return `${distance.toFixed(1)}m (効果 ${effectPercent}%) | ${modeText}`;
   }
 
-  if (def.id === "rigid" && state.hookshotId === "rigid") {
+  if (def.id === RIGID_HOOKSHOT_ID && state.hookshotId === RIGID_HOOKSHOT_ID) {
+    const rigidDef = def as RigidHookshotDefinition;
+    const rigidState = state as RigidHookshotState;
     const decayFactor = calculateAboveAnchorDecayFactor(
-      state.aboveAnchorTicks ?? 0,
-      def.steering,
+      rigidState.aboveAnchorTicks ?? 0,
+      rigidDef.steering,
     );
     const decayPercent = Math.round((1 - decayFactor) * 100);
 
     const steerResult = calculateRigidSteering(
       player,
-      state.anchor,
-      def.steering,
+      rigidState.anchor,
+      rigidDef.steering,
     );
-    const maxTiltRad = (def.steering.maxUpwardTiltDeg * Math.PI) / 180;
+    const maxTiltRad = (rigidDef.steering.maxUpwardTiltDeg * Math.PI) / 180;
     const rawEffectRatio =
       maxTiltRad > EPSILON
         ? Math.min(1, steerResult.targetTiltRad / maxTiltRad)
         : 0;
     const effectPercent = Math.round(rawEffectRatio * decayFactor * 100);
 
-    return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m | 減衰:${decayPercent}% 効果:${effectPercent}%`;
+    return `${distance.toFixed(1)}m / ${rigidState.currentLength.toFixed(1)}m | 減衰:${decayPercent}% 効果:${effectPercent}%`;
   }
 
   return `${distance.toFixed(1)}m / ${state.currentLength.toFixed(1)}m`;
