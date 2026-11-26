@@ -33,6 +33,8 @@ export interface MagnetPhysicsConfig {
   repelSustainAccel: number;
   /** 反発の逆二乗減衰の基準最小距離 r0 (blocks) */
   repelRefDistance: number;
+  /** 反発初回バーストのクールタイム (ticks) */
+  repelBurstCooldownTicks: number;
 }
 
 /**

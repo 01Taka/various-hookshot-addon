@@ -24,6 +24,8 @@ export interface MagnetHookshotState
   isAttractLocked?: boolean;
   /** 動作音再生の直近Tick */
   lastActiveSoundTick?: number;
+  /** 反発初回バーストの直近発動Tick */
+  lastRepelBurstTick?: number;
 }
 
 export interface MagnetHookshotDefinition
@@ -80,6 +82,7 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
     repelBurstSpeed: 3.6,
     repelSustainAccel: 0.2,
     repelRefDistance: 10.0,
+    repelBurstCooldownTicks: 10,
   },
   calculateImpulse: (player, state): Vector3 => {
     return calculateMagnetHookshot(

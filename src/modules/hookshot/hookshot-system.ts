@@ -1496,8 +1496,20 @@ export class HookshotSystem {
 
     const prevMode = state.activeMode;
     state.activeMode = desiredMode;
-    state.isModeEntryTick =
-      desiredMode !== "none" && desiredMode !== prevMode;
+    if (desiredMode === "attract") {
+      state.isModeEntryTick = prevMode !== "attract";
+    } else if (desiredMode === "repel") {
+      const cooldown = def.physics.repelBurstCooldownTicks;
+      const lastBurst = state.lastRepelBurstTick ?? -cooldown;
+      const canBurst =
+        prevMode !== "repel" && system.currentTick - lastBurst >= cooldown;
+      state.isModeEntryTick = canBurst;
+      if (canBurst) {
+        state.lastRepelBurstTick = system.currentTick;
+      }
+    } else {
+      state.isModeEntryTick = false;
+    }
 
     if (state.activeMode !== "none") {
       state.hasActivatedForce = true;
