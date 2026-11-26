@@ -1530,9 +1530,45 @@ export class HookshotSystem {
     const dist = Vector3Utils.distance(chestPos, state.anchor);
 
     if (state.activeMode === "attract") {
-      if (!state.isStuck && dist <= def.physics.attractStickRadius) {
-        state.isStuck = true;
-        this.playSoundSafe(player, "random.click", 1.4);
+      if (!state.isStuck && dist > EPSILON) {
+        const playerCenter: Vector3 = {
+          x: player.location.x,
+          y: player.location.y + 0.9,
+          z: player.location.z,
+        };
+        const toAnchor = Vector3Utils.subtract(state.anchor, playerCenter);
+        const centerDist = Vector3Utils.magnitude(toAnchor);
+        if (centerDist > EPSILON) {
+          const dir = Vector3Utils.scale(toAnchor, 1 / centerDist);
+          const surfaceDist =
+            1 /
+            Math.max(
+              Math.abs(dir.x) / 0.3,
+              Math.abs(dir.y) / 0.9,
+              Math.abs(dir.z) / 0.3,
+              EPSILON,
+            );
+          try {
+            const stickHit = player.dimension.getBlockFromRay(
+              playerCenter,
+              dir,
+              {
+                maxDistance: surfaceDist + 0.25,
+                includeLiquidBlocks: false,
+                includePassableBlocks: false,
+              },
+            );
+            if (
+              stickHit &&
+              Math.floor(stickHit.block.x) === state.blockPos.x &&
+              Math.floor(stickHit.block.y) === state.blockPos.y &&
+              Math.floor(stickHit.block.z) === state.blockPos.z
+            ) {
+              state.isStuck = true;
+              this.playSoundSafe(player, "random.click", 1.4);
+            }
+          } catch {}
+        }
       }
     } else if (state.isStuck) {
       state.isStuck = false;
