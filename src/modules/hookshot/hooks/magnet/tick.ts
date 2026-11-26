@@ -110,20 +110,13 @@ function updateMagnetStickState(
   }
 
   if (!state.isStuck) {
-    const { canStick, contactDir } = canStickAtCurrentPosition(
-      player,
-      state,
-      chestPos,
-    );
+    const { canStick } = canStickAtCurrentPosition(player, state, chestPos);
     if (!canStick) return;
 
     state.isStuck = true;
     state.stuckPhase = "damping";
     state.stuckAlignTicks = 0;
-    state.stuckLocation = calculateMagnetFixedStickLocation(
-      state.anchor,
-      contactDir,
-    );
+    state.stuckLocation = undefined;
     playSound(player, MAGNET_STICK_SOUND_ID, 1.4);
     return;
   }
@@ -131,8 +124,16 @@ function updateMagnetStickState(
   if (state.stuckPhase === "damping") {
     const speed = Vector3Utils.magnitude(player.getVelocity());
     if (speed <= MAGNET_STICK_DAMPING_SPEED_THRESHOLD) {
+      const { dir: contactDir } = resolveMagnetContactAxis(
+        chestPos,
+        state.anchor,
+      );
       state.stuckPhase = "aligning";
       state.stuckAlignTicks = 0;
+      state.stuckLocation = calculateMagnetFixedStickLocation(
+        state.anchor,
+        contactDir,
+      );
     }
     return;
   }
