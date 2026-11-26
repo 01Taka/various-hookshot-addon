@@ -96,6 +96,7 @@ function clearMagnetStickState(state: MagnetHookshotState): void {
   state.stuckPhase = undefined;
   state.stuckAlignTicks = 0;
   state.stuckLocation = undefined;
+  state.stuckContactDir = undefined;
 }
 
 function updateMagnetStickState(
@@ -130,6 +131,7 @@ function updateMagnetStickState(
       );
       state.stuckPhase = "aligning";
       state.stuckAlignTicks = 0;
+      state.stuckContactDir = contactDir;
       state.stuckLocation = calculateMagnetFixedStickLocation(
         state.anchor,
         contactDir,

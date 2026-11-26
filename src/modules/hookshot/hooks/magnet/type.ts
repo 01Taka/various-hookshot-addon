@@ -37,6 +37,7 @@ export interface MagnetHookshotState
   stuckPhase?: MagnetStuckPhase;
   stuckAlignTicks?: number;
   stuckLocation?: Vector3;
+  stuckContactDir?: Vector3;
   lastActiveSoundTick?: number;
   lastRepelBurstTick?: number;
   attractHoldTicks?: number;

@@ -28,6 +28,7 @@ export const magnetHookshotDefinition: MagnetHookshotDefinition = {
       !!state.isStuck,
       state.stuckPhase,
       state.stuckLocation,
+      state.stuckContactDir,
       state.attractHoldTicks ?? 0,
       state.repelHoldTicks ?? 0,
       magnetHookshotConfig.physics,

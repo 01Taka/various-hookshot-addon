@@ -10,6 +10,7 @@ import { getDirectionAndDistance, predictTickPhysics } from "../../math/physics-
 import {
   MAGNET_STICK_ALIGN_GAIN,
   MAGNET_STICK_ALIGN_MAX_SPEED,
+  MAGNET_STICK_LOCK_PRESS_SPEED,
 } from "./config";
 import {
   MagnetContactAxis,
@@ -114,6 +115,7 @@ export function calculateMagnetHookshot(
   isStuck: boolean,
   stuckPhase: MagnetStuckPhase | undefined,
   stuckLocation: Vector3 | undefined,
+  stuckContactDir: Vector3 | undefined,
   attractHoldTicks: number,
   repelHoldTicks: number,
   config: MagnetPhysicsConfig,
@@ -162,6 +164,11 @@ export function calculateMagnetHookshot(
                 MAGNET_STICK_ALIGN_MAX_SPEED / rawSpeed,
               )
             : rawVel;
+      } else if (stuckPhase === "locked" && stuckContactDir) {
+        targetVel = Vector3Utils.scale(
+          stuckContactDir,
+          MAGNET_STICK_LOCK_PRESS_SPEED,
+        );
       } else {
         targetVel = { x: 0, y: 0, z: 0 };
       }
