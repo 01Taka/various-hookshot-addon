@@ -8,6 +8,8 @@ import {
 import { EPSILON, PLAYER_CHEST_HEIGHT_OFFSET } from "../../constants";
 import { getDirectionAndDistance, predictTickPhysics } from "../../math/physics-utils";
 import {
+  MAGNET_ARRIVAL_MIN_SPEED,
+  MAGNET_ARRIVAL_STOP_OFFSET,
   MAGNET_STICK_ALIGN_GAIN,
   MAGNET_STICK_ALIGN_MAX_SPEED,
   MAGNET_STICK_LOCK_PRESS_SPEED,
@@ -173,18 +175,20 @@ export function calculateMagnetHookshot(
         targetVel = { x: 0, y: 0, z: 0 };
       }
     } else {
-      let desiredVel: Vector3;
-      if (isEntryTick) {
-        desiredVel = Vector3Utils.scale(dir, config.attractInitialSpeed);
-      } else {
-        const curDirSpeed = Math.max(0, Vector3Utils.dot(currentVel, dir));
-        const nextSpeed = Math.min(
-          config.attractMaxSpeed,
-          Math.max(curDirSpeed, config.attractInitialSpeed) +
-            config.attractAccel,
-        );
-        desiredVel = Vector3Utils.scale(dir, nextSpeed);
-      }
+      const rawNextSpeed = isEntryTick
+        ? config.attractInitialSpeed
+        : Math.min(
+            config.attractMaxSpeed,
+            Math.max(Vector3Utils.dot(currentVel, dir), config.attractInitialSpeed) +
+              config.attractAccel,
+          );
+      // 次の1Tickでアンカーを通り過ぎる場合のみ、ブロック表面手前までに速度をクランプ
+      const maxArrivalSpeed = Math.max(
+        MAGNET_ARRIVAL_MIN_SPEED,
+        distance - MAGNET_ARRIVAL_STOP_OFFSET,
+      );
+      const nextSpeed = Math.min(rawNextSpeed, maxArrivalSpeed);
+      const desiredVel = Vector3Utils.scale(dir, nextSpeed);
       targetVel = Vector3Utils.lerp(predictedVel, desiredVel, effectRatio);
 
       // 無重力化率を時間経過で 35% → 100%（20 ticks）へランプアップ
